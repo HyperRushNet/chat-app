@@ -9,6 +9,10 @@
         body{height:100vh;background:#0f0f14;color:#fff;display:flex;justify-content:center;align-items:center;overflow:hidden}
         #app{width:100%;max-width:480px;height:100vh;display:flex;flex-direction:column;border-left:1px solid #222;border-right:1px solid #222;position:relative;background:#0f0f14}
         
+        /* Header */
+        header{padding:15px;background:#18181f;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center}
+        #logoutBtn{width:auto;padding:8px 12px;background:#ff5555;color:#fff;font-size:12px}
+
         /* Screens */
         #loginScreen{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:15px;padding:30px}
         #chatScreen{flex:1;display:none;flex-direction:column;height:100%}
@@ -17,7 +21,6 @@
         input{width:100%;padding:14px;border-radius:12px;border:none;background:#18181f;color:#fff;font-size:16px;outline:none}
         button{width:100%;padding:14px;border-radius:12px;border:none;background:#7dd3fc;color:#0f0f14;font-weight:bold;cursor:pointer;transition:0.2s}
         button:hover{background:#38bdf8}
-        button:disabled{opacity:0.5;cursor:not-allowed}
 
         /* Messages */
         #messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px}
@@ -41,15 +44,19 @@
     <div id="loginScreen">
         <h2 style="margin-bottom:10px">HyperRush Chat</h2>
         <input id="emailInput" type="email" placeholder="E-mailadres..." />
-        <button id="loginBtn">Verstuur Login Link</button>
+        <button id="magicLinkBtn">Verstuur Login Link</button>
         <p id="loginInfo" style="font-size:13px; color:#aaa"></p>
     </div>
 
     <div id="chatScreen">
+        <header>
+            <span id="userEmail" style="font-size:12px; color:#aaa"></span>
+            <button id="logoutBtn">Uitloggen</button>
+        </header>
         <div id="messages"></div>
         <div id="inputBar">
             <input id="textInput" placeholder="Typ een bericht..." autocomplete="off" />
-            <button id="sendBtn" style="width:auto">Verzend</button>
+            <button id="sendBtn" style="width:auto">V</button>
         </div>
     </div>
 </div>
@@ -57,57 +64,48 @@
 <script type="module">
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    // --- CONFIG ---
     const SUPABASE_URL = "https://zhqcdpkobxkbfqhkjhng.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpocWNkcGtvYnhrYmZxaGtqaG5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NDg3NTAsImV4cCI6MjA4NjExNDc1MH0.zcZyVuzMZ_l_2QBElxvx61AFNVM1HCmUgpfFatsbZPg";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpocWNkcGtvYnhrYmZxaGtqaG5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NDg3NTAsImV4cCI6MjA4NjEyNDc1MH0.zcZyVuzMZ_l_2QBElxvx61AFNVM1HCmUgpfFatsbZPg";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const loginScreen = document.getElementById("loginScreen");
     const chatScreen = document.getElementById("chatScreen");
     const messagesDiv = document.getElementById("messages");
     const textInput = document.getElementById("textInput");
-    const loginBtn = document.getElementById("loginBtn");
+    const magicLinkBtn = document.getElementById("magicLinkBtn");
     const sendBtn = document.getElementById("sendBtn");
-    const loginInfo = document.getElementById("loginInfo");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const userEmailSpan = document.getElementById("userEmail");
 
     let user = null;
 
-    // 1. Check Sessie & Los 401 op
+    // 1. Sessie Check
     async function checkSession() {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-            console.warn("Oude sessie gevonden, we loggen je uit voor een schone start.");
-            await supabase.auth.signOut();
-            return;
-        }
+        const { data: { session } } = await supabase.auth.getSession();
+        handleAuth(session);
 
-        if (session) {
-            user = session.user;
-            await setupUser();
-        }
-
-        // Luister naar magic link kliks
-        supabase.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                user = session.user;
-                setupUser();
-            } else {
-                loginScreen.style.display = "flex";
-                chatScreen.style.display = "none";
-            }
+        supabase.auth.onAuthStateChange((_event, session) => {
+            handleAuth(session);
         });
     }
 
-    // 2. Registratie & Ban Check
+    function handleAuth(session) {
+        if (session) {
+            user = session.user;
+            userEmailSpan.textContent = user.email;
+            setupUser();
+        } else {
+            user = null;
+            loginScreen.style.display = "flex";
+            chatScreen.style.display = "none";
+            document.getElementById("banOverlay").style.display = "none";
+        }
+    }
+
+    // 2. Setup Gebruiker
     async function setupUser() {
-        if (!user) return;
-
-        // Maak profiel aan/bijwerken
         await supabase.from('users').upsert({ id: user.id, email: user.email });
-
-        // Check op ban
-        const { data, error } = await supabase.from('users').select('is_banned').eq('id', user.id).single();
+        const { data } = await supabase.from('users').select('is_banned').eq('id', user.id).single();
         
         if (data?.is_banned) {
             document.getElementById("banOverlay").style.display = "flex";
@@ -115,95 +113,71 @@
             return;
         }
 
-        // Switch naar chat scherm
         loginScreen.style.display = "none";
         chatScreen.style.display = "flex";
         loadMessages();
         subscribeToChanges();
     }
 
-    // 3. Data ophalen
+    // 3. Berichten laden
     async function loadMessages() {
-        const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-        if (error) {
-            console.error("401 Check: Als je dit ziet, moet je je browser cache legen.", error);
-            return;
-        }
+        const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
         if (data) {
             messagesDiv.innerHTML = "";
             data.forEach(msg => renderMessage(msg));
         }
     }
 
-    // 4. Bericht versturen
+    // 4. Logout
+    logoutBtn.onclick = async () => {
+        await supabase.auth.signOut();
+    };
+
+    // 5. Bericht sturen
     async function sendMessage() {
         const content = textInput.value.trim();
         if (!content || !user) return;
-
         textInput.value = "";
-        const { error } = await supabase.from('messages').insert([{ content, user_id: user.id }]);
-        
-        if (error) {
-            console.error("Verzenden mislukt:", error.message);
-            if (error.message.includes("JWT")) {
-                alert("Sessie verlopen. Ververs de pagina.");
-                await supabase.auth.signOut();
-            }
-        }
+        await supabase.from('messages').insert([{ content, user_id: user.id }]);
     }
 
-    // 5. Realtime
+    // 6. Realtime
     function subscribeToChanges() {
-        supabase.channel('public_chat')
+        supabase.channel('room1')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
                 renderMessage(payload.new);
             })
             .subscribe();
     }
 
-    // 6. UI Render
     function renderMessage(msg) {
         const isMe = user && msg.user_id === user.id;
         const div = document.createElement('div');
         div.className = `msg ${isMe ? 'me' : 'other'}`;
         const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        // Veiligheid: Voorkom XSS
-        const safeContent = document.createTextNode(msg.content);
-        div.appendChild(safeContent);
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'time';
-        timeSpan.textContent = time;
-        div.appendChild(timeSpan);
-
+        div.innerHTML = `${escapeHTML(msg.content)} <span class="time">${time}</span>`;
         messagesDiv.appendChild(div);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
+    function escapeHTML(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     // Events
-    loginBtn.onclick = async () => {
+    magicLinkBtn.onclick = async () => {
         const email = document.getElementById("emailInput").value.trim();
         if (!email) return;
-
-        loginBtn.disabled = true;
-        loginInfo.textContent = "Laden...";
-
-        const { error } = await supabase.auth.signInWithOtp({ 
-            email,
-            options: { emailRedirectTo: window.location.origin }
-        });
-
-        if (error) {
-            loginInfo.textContent = "Fout: " + error.message;
-            loginBtn.disabled = false;
-        } else {
-            loginInfo.textContent = "Check je inbox voor de Magic Link!";
-        }
+        magicLinkBtn.disabled = true;
+        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+        document.getElementById("loginInfo").textContent = error ? error.message : "Check je mail!";
+        magicLinkBtn.disabled = false;
     };
 
     sendBtn.onclick = sendMessage;
-    textInput.onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
+    textInput.onkeydown = (e) => { if(e.key === "Enter") sendMessage(); };
 
     checkSession();
 </script>
