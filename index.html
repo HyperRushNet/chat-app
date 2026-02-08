@@ -3,64 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HyperRush Private Chat</title>
+    <title>HyperRush Chat v2</title>
     <style>
-        *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
+        *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Roboto,sans-serif}
         body{height:100vh;background:#0f0f14;color:#fff;display:flex;justify-content:center;align-items:center;overflow:hidden}
-        #app{width:100%;max-width:480px;height:100vh;display:flex;flex-direction:column;border-left:1px solid #222;border-right:1px solid #222;position:relative;background:#0f0f14}
+        #app{width:100%;max-width:450px;height:100vh;display:flex;flex-direction:column;background:#0f0f14;border-left:1px solid #222;border-right:1px solid #222;position:relative}
         
+        /* Schermen */
+        #loginScreen, #usernameScreen, #chatScreen{flex:1;display:none;flex-direction:column;padding:25px}
+        .active{display:flex !important}
+
+        /* UI Elementen */
         header{padding:15px;background:#18181f;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center}
-        #logoutBtn{padding:6px 12px;background:#ff4444;color:#fff;font-size:12px;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
+        input{width:100%;padding:14px;margin-bottom:10px;border-radius:10px;border:1px solid #333;background:#18181f;color:#fff;outline:none}
+        button{width:100%;padding:14px;border-radius:10px;border:none;background:#7dd3fc;color:#0f0f14;font-weight:bold;cursor:pointer}
+        button:hover{opacity:0.9}
 
-        #loginScreen, #usernameScreen{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:15px;padding:30px}
-        #chatScreen{flex:1;display:none;flex-direction:column;height:100%}
-
-        input{width:100%;padding:14px;border-radius:12px;border:1px solid #333;background:#18181f;color:#fff;font-size:16px;outline:none}
-        button{width:100%;padding:14px;border-radius:12px;border:none;background:#7dd3fc;color:#0f0f14;font-weight:bold;cursor:pointer;transition:0.2s}
-        button:hover{background:#38bdf8}
-
-        #messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px}
-        .msg{padding:10px 14px;border-radius:15px;max-width:85%;word-wrap:break-word;line-height:1.4;position:relative}
+        /* Chat */
+        #messages{flex:1;overflow-y:auto;padding:15px;display:flex;flex-direction:column;gap:12px}
+        .msg{padding:10px 14px;border-radius:15px;max-width:80%;word-wrap:break-word;position:relative}
         .me{background:#2563eb;align-self:flex-end;border-bottom-right-radius:2px}
         .other{background:#222;align-self:flex-start;border-bottom-left-radius:2px}
-        .author{display:block;font-size:10px;font-weight:bold;margin-bottom:3px;color:#7dd3fc}
-        .time{display:block;font-size:9px;margin-top:5px;opacity:0.5}
+        .author{display:block;font-size:10px;font-weight:bold;color:#7dd3fc;margin-bottom:3px}
+        .time{display:block;font-size:9px;opacity:0.5;margin-top:5px}
 
-        #inputBar{padding:15px;background:#0f0f14;border-top:1px solid #222;display:flex;gap:10px}
-        #banOverlay{position:absolute;inset:0;background:rgba(0,0,0,0.95);display:none;flex-direction:column;justify-content:center;align-items:center;z-index:99;text-align:center;color:#ff4444}
+        #inputBar{padding:15px;background:#18181f;display:flex;gap:10px}
+        #banOverlay{position:absolute;inset:0;background:rgba(0,0,0,0.9);display:none;justify-content:center;align-items:center;z-index:99;color:red}
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div id="banOverlay"><h1>VERBANNEN</h1><p>Je hebt geen toegang meer tot de chat.</p></div>
+    <div id="banOverlay"><h1>GEBANNED</h1></div>
 
-    <div id="loginScreen">
-        <h2 style="margin-bottom:10px">HyperRush Chat</h2>
-        <input id="emailInput" type="email" placeholder="E-mail..." />
-        <input id="passInput" type="password" placeholder="Wachtwoord..." />
-        <div style="display:flex; gap:10px; width:100%">
-            <button id="loginBtn">Log in</button>
-            <button id="regBtn" style="background:#333; color:#fff">Registreren</button>
-        </div>
-        <p id="info" style="font-size:12px; color:#aaa; text-align:center"></p>
+    <div id="loginScreen" class="active">
+        <h2>HyperRush Login</h2>
+        <p style="color:#aaa; font-size:13px; margin-bottom:20px">Gebruik e-mail + wachtwoord</p>
+        <input id="email" type="email" placeholder="E-mailadres" />
+        <input id="pass" type="password" placeholder="Wachtwoord" />
+        <button id="loginBtn">Log in</button>
+        <button id="regBtn" style="background:none; color:#7dd3fc; margin-top:10px">Nog geen account? Registreer</button>
+        <p id="status" style="margin-top:15px; font-size:12px; color:orange"></p>
     </div>
 
-    <div id="usernameScreen" style="display:none;">
-        <h2 style="margin-bottom:10px">Kies een bijnaam</h2>
-        <input id="nickInput" placeholder="Je naam in de chat..." maxlength="15" />
-        <button id="saveNickBtn">Start Chatten</button>
+    <div id="usernameScreen">
+        <h2>Kies een bijnaam</h2>
+        <input id="nick" placeholder="Jouw naam..." maxlength="15" />
+        <button id="saveNick">Start Chatten</button>
     </div>
 
     <div id="chatScreen">
         <header>
-            <span id="myNick" style="font-size:12px; color:#aaa"></span>
-            <button id="logoutBtn">Log uit</button>
+            <span id="displayNick">...</span>
+            <button id="logoutBtn" style="width:auto; padding:5px 10px; background:#ff4444; color:white">Log uit</button>
         </header>
         <div id="messages"></div>
         <div id="inputBar">
-            <input id="msgInput" placeholder="Typ een bericht..." autocomplete="off" />
-            <button id="sendBtn" style="width:auto">Verzend</button>
+            <input id="msgInput" placeholder="Typ iets..." autocomplete="off" />
+            <button id="sendBtn" style="width:auto">></button>
         </div>
     </div>
 </div>
@@ -68,153 +68,111 @@
 <script type="module">
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    const SUPABASE_URL = "https://iuukppyhwpnzvtuedjzh.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1dWtwcHlod3BuenZ0dWVkanpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NDcxMTQsImV4cCI6MjA4NjEyMzExNH0.1HHIrXzdZ_eFrbqpCpTI8oAvN3IIZXwnZj8XaKU3Mwc";
+    const SUPABASE_URL = "https://fahbqdajxnhswevdagdn.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let user = null;
 
-    // 1. Auth Logica
-    async function checkAuth() {
+    // 1. Schermen wisselen
+    function showScreen(id) {
+        document.querySelectorAll('#app > div:not(#banOverlay)').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    // 2. Auth logica
+    async function checkUser() {
         const { data: { session } } = await supabase.auth.getSession();
-        updateUI(session);
-        supabase.auth.onAuthStateChange((_event, session) => updateUI(session));
-    }
-
-    function updateUI(session) {
         user = session?.user || null;
-        if (user) loadUserData();
-        else show('login');
+        if (user) loadProfile();
+        else showScreen('loginScreen');
     }
 
-    // 2. Data laden & Schermen
-    async function loadUserData() {
-        // Maak profiel aan als het niet bestaat
-        await supabase.from('users').upsert({ id: user.id, email: user.email });
+    async function loadProfile() {
+        // Check of user in onze tabel staat
+        let { data: profile } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
         
-        const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
-        
-        if (error) {
-            console.error("Fout bij laden gebruiker:", error);
+        if (!profile) {
+            const { data: newProfile } = await supabase.from('users').insert([{ id: user.id, email: user.email }]).select().single();
+            profile = newProfile;
+        }
+
+        if (profile.is_banned) {
+            document.getElementById('banOverlay').style.display = 'flex';
             return;
         }
 
-        if (data?.is_banned) {
-            document.getElementById("banOverlay").style.display = "flex";
-            return;
-        }
-
-        if (!data?.username) {
-            show('username');
+        if (!profile.username) {
+            showScreen('usernameScreen');
         } else {
-            document.getElementById("myNick").textContent = data.username;
-            show('chat');
-            getMessages();
+            document.getElementById('displayNick').textContent = profile.username;
+            showScreen('chatScreen');
+            loadMessages();
             subscribe();
         }
     }
 
-    function show(s) {
-        document.getElementById("loginScreen").style.display = s === 'login' ? 'flex' : 'none';
-        document.getElementById("usernameScreen").style.display = s === 'username' ? 'flex' : 'none';
-        document.getElementById("chatScreen").style.display = s === 'chat' ? 'flex' : 'none';
-        if(s === 'login') document.getElementById("banOverlay").style.display = 'none';
+    // 3. Chat functies
+    async function loadMessages() {
+        const { data } = await supabase.from('messages').select('*, users(username)').order('created_at', { ascending: true });
+        const container = document.getElementById('messages');
+        container.innerHTML = '';
+        if (data) data.forEach(m => renderMessage(m, m.users?.username));
     }
 
-    // 3. Chat Functies
-    async function getMessages() {
-        // Let op: users(username) werkt alleen als de foreign key in SQL correct is ingesteld
-        const { data, error } = await supabase
-            .from('messages')
-            .select('*, users(username)')
-            .order('created_at', { ascending: true });
-        
-        if (error) {
-            console.error("Fout bij ophalen berichten:", error);
-            // Fallback als de relatie niet werkt
-            const { data: fallbackData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-            if (fallbackData) {
-                document.getElementById("messages").innerHTML = "";
-                fallbackData.forEach(m => render(m, "Laden..."));
-            }
-            return;
-        }
-
-        if (data) {
-            document.getElementById("messages").innerHTML = "";
-            data.forEach(m => render(m, m.users?.username));
-        }
-    }
-
-    async function send() {
-        const input = document.getElementById("msgInput");
-        const content = input.value.trim();
-        if (!content || !user) return;
-        input.value = "";
-        await supabase.from('messages').insert([{ content, user_id: user.id }]);
-    }
-
-    function subscribe() {
-        supabase.channel('chat').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (p) => {
-            const { data } = await supabase.from('users').select('username').eq('id', p.new.user_id).single();
-            render(p.new, data?.username);
-        }).subscribe();
-    }
-
-    function render(m, name) {
-        const isMe = user && m.user_id === user.id;
+    function renderMessage(m, name) {
+        const isMe = m.user_id === user?.id;
         const div = document.createElement('div');
         div.className = `msg ${isMe ? 'me' : 'other'}`;
         const time = new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        
-        // Gebruik textContent voor veiligheid tegen hackers (XSS)
-        const authorSpan = document.createElement('span');
-        authorSpan.className = 'author';
-        authorSpan.textContent = name || 'Anoniem';
-        
-        const textNode = document.createTextNode(m.content);
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'time';
-        timeSpan.textContent = time;
-
-        div.appendChild(authorSpan);
-        div.appendChild(textNode);
-        div.appendChild(timeSpan);
-        
-        const mDiv = document.getElementById("messages");
-        mDiv.appendChild(div);
-        mDiv.scrollTop = mDiv.scrollHeight;
+        div.innerHTML = `<span class="author">${name || 'Anoniem'}</span>${m.content} <span class="time">${time}</span>`;
+        const container = document.getElementById('messages');
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
     }
 
-    // 4. Events
-    document.getElementById("regBtn").onclick = async () => {
-        const email = document.getElementById("emailInput").value;
-        const password = document.getElementById("passInput").value;
-        const { error } = await supabase.auth.signUp({ email, password });
-        document.getElementById("info").textContent = error ? error.message : "Geregistreerd! Je kunt nu inloggen.";
+    function subscribe() {
+        supabase.channel('public').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (p) => {
+            const { data } = await supabase.from('users').select('username').eq('id', p.new.user_id).single();
+            renderMessage(p.new, data?.username);
+        }).subscribe();
+    }
+
+    // 4. Knoppen
+    document.getElementById('regBtn').onclick = async () => {
+        const { error } = await supabase.auth.signUp({ email: email.value, password: pass.value });
+        status.textContent = error ? error.message : "Geregistreerd! Klik nu op Log in.";
     };
 
-    document.getElementById("loginBtn").onclick = async () => {
-        const email = document.getElementById("emailInput").value;
-        const password = document.getElementById("passInput").value;
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if(error) document.getElementById("info").textContent = error.message;
+    document.getElementById('loginBtn').onclick = async () => {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.value, password: pass.value });
+        if (error) status.textContent = error.message;
     };
 
-    document.getElementById("saveNickBtn").onclick = async () => {
-        const name = document.getElementById("nickInput").value.trim();
-        if(name.length > 1) {
-            await supabase.from('users').update({ username: name }).eq('id', user.id);
-            loadUserData();
-        }
+    document.getElementById('saveNick').onclick = async () => {
+        const name = nick.value.trim();
+        if (name.length < 2) return alert("Naam te kort");
+        await supabase.from('users').update({ username: name }).eq('id', user.id);
+        loadProfile();
     };
 
-    document.getElementById("logoutBtn").onclick = () => supabase.auth.signOut();
-    document.getElementById("sendBtn").onclick = send;
-    document.getElementById("msgInput").onkeydown = (e) => e.key === "Enter" && send();
+    document.getElementById('sendBtn').onclick = async () => {
+        const content = msgInput.value.trim();
+        if (!content) return;
+        msgInput.value = '';
+        await supabase.from('messages').insert([{ content, user_id: user.id }]);
+    };
 
-    checkAuth();
+    document.getElementById('logoutBtn').onclick = () => supabase.auth.signOut();
+    msgInput.onkeydown = (e) => e.key === 'Enter' && document.getElementById('sendBtn').click();
+
+    // Start
+    supabase.auth.onAuthStateChange((_event, session) => {
+        user = session?.user || null;
+        if (user) loadProfile();
+        else showScreen('loginScreen');
+    });
+    checkUser();
 </script>
 </body>
 </html>
