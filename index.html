@@ -3,31 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HyperRush Chat v2</title>
+    <title>HyperRush Chat v3</title>
     <style>
-        *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Roboto,sans-serif}
+        *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter', sans-serif}
         body{height:100vh;background:#0f0f14;color:#fff;display:flex;justify-content:center;align-items:center;overflow:hidden}
         #app{width:100%;max-width:450px;height:100vh;display:flex;flex-direction:column;background:#0f0f14;border-left:1px solid #222;border-right:1px solid #222;position:relative}
         
-        /* Schermen */
-        #loginScreen, #usernameScreen, #chatScreen{flex:1;display:none;flex-direction:column;padding:25px}
+        .screen{flex:1;display:none;flex-direction:column;padding:25px}
         .active{display:flex !important}
 
-        /* UI Elementen */
         header{padding:15px;background:#18181f;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center}
-        input{width:100%;padding:14px;margin-bottom:10px;border-radius:10px;border:1px solid #333;background:#18181f;color:#fff;outline:none}
+        input{width:100%;padding:14px;margin-bottom:12px;border-radius:10px;border:1px solid #333;background:#18181f;color:#fff;outline:none}
         button{width:100%;padding:14px;border-radius:10px;border:none;background:#7dd3fc;color:#0f0f14;font-weight:bold;cursor:pointer}
-        button:hover{opacity:0.9}
+        button:hover{background:#38bdf8}
 
-        /* Chat */
         #messages{flex:1;overflow-y:auto;padding:15px;display:flex;flex-direction:column;gap:12px}
-        .msg{padding:10px 14px;border-radius:15px;max-width:80%;word-wrap:break-word;position:relative}
+        .msg{padding:10px 14px;border-radius:15px;max-width:85%;word-wrap:break-word;line-height:1.4}
         .me{background:#2563eb;align-self:flex-end;border-bottom-right-radius:2px}
         .other{background:#222;align-self:flex-start;border-bottom-left-radius:2px}
         .author{display:block;font-size:10px;font-weight:bold;color:#7dd3fc;margin-bottom:3px}
         .time{display:block;font-size:9px;opacity:0.5;margin-top:5px}
 
-        #inputBar{padding:15px;background:#18181f;display:flex;gap:10px}
+        #inputBar{padding:15px;background:#18181f;border-top:1px solid #222;display:flex;gap:10px}
         #banOverlay{position:absolute;inset:0;background:rgba(0,0,0,0.9);display:none;justify-content:center;align-items:center;z-index:99;color:red}
     </style>
 </head>
@@ -36,31 +33,31 @@
 <div id="app">
     <div id="banOverlay"><h1>GEBANNED</h1></div>
 
-    <div id="loginScreen" class="active">
-        <h2>HyperRush Login</h2>
-        <p style="color:#aaa; font-size:13px; margin-bottom:20px">Gebruik e-mail + wachtwoord</p>
-        <input id="email" type="email" placeholder="E-mailadres" />
-        <input id="pass" type="password" placeholder="Wachtwoord" />
+    <div id="loginScreen" class="screen active">
+        <h2 style="margin-bottom:15px">HyperRush Chat</h2>
+        <input id="email" type="email" placeholder="E-mail" />
+        <input id="pass" type="password" placeholder="Wachtwoord (min. 6 tekens)" />
         <button id="loginBtn">Log in</button>
         <button id="regBtn" style="background:none; color:#7dd3fc; margin-top:10px">Nog geen account? Registreer</button>
-        <p id="status" style="margin-top:15px; font-size:12px; color:orange"></p>
+        <p id="statusMsg" style="margin-top:15px; font-size:12px; color:orange; text-align:center"></p>
     </div>
 
-    <div id="usernameScreen">
+    <div id="usernameScreen" class="screen">
         <h2>Kies een bijnaam</h2>
+        <p style="margin-bottom:15px; color:#aaa">Dit is de naam die anderen zien.</p>
         <input id="nick" placeholder="Jouw naam..." maxlength="15" />
         <button id="saveNick">Start Chatten</button>
     </div>
 
-    <div id="chatScreen">
+    <div id="chatScreen" class="screen">
         <header>
-            <span id="displayNick">...</span>
-            <button id="logoutBtn" style="width:auto; padding:5px 10px; background:#ff4444; color:white">Log uit</button>
+            <span id="displayNick" style="font-weight:bold">...</span>
+            <button id="logoutBtn" style="width:auto; padding:5px 12px; background:#ff4444; color:white">Log uit</button>
         </header>
         <div id="messages"></div>
         <div id="inputBar">
-            <input id="msgInput" placeholder="Typ iets..." autocomplete="off" />
-            <button id="sendBtn" style="width:auto">></button>
+            <input id="msgInput" placeholder="Typ een bericht..." autocomplete="off" />
+            <button id="sendBtn" style="width:auto; padding:0 20px">Verzend</button>
         </div>
     </div>
 </div>
@@ -72,37 +69,42 @@
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let user = null;
+    let currentUser = null;
 
-    // 1. Schermen wisselen
     function showScreen(id) {
-        document.querySelectorAll('#app > div:not(#banOverlay)').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
     }
 
-    // 2. Auth logica
+    // AUTH & PROFIEL
     async function checkUser() {
         const { data: { session } } = await supabase.auth.getSession();
-        user = session?.user || null;
-        if (user) loadProfile();
-        else showScreen('loginScreen');
+        handleSession(session);
+    }
+
+    async function handleSession(session) {
+        currentUser = session?.user || null;
+        if (currentUser) {
+            loadProfile();
+        } else {
+            showScreen('loginScreen');
+        }
     }
 
     async function loadProfile() {
-        // Check of user in onze tabel staat
-        let { data: profile } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
+        let { data: profile, error } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
         
         if (!profile) {
-            const { data: newProfile } = await supabase.from('users').insert([{ id: user.id, email: user.email }]).select().single();
+            const { data: newProfile } = await supabase.from('users').insert([{ id: currentUser.id, email: currentUser.email }]).select().single();
             profile = newProfile;
         }
 
-        if (profile.is_banned) {
+        if (profile?.is_banned) {
             document.getElementById('banOverlay').style.display = 'flex';
             return;
         }
 
-        if (!profile.username) {
+        if (!profile?.username) {
             showScreen('usernameScreen');
         } else {
             document.getElementById('displayNick').textContent = profile.username;
@@ -112,7 +114,7 @@
         }
     }
 
-    // 3. Chat functies
+    // CHAT DATA
     async function loadMessages() {
         const { data } = await supabase.from('messages').select('*, users(username)').order('created_at', { ascending: true });
         const container = document.getElementById('messages');
@@ -121,57 +123,60 @@
     }
 
     function renderMessage(m, name) {
-        const isMe = m.user_id === user?.id;
+        const isMe = m.user_id === currentUser?.id;
         const div = document.createElement('div');
         div.className = `msg ${isMe ? 'me' : 'other'}`;
         const time = new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        div.innerHTML = `<span class="author">${name || 'Anoniem'}</span>${m.content} <span class="time">${time}</span>`;
+        div.innerHTML = `<span class="author">${name || 'Anoniem'}</span>${m.content.replace(/</g, "&lt;")} <span class="time">${time}</span>`;
         const container = document.getElementById('messages');
         container.appendChild(div);
         container.scrollTop = container.scrollHeight;
     }
 
     function subscribe() {
-        supabase.channel('public').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (p) => {
-            const { data } = await supabase.from('users').select('username').eq('id', p.new.user_id).single();
-            renderMessage(p.new, data?.username);
+        supabase.channel('global').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
+            const { data } = await supabase.from('users').select('username').eq('id', payload.new.user_id).single();
+            renderMessage(payload.new, data?.username);
         }).subscribe();
     }
 
-    // 4. Knoppen
+    // BUTTONS
     document.getElementById('regBtn').onclick = async () => {
-        const { error } = await supabase.auth.signUp({ email: email.value, password: pass.value });
-        status.textContent = error ? error.message : "Geregistreerd! Klik nu op Log in.";
+        const email = document.getElementById('email').value;
+        const pass = document.getElementById('pass').value;
+        if(pass.length < 6) return document.getElementById('statusMsg').textContent = "Wachtwoord min. 6 tekens!";
+        
+        const { error } = await supabase.auth.signUp({ email, password: pass });
+        document.getElementById('statusMsg').textContent = error ? error.message : "Account aangemaakt! Klik nu op Log in.";
     };
 
     document.getElementById('loginBtn').onclick = async () => {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.value, password: pass.value });
-        if (error) status.textContent = error.message;
+        const email = document.getElementById('email').value;
+        const pass = document.getElementById('pass').value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+        if (error) document.getElementById('statusMsg').textContent = error.message;
     };
 
     document.getElementById('saveNick').onclick = async () => {
-        const name = nick.value.trim();
+        const name = document.getElementById('nick').value.trim();
         if (name.length < 2) return alert("Naam te kort");
-        await supabase.from('users').update({ username: name }).eq('id', user.id);
+        await supabase.from('users').update({ username: name }).eq('id', currentUser.id);
         loadProfile();
     };
 
     document.getElementById('sendBtn').onclick = async () => {
-        const content = msgInput.value.trim();
+        const input = document.getElementById('msgInput');
+        const content = input.value.trim();
         if (!content) return;
-        msgInput.value = '';
-        await supabase.from('messages').insert([{ content, user_id: user.id }]);
+        input.value = '';
+        await supabase.from('messages').insert([{ content, user_id: currentUser.id }]);
     };
 
     document.getElementById('logoutBtn').onclick = () => supabase.auth.signOut();
-    msgInput.onkeydown = (e) => e.key === 'Enter' && document.getElementById('sendBtn').click();
+    document.getElementById('msgInput').onkeydown = (e) => e.key === 'Enter' && document.getElementById('sendBtn').click();
 
-    // Start
-    supabase.auth.onAuthStateChange((_event, session) => {
-        user = session?.user || null;
-        if (user) loadProfile();
-        else showScreen('loginScreen');
-    });
+    // AUTH LISTENER
+    supabase.auth.onAuthStateChange((_event, session) => handleSession(session));
     checkUser();
 </script>
 </body>
