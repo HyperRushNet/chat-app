@@ -89,13 +89,24 @@
 
     // 2. Data laden & Schermen
     async function loadUserData() {
+        // Maak profiel aan als het niet bestaat
         await supabase.from('users').upsert({ id: user.id, email: user.email });
-        const { data } = await supabase.from('users').select('*').eq('id', user.id).single();
         
-        if (data?.is_banned) return document.getElementById("banOverlay").style.display = "flex";
+        const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
         
-        if (!data?.username) show('username');
-        else {
+        if (error) {
+            console.error("Fout bij laden gebruiker:", error);
+            return;
+        }
+
+        if (data?.is_banned) {
+            document.getElementById("banOverlay").style.display = "flex";
+            return;
+        }
+
+        if (!data?.username) {
+            show('username');
+        } else {
             document.getElementById("myNick").textContent = data.username;
             show('chat');
             getMessages();
@@ -112,7 +123,23 @@
 
     // 3. Chat Functies
     async function getMessages() {
-        const { data } = await supabase.from('messages').select('*, users(username)').order('created_at', { ascending: true });
+        // Let op: users(username) werkt alleen als de foreign key in SQL correct is ingesteld
+        const { data, error } = await supabase
+            .from('messages')
+            .select('*, users(username)')
+            .order('created_at', { ascending: true });
+        
+        if (error) {
+            console.error("Fout bij ophalen berichten:", error);
+            // Fallback als de relatie niet werkt
+            const { data: fallbackData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+            if (fallbackData) {
+                document.getElementById("messages").innerHTML = "";
+                fallbackData.forEach(m => render(m, "Laden..."));
+            }
+            return;
+        }
+
         if (data) {
             document.getElementById("messages").innerHTML = "";
             data.forEach(m => render(m, m.users?.username));
@@ -122,7 +149,7 @@
     async function send() {
         const input = document.getElementById("msgInput");
         const content = input.value.trim();
-        if (!content) return;
+        if (!content || !user) return;
         input.value = "";
         await supabase.from('messages').insert([{ content, user_id: user.id }]);
     }
@@ -139,7 +166,22 @@
         const div = document.createElement('div');
         div.className = `msg ${isMe ? 'me' : 'other'}`;
         const time = new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        div.innerHTML = `<span class="author">${name || 'Anoniem'}</span>${m.content.replace(/</g, "&lt;")} <span class="time">${time}</span>`;
+        
+        // Gebruik textContent voor veiligheid tegen hackers (XSS)
+        const authorSpan = document.createElement('span');
+        authorSpan.className = 'author';
+        authorSpan.textContent = name || 'Anoniem';
+        
+        const textNode = document.createTextNode(m.content);
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'time';
+        timeSpan.textContent = time;
+
+        div.appendChild(authorSpan);
+        div.appendChild(textNode);
+        div.appendChild(timeSpan);
+        
         const mDiv = document.getElementById("messages");
         mDiv.appendChild(div);
         mDiv.scrollTop = mDiv.scrollHeight;
@@ -147,17 +189,21 @@
 
     // 4. Events
     document.getElementById("regBtn").onclick = async () => {
-        const { error } = await supabase.auth.signUp({ email: emailInput.value, password: passInput.value });
-        info.textContent = error ? error.message : "Geregistreerd! Log nu in.";
+        const email = document.getElementById("emailInput").value;
+        const password = document.getElementById("passInput").value;
+        const { error } = await supabase.auth.signUp({ email, password });
+        document.getElementById("info").textContent = error ? error.message : "Geregistreerd! Je kunt nu inloggen.";
     };
 
     document.getElementById("loginBtn").onclick = async () => {
-        const { error } = await supabase.auth.signInWithPassword({ email: emailInput.value, password: passInput.value });
-        if(error) info.textContent = error.message;
+        const email = document.getElementById("emailInput").value;
+        const password = document.getElementById("passInput").value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if(error) document.getElementById("info").textContent = error.message;
     };
 
     document.getElementById("saveNickBtn").onclick = async () => {
-        const name = nickInput.value.trim();
+        const name = document.getElementById("nickInput").value.trim();
         if(name.length > 1) {
             await supabase.from('users').update({ username: name }).eq('id', user.id);
             loadUserData();
@@ -166,7 +212,7 @@
 
     document.getElementById("logoutBtn").onclick = () => supabase.auth.signOut();
     document.getElementById("sendBtn").onclick = send;
-    msgInput.onkeydown = (e) => e.key === "Enter" && send();
+    document.getElementById("msgInput").onkeydown = (e) => e.key === "Enter" && send();
 
     checkAuth();
 </script>
