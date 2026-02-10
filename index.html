@@ -3,208 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Hyperrush Vault V43 - Outline</title>
+    <title>Hyperrush Vault V43</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
             --bg: #050507;
-            --surface: rgba(255, 255, 255, 0.02);
-            --border: rgba(255, 255, 255, 0.15);
-            --border-active: rgba(255, 255, 255, 0.8);
+            --surface: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.12);
+            --border-active: rgba(255, 255, 255, 0.9);
             --text-main: #ffffff;
             --text-mute: #88888e;
             --accent: #00d2ff;
-            --status-red: #ff4b4b;
             --status-green: #00ff88;
+            --danger: #ff4444;
         }
-
-        ::-webkit-scrollbar { width: 2px; }
-        ::-webkit-scrollbar-thumb { background: var(--border); }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
         body { height: 100dvh; background: var(--bg); color: var(--text-main); display: flex; justify-content: center; overflow: hidden; position: relative; }
         
-        body::before { content: ""; position: absolute; inset: 0; background-image: url('https://images.vexels.com/media/users/3/174109/raw/9c4c064f2263249de7cef1c49162597d-black-abstract-background-design.jpg'); background-size: cover; background-position: center; opacity: 0.1; z-index: -2; }
-        body::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(5, 5, 7, 0) 0%, rgba(5, 5, 7, 0.9) 100%); z-index: -1; }
+        #app { width: 100%; max-width: 440px; height: 100%; position: relative; backdrop-filter: blur(20px); border-left: 1px solid var(--border); border-right: 1px solid var(--border); background: rgba(5,5,7,0.8); }
 
-        #app { width: 100%; max-width: 440px; height: 100%; position: relative; backdrop-filter: blur(12px); }
+        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 40px 25px; }
+        .screen.active { display: flex; animation: fadeIn 0.3s ease; }
+        .centered-y { justify-content: center; }
 
-        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 40px 30px; padding-top: calc(env(safe-area-inset-top, 20px) + 40px); padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 20px); }
-        .screen.active { display: flex; animation: k-in 0.5s ease-out; }
-        @keyframes k-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-        .title { font-size: 32px; font-weight: 800; letter-spacing: -1.5px; text-align: center; margin-bottom: 6px; }
-        .subtitle { color: var(--text-mute); font-size: 9px; font-weight: 700; margin-bottom: 40px; text-align: center; text-transform: uppercase; letter-spacing: 4px; }
+        .title { font-size: 28px; font-weight: 800; letter-spacing: -1px; text-align: center; margin-bottom: 4px; }
+        .subtitle { color: var(--text-mute); font-size: 8px; font-weight: 700; margin-bottom: 35px; text-align: center; text-transform: uppercase; letter-spacing: 3px; }
 
-        .btn { 
-            width: 100%; height: 54px; border-radius: 14px; 
-            border: 1px solid var(--border-active); background: transparent; 
-            color: #fff; font-weight: 700; font-size: 11px; cursor: pointer; 
-            display: flex; align-items: center; justify-content: center; gap: 12px; 
-            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; letter-spacing: 2px;
-        }
-        .btn:hover { background: rgba(255,255,255,0.05); border-color: #fff; }
-        .btn:active { transform: scale(0.98); background: rgba(255,255,255,0.1); }
+        .btn { width: 100%; height: 52px; border-radius: 12px; border: 1px solid var(--border-active); background: transparent; color: #fff; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.2s; text-transform: uppercase; letter-spacing: 1.5px; }
+        .btn:active { transform: scale(0.98); background: rgba(255,255,255,0.05); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-mute { border: 1px solid var(--border); color: var(--text-mute); }
 
-        .input-field { 
-            width: 100%; background: var(--surface); border: 1px solid var(--border); 
-            border-radius: 14px; padding: 16px; color: white; font-size: 14px; outline: none; 
-            text-align: center; transition: 0.3s;
-        }
+        .input-field { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: white; font-size: 14px; outline: none; text-align: center; transition: 0.2s; margin-bottom: 10px; }
         .input-field:focus { border-color: var(--accent); }
 
-        #status-dot { width: 6px; height: 6px; border-radius: 50%; display: none; margin-left: 10px; }
-        #status-dot.online { background: var(--status-green); box-shadow: 0 0 12px var(--status-green); display: block; }
-        #status-dot.offline { background: var(--status-red); display: block; }
-
-        #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 20px 0; }
-        .msg { max-width: 80%; padding: 14px 18px; border-radius: 16px; font-size: 14px; line-height: 1.6; border: 1px solid var(--border); }
+        #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 15px 0; scroll-behavior: smooth; }
+        .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.4; border: 1px solid var(--border); background: var(--surface); word-break: break-word; }
         .msg.me { align-self: flex-end; border-color: var(--accent); color: var(--accent); border-bottom-right-radius: 2px; }
-        .msg.them { align-self: flex-start; border-color: var(--border); border-bottom-left-radius: 2px; }
-        .msg-info { font-size: 8px; color: var(--text-mute); margin-bottom: 6px; display: block; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; }
+        .msg.them { align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg-user { font-size: 9px; opacity: 0.4; margin-bottom: 3px; font-weight: 800; text-transform: uppercase; }
 
-        .overlay { position: absolute; inset: 0; background: rgba(5,5,7,0.95); z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 40px; backdrop-filter: blur(10px); }
+        .overlay { position: absolute; inset: 0; background: rgba(5,5,7,0.96); z-index: 2000; display: none; flex-direction: column; justify-content: center; padding: 30px; backdrop-filter: blur(10px); }
         .overlay.active { display: flex; }
-        .overlay-card { width: 100%; border: 1px solid var(--border); padding: 30px; border-radius: 20px; background: var(--surface); text-align: center; }
-
-        #toast { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); background: #000; border: 1px solid var(--border); color: #fff; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 10px; opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000; letter-spacing: 1px; }
+        
+        #toast { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); background: #fff; color: #000; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 10px; opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000; text-transform: uppercase; box-shadow: 0 10px 30px rgba(0,0,0,0.5); white-space: nowrap; }
         #toast.visible { opacity: 1; visibility: visible; }
+
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface); padding: 12px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px; }
+        .toggle-row label { font-size: 10px; font-weight: 700; color: var(--text-mute); text-transform: uppercase; }
+
+        .room-card { width: 100%; padding: 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.2s; }
+        .room-card:active { border-color: var(--accent); }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div id="toast">SYSTEM NOTIFY</div>
+    <div id="toast">SYSTEM</div>
 
-    <div id="scr-start" class="screen active">
-        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-            <i data-lucide="shield-check" size="48" color="#fff" stroke-width="1" style="margin-bottom: 24px;"></i>
-            <h1 class="title">HYPERRUSH</h1>
-            <p class="subtitle">Secure Protocol V.43</p>
-            <div style="width:100%; display:flex; flex-direction:column; gap:12px;">
-                <button class="btn" onclick="nav('scr-login')">Access Vault</button>
-                <button class="btn btn-mute" onclick="nav('scr-register')">Register Identity</button>
-            </div>
-        </div>
+    <div id="scr-start" class="screen active centered-y">
+        <i data-lucide="shield-keyhole" size="42" color="#fff" style="margin: 0 auto 20px auto;"></i>
+        <h1 class="title">HYPERRUSH</h1>
+        <p class="subtitle">Secure Protocol V.43</p>
+        <button class="btn" onclick="nav('scr-login')">Access Vault</button>
+        <button class="btn btn-mute" onclick="nav('scr-register')" style="margin-top:10px;">Register</button>
     </div>
 
-    <div id="scr-register" class="screen">
+    <div id="scr-register" class="screen centered-y">
         <h1 class="title">Identity</h1>
-        <p class="subtitle">Create New Access</p>
-        <div style="display:flex; flex-direction:column; gap:12px;">
-            <input type="text" id="r-name" class="input-field" placeholder="Username">
-            <input type="email" id="r-email" class="input-field" placeholder="Email Address">
-            <input type="password" id="r-pass" class="input-field" placeholder="Password">
-            <button id="btn-reg-gas" class="btn" style="margin-top:10px;">Request Code</button>
-            <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none;">Back</button>
-        </div>
+        <p class="subtitle">Establish Access</p>
+        <input type="text" id="r-name" class="input-field" placeholder="Username">
+        <input type="email" id="r-email" class="input-field" placeholder="Email">
+        <input type="password" id="r-pass" class="input-field" placeholder="Password">
+        <button class="btn" id="reg-btn" onclick="handleRegister()">Send Code</button>
+        <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Back</button>
     </div>
 
-    <div id="scr-verify" class="screen">
+    <div id="scr-verify" class="screen centered-y">
         <h1 class="title">Verify</h1>
         <p class="subtitle">Enter Security Code</p>
-        <input type="number" id="v-code" class="input-field" placeholder="000000" style="font-size: 28px; letter-spacing: 10px; margin-bottom: 20px;">
-        <button id="btn-verify-final" class="btn">Verify & Grant Access</button>
+        <input type="number" id="v-code" class="input-field" placeholder="000000" style="font-size: 20px; letter-spacing: 5px;">
+        <button class="btn" id="ver-btn" onclick="handleVerify()">Finalize Identity</button>
     </div>
 
-    <div id="scr-login" class="screen">
+    <div id="scr-login" class="screen centered-y">
         <h1 class="title">Unlock</h1>
-        <p class="subtitle">System Authentication</p>
-        <div style="display:flex; flex-direction:column; gap:12px;">
-            <input type="email" id="l-email" class="input-field" placeholder="Email">
-            <input type="password" id="l-pass" class="input-field" placeholder="Password">
-            <button id="btn-login" class="btn">Login to Vault</button>
-            <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none;">Back</button>
-        </div>
+        <p class="subtitle">Authentication</p>
+        <input type="email" id="l-email" class="input-field" placeholder="Email">
+        <input type="password" id="l-pass" class="input-field" placeholder="Password">
+        <button class="btn" onclick="handleLogin()">Grant Access</button>
+        <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Back</button>
     </div>
 
     <div id="scr-lobby" class="screen">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 30px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px; margin-top:10px;">
             <h1 class="title" style="font-size: 20px; margin:0;">Vaults</h1>
-            <div style="display:flex; gap:16px;">
-                <i data-lucide="plus" size="20" onclick="nav('scr-create')" style="cursor:pointer; color:var(--accent);"></i>
-                <i data-lucide="settings" size="20" onclick="nav('scr-settings')" style="cursor:pointer;"></i>
+            <div style="display:flex; gap:12px;">
+                <i data-lucide="hash" size="18" onclick="joinById()" style="cursor:pointer; opacity:0.6;"></i>
+                <i data-lucide="plus-circle" size="18" onclick="nav('scr-create')" style="cursor:pointer; color:var(--accent);"></i>
+                <i data-lucide="power" size="18" onclick="location.reload()" style="cursor:pointer; color:var(--danger);"></i>
             </div>
         </div>
-
-        <div style="display:flex; gap:10px; margin-bottom:24px;">
-            <input type="text" id="search-id" class="input-field" placeholder="Search by ID..." style="text-align:left; padding-left:20px; height:48px;">
-            <button onclick="joinViaId()" style="border:1px solid var(--border-active); background:none; color:#fff; width:48px; border-radius:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-                <i data-lucide="arrow-right" size="18"></i>
-            </button>
-        </div>
-
-        <div id="room-list" style="flex:1; display:flex; flex-direction:column; gap:12px; overflow-y:auto;"></div>
+        <div id="room-list" style="flex:1; display:flex; flex-direction:column; gap:10px; overflow-y:auto;"></div>
     </div>
 
-    <div id="scr-create" class="screen">
-        <h1 class="title">Initialize</h1>
-        <p class="subtitle">Setup New Secure Room</p>
-        <div style="display:flex; flex-direction:column; gap:12px;">
-            <input type="text" id="c-name" class="input-field" placeholder="Room Name">
-            <select id="c-privacy" class="input-field" style="appearance:none;">
-                <option value="public">Public Listing</option>
-                <option value="private">Private (Hidden)</option>
-            </select>
-            <input type="password" id="c-pass" class="input-field" placeholder="Password (Optional)">
-            <button class="btn" onclick="createVault()" style="margin-top:10px;">Deploy Vault</button>
-            <button class="btn btn-mute" onclick="nav('scr-lobby')" style="border:none;">Cancel</button>
+    <div id="scr-create" class="screen centered-y">
+        <h1 class="title">New Vault</h1>
+        <p class="subtitle">Initialize Security</p>
+        <input type="text" id="c-name" class="input-field" placeholder="Vault Name">
+        <input type="password" id="c-pass" class="input-field" placeholder="Vault Password (Optional)">
+        <div class="toggle-row">
+            <label>Hide From Lobby (Private)</label>
+            <input type="checkbox" id="c-priv" style="accent-color:var(--accent); width:18px; height:18px;">
         </div>
-    </div>
-
-    <div id="scr-settings" class="screen">
-        <h1 class="title">Protocol</h1>
-        <p class="subtitle">User Configuration</p>
-        <div style="display:flex; flex-direction:column; gap:12px;">
-            <input type="text" id="s-name" class="input-field" placeholder="Display Name">
-            <button id="btn-save-name" class="btn">Save Changes</button>
-            <button onclick="supabase.auth.signOut().then(() => location.reload())" class="btn" style="border-color:var(--status-red); color:var(--status-red); margin-top:20px;">Terminate Session</button>
-            <button onclick="nav('scr-lobby')" class="btn btn-mute" style="border:none;">Return</button>
-        </div>
+        <button class="btn" onclick="handleCreate()">Create Vault</button>
+        <button onclick="nav('scr-lobby')" class="btn btn-mute" style="border:none; margin-top:10px;">Cancel</button>
     </div>
 
     <div id="scr-chat" class="screen">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <i data-lucide="chevron-left" onclick="leaveChat()" style="cursor:pointer;"></i>
-                <div style="display:flex; align-items:center;">
-                    <h2 id="chat-title" style="font-size: 16px; font-weight:800; letter-spacing:-0.5px;">Vault</h2>
-                    <div id="status-dot"></div>
-                </div>
-            </div>
-            <i data-lucide="copy" size="18" onclick="copyRoomId()" style="cursor:pointer; color:var(--text-mute);"></i>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-top:10px;">
+            <i data-lucide="arrow-left" onclick="leaveChat()" style="cursor:pointer;"></i>
+            <h2 id="chat-title" style="font-size: 14px; font-weight:800; letter-spacing:1px;">VAULT</h2>
+            <i data-lucide="fingerprint" size="18" onclick="copyId()" style="cursor:pointer; opacity:0.4;"></i>
         </div>
         <div id="chat-messages"></div>
-        <div style="display:flex; gap:10px; padding:10px 0;">
-            <input type="text" id="chat-input" class="input-field" style="text-align:left; flex:1; border-radius:12px;" placeholder="Message...">
-            <button id="btn-send" style="border:1px solid var(--accent); background:none; width:50px; border-radius:12px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-                <i data-lucide="send" size="18" color="var(--accent)"></i>
+        <div style="display:flex; gap:8px; padding-top:10px;">
+            <input type="text" id="chat-input" class="input-field" style="text-align:left; flex:1; margin-bottom:0;" placeholder="Encrypted transmission...">
+            <button onclick="sendMsg()" style="border:1px solid var(--accent); background:none; width:48px; border-radius:10px; color:var(--accent);">
+                <i data-lucide="send" size="16" style="margin:0 auto;"></i>
             </button>
         </div>
     </div>
 
-    <div id="ovl-pass" class="overlay">
-        <div class="overlay-card">
-            <i data-lucide="lock" size="32" style="margin-bottom:15px; color:var(--status-red);"></i>
-            <h2 style="margin-bottom:20px; font-size:18px;">Locked Vault</h2>
-            <input type="password" id="ovl-pass-input" class="input-field" placeholder="Enter Password" style="margin-bottom:20px;">
-            <div style="display:flex; gap:10px;">
-                <button class="btn btn-mute" onclick="closeOverlays()">Abort</button>
-                <button class="btn" id="btn-ovl-confirm">Unlock</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="ovl-success" class="overlay">
-        <div class="overlay-card">
-            <i data-lucide="shield-check" size="32" style="margin-bottom:15px; color:var(--status-green);"></i>
-            <h2 style="margin-bottom:10px; font-size:18px;">Vault Created</h2>
-            <p style="font-size:11px; color:var(--text-mute); margin-bottom:20px;">Unique identifier generated:</p>
-            <div style="border:1px dashed var(--border); padding:15px; border-radius:10px; margin-bottom:20px; font-size:12px; color:var(--accent); font-family:monospace; word-break:break-all;" id="new-vault-id">---</div>
-            <button class="btn" onclick="copyCreatedId()">Copy ID & Enter</button>
+    <div id="ovl-done" class="overlay">
+        <div style="background:var(--surface); border:1px solid var(--border); padding:30px; border-radius:20px; text-align:center;">
+            <i data-lucide="check-circle" color="var(--status-green)" size="32" style="margin-bottom:15px;"></i>
+            <h3 style="margin-bottom:5px;">Vault Active</h3>
+            <p id="vault-id-display" style="font-family:monospace; font-size:10px; color:var(--accent); margin-bottom:20px; word-break:break-all;">ID</p>
+            <button class="btn" onclick="closeOverlay()">Copy & Enter</button>
         </div>
     </div>
 </div>
@@ -212,183 +153,188 @@
 <script type="module">
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    const SUPABASE_URL = "https://fahbqdajxnhswevdagdn.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
+    const URL = "https://fahbqdajxnhswevdagdn.supabase.co";
+    const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw3qJc8pOaYGgal63I3cK0C_6rhEo86g54pYJ23Lt5-2mnbYBG6tiYdkSXhqFg0TQdj/exec";
-    const SECRET_KEY = "HyperRush_Protocol_99"; 
+    const SALT = "HyperRush_99_Vault";
 
-    let currentUser = null;
-    let currentRoomId = null;
-    let channel = null;
-    let regData = {};
+    const db = createClient(URL, KEY);
+    let user = null;
+    let room = null;
+    let sub = null;
+    let tempReg = {};
 
-    const encrypt = (t) => CryptoJS.AES.encrypt(t, SECRET_KEY).toString();
+    const crypt = (t) => CryptoJS.AES.encrypt(t, SALT).toString();
     const decrypt = (c) => {
-        try { return CryptoJS.AES.decrypt(c, SECRET_KEY).toString(CryptoJS.enc.Utf8) || "[Error]"; }
-        catch(e) { return "[Encrypted]"; }
+        try { return CryptoJS.AES.decrypt(c, SALT).toString(CryptoJS.enc.Utf8) || "[SECURE]"; }
+        catch { return "[DECRYPT_ERR]"; }
     };
-    const escape = (s) => { let p = document.createElement('p'); p.textContent = s; return p.innerHTML; };
 
     window.nav = (id) => {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        if(id === 'scr-settings' && currentUser) document.getElementById('s-name').value = currentUser.user_metadata.full_name || "";
         lucide.createIcons();
     };
 
-    window.toast = (m, color = "#fff") => {
+    window.toast = (m) => {
         const t = document.getElementById('toast');
-        t.innerText = m; t.style.borderColor = color;
-        t.classList.add('visible'); setTimeout(() => t.classList.remove('visible'), 3000);
+        t.innerText = m; t.classList.add('visible');
+        setTimeout(() => t.classList.remove('visible'), 2500);
     };
 
-    window.closeOverlays = () => document.querySelectorAll('.overlay').forEach(o => o.classList.remove('active'));
+    // GAS POST Handler
+    const gasRequest = async (data) => {
+        return fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'no-cors', // Vereist voor GAS doPost zonder redirect errors
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    };
+
+    // Omdat no-cors geen JSON teruggeeft, gebruiken we een kleine fallback voor status checks
+    window.handleRegister = async () => {
+        tempReg = { 
+            n: document.getElementById('r-name').value, 
+            e: document.getElementById('r-email').value, 
+            p: document.getElementById('r-pass').value 
+        };
+        if(!tempReg.n || !tempReg.e || !tempReg.p) return window.toast("MISSING DATA");
+        
+        const btn = document.getElementById('reg-btn');
+        btn.disabled = true;
+        window.toast("INITIATING TRANSITION...");
+
+        try {
+            await gasRequest({ action: "send", email: tempReg.e });
+            window.toast("CODE DISPATCHED");
+            window.nav('scr-verify');
+        } catch (e) {
+            window.toast("NETWORK ERROR");
+        } finally {
+            btn.disabled = false;
+        }
+    };
+
+    window.handleVerify = async () => {
+        const code = document.getElementById('v-code').value;
+        if(!code) return window.toast("ENTER CODE");
+
+        const btn = document.getElementById('ver-btn');
+        btn.disabled = true;
+        window.toast("VERIFYING...");
+
+        // Omdat 'no-cors' geen response body geeft, proberen we de registratie direct.
+        // Als de code fout is in de Cache, faalt het script aan de achterkant of de gebruiker komt niet door Auth.
+        // Voor een betere UX bij GAS 'doPost' is het vaak handiger om direct naar de auth te gaan.
+        
+        const { data, error } = await db.auth.signUp({ 
+            email: tempReg.e, 
+            password: tempReg.p, 
+            options: { data: { full_name: tempReg.n } } 
+        });
+
+        if(!error) { 
+            user = data.user; 
+            window.toast("IDENTITY CONFIRMED");
+            window.nav('scr-lobby'); 
+            window.loadRooms(); 
+        } else {
+            window.toast(error.message.toUpperCase());
+        }
+        btn.disabled = false;
+    };
+
+    window.handleLogin = async () => {
+        const e = document.getElementById('l-email').value;
+        const p = document.getElementById('l-pass').value;
+        const { data, error } = await db.auth.signInWithPassword({ email: e, password: p });
+        if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); }
+        else window.toast("DENIED");
+    };
 
     window.loadRooms = async () => {
-        const { data } = await supabase.from('rooms').select('*').eq('is_private', false).order('created_at', {ascending: false});
-        const list = document.getElementById('room-list');
-        list.innerHTML = (data || []).map(r => `
-            <div class="btn btn-mute" style="justify-content:space-between; padding:0 20px; text-transform:none; border-radius:14px;" onclick='checkAccess(${JSON.stringify(r)})'>
-                <div style="text-align:left;">
-                    <div style="font-size:13px; color:white; font-weight:700;">${escape(r.name)} ${r.password ? '🔒' : ''}</div>
-                    <div style="font-size:8px; opacity:0.4;">ID: ${r.id.substring(0,8)}...</div>
+        const { data } = await db.from('rooms').select('*').or(`is_private.eq.false,created_by.eq.${user.id}`).order('created_at', { ascending: false });
+        document.getElementById('room-list').innerHTML = (data || []).map(r => `
+            <div class="room-card" onclick="joinAttempt('${r.id}', '${r.name}', '${r.password}')">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <i data-lucide="${r.password ? 'lock' : 'globe'}" size="14" style="opacity:0.5;"></i>
+                    <span style="font-size:13px; font-weight:600;">${r.name}</span>
                 </div>
-                <i data-lucide="chevron-right" size="14"></i>
+                <i data-lucide="chevron-right" size="14" opacity="0.3"></i>
             </div>
         `).join('');
         lucide.createIcons();
     };
 
-    window.createVault = async () => {
-        const name = document.getElementById('c-name').value.trim();
-        const priv = document.getElementById('c-privacy').value === 'private';
-        const pass = document.getElementById('c-pass').value.trim();
-        if(!name) return toast("Name Required");
-
-        const { data, error } = await supabase.from('rooms').insert([{
-            name, is_private: priv, password: pass || null, created_by: currentUser.id
-        }]).select();
-
-        if(!error) {
-            document.getElementById('new-vault-id').innerText = data[0].id;
-            document.getElementById('ovl-success').classList.add('active');
-            loadRooms();
-        } else toast("Sync Error");
+    window.joinAttempt = (id, name, p) => {
+        if(p && p !== "null" && p !== "") {
+            if(prompt("PASSWORD REQUIRED:") !== p) return window.toast("WRONG PASSWORD");
+        }
+        window.openVault(id, name);
     };
 
-    window.copyCreatedId = () => {
-        navigator.clipboard.writeText(document.getElementById('new-vault-id').innerText);
-        toast("ID Copied", "#00ff88");
-        const id = document.getElementById('new-vault-id').innerText;
-        closeOverlays();
-        enterChat(id, "New Vault");
-    };
-
-    window.joinViaId = async () => {
-        const id = document.getElementById('search-id').value.trim();
-        if(!id) return;
-        const { data } = await supabase.from('rooms').select('*').eq('id', id).single();
-        if(data) checkAccess(data);
-        else toast("Vault Not Found", "#ff4b4b");
-    };
-
-    window.checkAccess = (room) => {
-        if(room.password) {
-            document.getElementById('ovl-pass').classList.add('active');
-            document.getElementById('btn-ovl-confirm').onclick = () => {
-                if(document.getElementById('ovl-pass-input').value === room.password) {
-                    closeOverlays(); enterChat(room.id, room.name);
-                } else toast("Access Denied", "#ff4b4b");
-            };
-        } else enterChat(room.id, room.name);
-    };
-
-    async function enterChat(id, name) {
-        if (channel) await supabase.removeChannel(channel);
-        currentRoomId = id;
-        document.getElementById('chat-title').innerText = name;
-        nav('scr-chat');
-        const { data } = await supabase.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: true });
-        const container = document.getElementById('chat-messages');
-        container.innerHTML = '';
-        (data || []).forEach(m => appendMsg(m));
-        channel = supabase.channel(`room_${id}`);
-        channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, (p) => appendMsg(p.new))
-        .subscribe((s) => { document.getElementById('status-dot').className = (s === 'SUBSCRIBED') ? 'online' : 'offline'; });
-    }
-
-    document.getElementById('btn-reg-gas').onclick = async () => {
-        const email = document.getElementById('r-email').value.trim();
-        if(!email) return toast("Email Required");
-        regData = { name: document.getElementById('r-name').value, email, pass: document.getElementById('r-pass').value };
-        toast("Sending Code...", "#00d2ff");
-        try {
-            await fetch(GAS_URL, { 
-                method: 'POST', 
-                body: JSON.stringify({ action: 'send', email }) 
-            });
-            nav('scr-verify');
-        } catch(e) { toast("GAS Connection Issue"); }
-    };
-
-    document.getElementById('btn-verify-final').onclick = async () => {
-        const code = document.getElementById('v-code').value;
-        try {
-            const resp = await fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'verify', email: regData.email, code: code })
-            });
-            const result = await resp.json();
-            if(result.status === 200) {
-                const { error } = await supabase.auth.signUp({ 
-                    email: regData.email, 
-                    password: regData.pass, 
-                    options: { data: { full_name: regData.name } } 
-                });
-                if(!error) { toast("Identity Secured", "#00ff88"); nav('scr-login'); }
-                else { toast("Auth: " + error.message); }
-            } else {
-                toast("Invalid Code");
-            }
-        } catch(e) { toast("Verification Error"); }
-    };
-
-    document.getElementById('btn-login').onclick = async () => {
-        const { data, error } = await supabase.auth.signInWithPassword({ 
-            email: document.getElementById('l-email').value, 
-            password: document.getElementById('l-pass').value 
+    window.joinById = () => {
+        const id = prompt("ENTER VAULT ID:");
+        if(id) db.from('rooms').select('*').eq('id', id).single().then(({data}) => {
+            if(data) joinAttempt(data.id, data.name, data.password);
+            else window.toast("NOT FOUND");
         });
-        if(!error) { currentUser = data.user; nav('scr-lobby'); loadRooms(); }
-        else toast("Auth Failure", "#ff4b4b");
     };
 
-    function appendMsg(m) {
-        const container = document.getElementById('chat-messages');
-        const isMe = m.user_id === currentUser?.id;
-        const div = document.createElement('div');
-        div.className = `msg ${isMe ? 'me' : 'them'}`;
-        div.innerHTML = `<span class="msg-info">${escape(m.user_name)}</span><div>${escape(decrypt(m.content))}</div>`;
-        container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
-    }
-
-    document.getElementById('btn-send').onclick = async () => {
-        const input = document.getElementById('chat-input');
-        if(!input.value.trim() || !currentUser) return;
-        const content = input.value; input.value = '';
-        await supabase.from('messages').insert([{
-            room_id: currentRoomId, user_id: currentUser.id, 
-            user_name: currentUser.user_metadata.full_name || "Guest", 
-            content: encrypt(content)
-        }]);
+    window.handleCreate = async () => {
+        const n = document.getElementById('c-name').value;
+        const p = document.getElementById('c-pass').value;
+        const pr = document.getElementById('c-priv').checked;
+        if(!n) return window.toast("NAME REQUIRED");
+        const { data } = await db.from('rooms').insert([{ name: n, password: p || null, is_private: pr, created_by: user.id }]).select();
+        if(data) {
+            document.getElementById('vault-id-display').innerText = data[0].id;
+            document.getElementById('ovl-done').classList.add('active');
+            window.loadRooms();
+        }
     };
 
-    window.leaveChat = async () => { if(channel) await supabase.removeChannel(channel); nav('scr-lobby'); };
-    window.copyRoomId = () => { navigator.clipboard.writeText(currentRoomId); toast("Vault ID Copied", "#00d2ff"); };
-    document.getElementById('chat-input').onkeydown = (e) => { if(e.key === 'Enter') document.getElementById('btn-send').click(); };
+    window.openVault = async (id, name) => {
+        room = id;
+        document.getElementById('chat-title').innerText = name.toUpperCase();
+        window.nav('scr-chat');
+        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: true });
+        const box = document.getElementById('chat-messages');
+        box.innerHTML = (data || []).map(m => render(m)).join('');
+        box.scrollTop = box.scrollHeight;
 
+        if(sub) db.removeChannel(sub);
+        sub = db.channel(`room_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, 
+        p => {
+            box.insertAdjacentHTML('beforeend', render(p.new));
+            box.scrollTop = box.scrollHeight;
+        }).subscribe();
+    };
+
+    const render = (m) => `
+        <div class="msg ${m.user_id === user.id ? 'me' : 'them'}">
+            <div class="msg-user">${m.user_name}</div>
+            <div>${decrypt(m.content)}</div>
+        </div>
+    `;
+
+    window.sendMsg = async () => {
+        const i = document.getElementById('chat-input');
+        if(!i.value.trim()) return;
+        const txt = i.value; i.value = '';
+        await db.from('messages').insert([{ room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(txt) }]);
+    };
+
+    window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); window.loadRooms(); };
+    window.copyId = () => { navigator.clipboard.writeText(room); window.toast("COPIED ID"); };
+    window.closeOverlay = () => { 
+        navigator.clipboard.writeText(document.getElementById('vault-id-display').innerText); 
+        document.getElementById('ovl-done').classList.remove('active');
+        window.openVault(document.getElementById('vault-id-display').innerText, "New Vault");
+    };
+
+    document.getElementById('chat-input').addEventListener('keypress', e => e.key === 'Enter' && sendMsg());
     lucide.createIcons();
 </script>
 </body>
