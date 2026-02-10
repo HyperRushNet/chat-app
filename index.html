@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Hyperrush Vault V43</title>
+    <title>Hyperrush Chat V43</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -12,53 +12,121 @@
             --bg: #050507;
             --surface: rgba(255, 255, 255, 0.03);
             --border: rgba(255, 255, 255, 0.12);
-            --border-active: rgba(255, 255, 255, 0.9);
+            --border-active: rgba(255, 255, 255, 0.4);
             --text-main: #ffffff;
             --text-mute: #88888e;
             --accent: #00d2ff;
-            --status-green: #00ff88;
             --danger: #ff4444;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
-        body { height: 100dvh; background: var(--bg); color: var(--text-main); display: flex; justify-content: center; overflow: hidden; position: relative; }
-        
-        #app { width: 100%; max-width: 440px; height: 100%; position: relative; backdrop-filter: blur(20px); border-left: 1px solid var(--border); border-right: 1px solid var(--border); background: rgba(5,5,7,0.8); }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 
-        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 40px 25px; }
-        .screen.active { display: flex; animation: fadeIn 0.3s ease; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        body { 
+            height: 100dvh; 
+            background: var(--bg); 
+            color: var(--text-main); 
+            display: flex; 
+            justify-content: center; 
+            overflow: hidden; 
+        }
+        
+        #app { 
+            width: 100%; 
+            max-width: 440px; 
+            height: 100%; 
+            position: relative; 
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border); 
+            border-right: 1px solid var(--border); 
+            background: rgba(5,5,7,0.8); 
+            backdrop-filter: blur(20px); 
+        }
+
+        .screen { 
+            position: absolute; 
+            inset: 0; 
+            display: none; 
+            flex-direction: column; 
+            padding: 25px;
+        }
+        
+        .screen.active { 
+            display: flex; 
+            animation: fadeIn 0.2s ease-out; 
+            position: relative;
+            flex: 1;
+        }
+
         .centered-y { justify-content: center; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
 
         .title { font-size: 28px; font-weight: 800; letter-spacing: -1px; text-align: center; margin-bottom: 4px; }
         .subtitle { color: var(--text-mute); font-size: 8px; font-weight: 700; margin-bottom: 35px; text-align: center; text-transform: uppercase; letter-spacing: 3px; }
 
         .btn { width: 100%; height: 52px; border-radius: 12px; border: 1px solid var(--border-active); background: transparent; color: #fff; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.2s; text-transform: uppercase; letter-spacing: 1.5px; }
         .btn:active { transform: scale(0.98); background: rgba(255,255,255,0.05); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-mute { border: 1px solid var(--border); color: var(--text-mute); }
 
-        .input-field { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: white; font-size: 14px; outline: none; text-align: center; transition: 0.2s; margin-bottom: 10px; }
-        .input-field:focus { border-color: var(--accent); }
+        .input-field { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: white; font-size: 14px; outline: none; text-align: center; margin-bottom: 10px; }
 
-        #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 15px 0; scroll-behavior: smooth; }
-        .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.4; border: 1px solid var(--border); background: var(--surface); word-break: break-word; }
-        .msg.me { align-self: flex-end; border-color: var(--accent); color: var(--accent); border-bottom-right-radius: 2px; }
-        .msg.them { align-self: flex-start; border-bottom-left-radius: 2px; }
-        .msg-user { font-size: 9px; opacity: 0.4; margin-bottom: 3px; font-weight: 800; text-transform: uppercase; }
+        #chat-messages { 
+            flex: 1; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+            padding: 10px 0;
+            scroll-behavior: smooth; 
+        }
 
-        .overlay { position: absolute; inset: 0; background: rgba(5,5,7,0.96); z-index: 2000; display: none; flex-direction: column; justify-content: center; padding: 30px; backdrop-filter: blur(10px); }
-        .overlay.active { display: flex; }
+        .msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); align-self: flex-start; }
+        .msg.me { align-self: flex-end; border-color: rgba(0, 210, 255, 0.2); border-bottom-right-radius: 2px; }
         
-        #toast { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); background: #fff; color: #000; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 10px; opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000; text-transform: uppercase; box-shadow: 0 10px 30px rgba(0,0,0,0.5); white-space: nowrap; }
+        .msg-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+        .msg-user { font-size: 10px; font-weight: 700; color: var(--accent); }
+        .msg-time { font-size: 9px; color: var(--text-mute); }
+        .msg-text { font-size: 13px; line-height: 1.4; color: var(--text-main); white-space: pre-wrap; word-break: break-word; }
+
+        .chat-input-container { 
+            display: flex; 
+            align-items: flex-end; 
+            gap: 8px; 
+            padding-top: 10px;
+            padding-bottom: 5px; 
+            border-top: 1px solid var(--border); 
+            flex-shrink: 0;
+        }
+
+        #chat-input { 
+            flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; 
+            padding: 10px 14px; color: white; font-size: 14px; outline: none; resize: none; 
+            min-height: 42px; max-height: 100px; line-height: 1.4; 
+        }
+
+        .send-btn { border: 1px solid var(--accent); background: none; width: 42px; height: 42px; border-radius: 10px; color: var(--accent); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+        .overlay { position: absolute; inset: 0; background: rgba(5,5,7,0.98); z-index: 2000; display: none; flex-direction: column; justify-content: center; padding: 30px; backdrop-filter: blur(15px); }
+        .overlay.active { display: flex; }
+
+        #toast { position: fixed; top: 30px; left: 50%; transform: translateX(-50%); background: #fff; color: #000; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 10px; opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000; }
         #toast.visible { opacity: 1; visibility: visible; }
 
-        .toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface); padding: 12px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px; }
-        .toggle-row label { font-size: 10px; font-weight: 700; color: var(--text-mute); text-transform: uppercase; }
-
-        .room-card { width: 100%; padding: 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: 0.2s; }
-        .room-card:active { border-color: var(--accent); }
+        .room-card { width: 100%; padding: 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -67,85 +135,79 @@
     <div id="toast">SYSTEM</div>
 
     <div id="scr-start" class="screen active centered-y">
-        <i data-lucide="shield-keyhole" size="42" color="#fff" style="margin: 0 auto 20px auto;"></i>
+        <i data-lucide="message-square" size="48" color="#fff" style="margin: 0 auto 20px auto;"></i>
         <h1 class="title">HYPERRUSH</h1>
-        <p class="subtitle">Secure Protocol V.43</p>
-        <button class="btn" onclick="nav('scr-login')">Access Vault</button>
-        <button class="btn btn-mute" onclick="nav('scr-register')" style="margin-top:10px;">Register</button>
+        <p class="subtitle">Secure Chat 2026</p>
+        <button class="btn" onclick="nav('scr-login')">Sign in (E-mail)</button>
+        <button class="btn btn-mute" onclick="nav('scr-register')" style="margin-top:10px;">Sign up (E-mail)</button>
     </div>
 
     <div id="scr-register" class="screen centered-y">
-        <h1 class="title">Identity</h1>
-        <p class="subtitle">Establish Access</p>
-        <input type="text" id="r-name" class="input-field" placeholder="Username">
-        <input type="email" id="r-email" class="input-field" placeholder="Email">
-        <input type="password" id="r-pass" class="input-field" placeholder="Password">
-        <button class="btn" id="reg-btn" onclick="handleRegister()">Send Code</button>
-        <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Back</button>
+        <h1 class="title">Sign Up | Chats</h1>
+        <p class="subtitle">New User Registration</p>
+        <input type="text" id="r-name" class="input-field" placeholder="Display Name">
+        <input type="email" id="r-email" class="input-field" placeholder="Email Address">
+        <input type="password" id="r-pass" class="input-field" placeholder="Create Password">
+        <button class="btn" onclick="handleRegister()">Continue</button>
+        <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Cancel</button>
     </div>
 
     <div id="scr-verify" class="screen centered-y">
         <h1 class="title">Verify</h1>
-        <p class="subtitle">Enter Security Code</p>
-        <input type="number" id="v-code" class="input-field" placeholder="000000" style="font-size: 20px; letter-spacing: 5px;">
-        <button class="btn" id="ver-btn" onclick="handleVerify()">Finalize Identity</button>
+        <p class="subtitle">Enter Confirmation Code</p>
+        <input type="number" id="v-code" class="input-field" placeholder="000000">
+        <button class="btn" onclick="handleVerify()">Join Hyperrush</button>
     </div>
 
     <div id="scr-login" class="screen centered-y">
-        <h1 class="title">Unlock</h1>
-        <p class="subtitle">Authentication</p>
-        <input type="email" id="l-email" class="input-field" placeholder="Email">
+        <h1 class="title">Sign In | Chats</h1>
+        <p class="subtitle">Sign in with an e-mail adress.</p>
+        <input type="email" id="l-email" class="input-field" placeholder="Email Address">
         <input type="password" id="l-pass" class="input-field" placeholder="Password">
-        <button class="btn" onclick="handleLogin()">Grant Access</button>
+        <button class="btn" onclick="handleLogin()">Login</button>
         <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Back</button>
     </div>
 
     <div id="scr-lobby" class="screen">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px; margin-top:10px;">
-            <h1 class="title" style="font-size: 20px; margin:0;">Vaults</h1>
-            <div style="display:flex; gap:12px;">
-                <i data-lucide="hash" size="18" onclick="joinById()" style="cursor:pointer; opacity:0.6;"></i>
-                <i data-lucide="plus-circle" size="18" onclick="nav('scr-create')" style="cursor:pointer; color:var(--accent);"></i>
-                <i data-lucide="power" size="18" onclick="location.reload()" style="cursor:pointer; color:var(--danger);"></i>
+        <div class="header">
+            <h1 class="title" style="font-size: 20px; margin:0;">Channels</h1>
+            <div style="display:flex; gap:16px;">
+                <i data-lucide="search" size="20" onclick="openJoinUI()" style="cursor:pointer; opacity:0.6;"></i>
+                <i data-lucide="plus" size="20" onclick="nav('scr-create')" style="cursor:pointer; color:var(--accent);"></i>
+                <i data-lucide="log-out" size="20" onclick="location.reload()" style="cursor:pointer; color:var(--danger);"></i>
             </div>
         </div>
-        <div id="room-list" style="flex:1; display:flex; flex-direction:column; gap:10px; overflow-y:auto;"></div>
+        <div id="room-list" style="flex:1; overflow-y:auto;"></div>
     </div>
 
     <div id="scr-create" class="screen centered-y">
-        <h1 class="title">New Vault</h1>
-        <p class="subtitle">Initialize Security</p>
-        <input type="text" id="c-name" class="input-field" placeholder="Vault Name">
-        <input type="password" id="c-pass" class="input-field" placeholder="Vault Password (Optional)">
-        <div class="toggle-row">
-            <label>Hide From Lobby (Private)</label>
-            <input type="checkbox" id="c-priv" style="accent-color:var(--accent); width:18px; height:18px;">
-        </div>
-        <button class="btn" onclick="handleCreate()">Create Vault</button>
+        <h1 class="title">New Channel</h1>
+        <p class="subtitle">Initialize Chatroom</p>
+        <input type="text" id="c-name" class="input-field" placeholder="Channel Name">
+        <input type="password" id="c-pass" class="input-field" placeholder="Access Code (Optional)">
+        <button class="btn" onclick="handleCreate()">Create</button>
         <button onclick="nav('scr-lobby')" class="btn btn-mute" style="border:none; margin-top:10px;">Cancel</button>
     </div>
 
     <div id="scr-chat" class="screen">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-top:10px;">
-            <i data-lucide="arrow-left" onclick="leaveChat()" style="cursor:pointer;"></i>
-            <h2 id="chat-title" style="font-size: 14px; font-weight:800; letter-spacing:1px;">VAULT</h2>
-            <i data-lucide="fingerprint" size="18" onclick="copyId()" style="cursor:pointer; opacity:0.4;"></i>
+        <div class="header">
+            <i data-lucide="chevron-left" onclick="leaveChat()" style="cursor:pointer;"></i>
+            <h2 id="chat-title" style="font-size: 14px; font-weight:800; letter-spacing: 1px;">CHANNEL</h2>
+            <i data-lucide="info" size="18" onclick="copyId()" style="cursor:pointer; opacity:0.4;"></i>
         </div>
         <div id="chat-messages"></div>
-        <div style="display:flex; gap:8px; padding-top:10px;">
-            <input type="text" id="chat-input" class="input-field" style="text-align:left; flex:1; margin-bottom:0;" placeholder="Encrypted transmission...">
-            <button onclick="sendMsg()" style="border:1px solid var(--accent); background:none; width:48px; border-radius:10px; color:var(--accent);">
-                <i data-lucide="send" size="16" style="margin:0 auto;"></i>
-            </button>
+        <div class="chat-input-container">
+            <textarea id="chat-input" rows="1" placeholder="Send a message..."></textarea>
+            <button class="send-btn" onclick="sendMsg()"><i data-lucide="send" size="18"></i></button>
         </div>
     </div>
 
-    <div id="ovl-done" class="overlay">
+    <div id="ovl-join" class="overlay">
         <div style="background:var(--surface); border:1px solid var(--border); padding:30px; border-radius:20px; text-align:center;">
-            <i data-lucide="check-circle" color="var(--status-green)" size="32" style="margin-bottom:15px;"></i>
-            <h3 style="margin-bottom:5px;">Vault Active</h3>
-            <p id="vault-id-display" style="font-family:monospace; font-size:10px; color:var(--accent); margin-bottom:20px; word-break:break-all;">ID</p>
-            <button class="btn" onclick="closeOverlay()">Copy & Enter</button>
+            <h3 style="margin-bottom:15px; letter-spacing: 1px;">JOIN BY ID</h3>
+            <input type="text" id="join-id-input" class="input-field" placeholder="Channel-ID-xxxx">
+            <button class="btn" onclick="handleJoinByID()">Connect</button>
+            <button class="btn btn-mute" onclick="closeJoinUI()" style="margin-top:10px; border:none;">Cancel</button>
         </div>
     </div>
 </div>
@@ -159,15 +221,25 @@
     const SALT = "HyperRush_99_Vault";
 
     const db = createClient(URL, KEY);
-    let user = null;
-    let room = null;
-    let sub = null;
-    let tempReg = {};
+    let user = null, room = null, sub = null, tempReg = {};
 
-    const crypt = (t) => CryptoJS.AES.encrypt(t, SALT).toString();
-    const decrypt = (c) => {
-        try { return CryptoJS.AES.decrypt(c, SALT).toString(CryptoJS.enc.Utf8) || "[SECURE]"; }
-        catch { return "[DECRYPT_ERR]"; }
+    const escapeHTML = (s) => s ? s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : "";
+    
+    const crypt = (t) => {
+        const now = new Date();
+        const timeStr = `[${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}]`;
+        return CryptoJS.AES.encrypt(timeStr + t, SALT).toString();
+    };
+
+    const decryptData = (c) => {
+        try {
+            const raw = CryptoJS.AES.decrypt(c, SALT).toString(CryptoJS.enc.Utf8);
+            if(raw.startsWith('[')) {
+                const endBracket = raw.indexOf(']');
+                return { time: raw.substring(1, endBracket), text: escapeHTML(raw.substring(endBracket + 1)) };
+            }
+            return { time: "--:--", text: escapeHTML(raw) };
+        } catch { return { time: "??:??", text: "[ENCRYPTION ERROR]" }; }
     };
 
     window.nav = (id) => {
@@ -182,117 +254,57 @@
         setTimeout(() => t.classList.remove('visible'), 2500);
     };
 
-    // GAS POST Handler
-    const gasRequest = async (data) => {
-        return fetch(GAS_URL, {
-            method: 'POST',
-            mode: 'no-cors', // Vereist voor GAS doPost zonder redirect errors
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-    };
-
-    // Omdat no-cors geen JSON teruggeeft, gebruiken we een kleine fallback voor status checks
     window.handleRegister = async () => {
-        tempReg = { 
-            n: document.getElementById('r-name').value, 
-            e: document.getElementById('r-email').value, 
-            p: document.getElementById('r-pass').value 
-        };
-        if(!tempReg.n || !tempReg.e || !tempReg.p) return window.toast("MISSING DATA");
-        
-        const btn = document.getElementById('reg-btn');
-        btn.disabled = true;
-        window.toast("INITIATING TRANSITION...");
-
-        try {
-            await gasRequest({ action: "send", email: tempReg.e });
-            window.toast("CODE DISPATCHED");
-            window.nav('scr-verify');
-        } catch (e) {
-            window.toast("NETWORK ERROR");
-        } finally {
-            btn.disabled = false;
-        }
+        tempReg = { n: document.getElementById('r-name').value, e: document.getElementById('r-email').value, p: document.getElementById('r-pass').value };
+        if(!tempReg.n || !tempReg.e || !tempReg.p) return window.toast("DATA REQUIRED");
+        window.toast("SENDING CODE...");
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "send", email: tempReg.e }) });
+        window.nav('scr-verify');
     };
 
     window.handleVerify = async () => {
-        const code = document.getElementById('v-code').value;
-        if(!code) return window.toast("ENTER CODE");
-
-        const btn = document.getElementById('ver-btn');
-        btn.disabled = true;
-        window.toast("VERIFYING...");
-
-        // Omdat 'no-cors' geen response body geeft, proberen we de registratie direct.
-        // Als de code fout is in de Cache, faalt het script aan de achterkant of de gebruiker komt niet door Auth.
-        // Voor een betere UX bij GAS 'doPost' is het vaak handiger om direct naar de auth te gaan.
-        
-        const { data, error } = await db.auth.signUp({ 
-            email: tempReg.e, 
-            password: tempReg.p, 
-            options: { data: { full_name: tempReg.n } } 
-        });
-
-        if(!error) { 
-            user = data.user; 
-            window.toast("IDENTITY CONFIRMED");
-            window.nav('scr-lobby'); 
-            window.loadRooms(); 
-        } else {
-            window.toast(error.message.toUpperCase());
-        }
-        btn.disabled = false;
+        const { data, error } = await db.auth.signUp({ email: tempReg.e, password: tempReg.p, options: { data: { full_name: tempReg.n } } });
+        if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); }
+        else window.toast(error.message.toUpperCase());
     };
 
     window.handleLogin = async () => {
-        const e = document.getElementById('l-email').value;
-        const p = document.getElementById('l-pass').value;
+        const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value;
         const { data, error } = await db.auth.signInWithPassword({ email: e, password: p });
         if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); }
-        else window.toast("DENIED");
+        else window.toast("LOGIN FAILED");
     };
 
     window.loadRooms = async () => {
         const { data } = await db.from('rooms').select('*').or(`is_private.eq.false,created_by.eq.${user.id}`).order('created_at', { ascending: false });
         document.getElementById('room-list').innerHTML = (data || []).map(r => `
-            <div class="room-card" onclick="joinAttempt('${r.id}', '${r.name}', '${r.password}')">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <i data-lucide="${r.password ? 'lock' : 'globe'}" size="14" style="opacity:0.5;"></i>
-                    <span style="font-size:13px; font-weight:600;">${r.name}</span>
-                </div>
-                <i data-lucide="chevron-right" size="14" opacity="0.3"></i>
+            <div class="room-card" onclick="joinAttempt('${r.id}', '${escapeHTML(r.name)}', '${r.password}')">
+                <span style="font-size:13px; font-weight:600;">${escapeHTML(r.name)}</span>
+                <i data-lucide="${r.password ? 'lock' : 'chevron-right'}" size="14" style="opacity:0.4;"></i>
             </div>
         `).join('');
         lucide.createIcons();
     };
 
     window.joinAttempt = (id, name, p) => {
-        if(p && p !== "null" && p !== "") {
-            if(prompt("PASSWORD REQUIRED:") !== p) return window.toast("WRONG PASSWORD");
-        }
+        if(p && p !== "null" && p !== "" && prompt("ENTER CHANNEL CODE:") !== p) return window.toast("INVALID CODE");
         window.openVault(id, name);
     };
 
-    window.joinById = () => {
-        const id = prompt("ENTER VAULT ID:");
-        if(id) db.from('rooms').select('*').eq('id', id).single().then(({data}) => {
-            if(data) joinAttempt(data.id, data.name, data.password);
-            else window.toast("NOT FOUND");
-        });
+    window.openJoinUI = () => document.getElementById('ovl-join').classList.add('active');
+    window.closeJoinUI = () => document.getElementById('ovl-join').classList.remove('active');
+    window.handleJoinByID = async () => {
+        const id = document.getElementById('join-id-input').value.trim();
+        const {data} = await db.from('rooms').select('*').eq('id', id).single();
+        if(data) { closeJoinUI(); joinAttempt(data.id, data.name, data.password); }
+        else window.toast("CHANNEL NOT FOUND");
     };
 
     window.handleCreate = async () => {
-        const n = document.getElementById('c-name').value;
-        const p = document.getElementById('c-pass').value;
-        const pr = document.getElementById('c-priv').checked;
+        const n = document.getElementById('c-name').value, p = document.getElementById('c-pass').value;
         if(!n) return window.toast("NAME REQUIRED");
-        const { data } = await db.from('rooms').insert([{ name: n, password: p || null, is_private: pr, created_by: user.id }]).select();
-        if(data) {
-            document.getElementById('vault-id-display').innerText = data[0].id;
-            document.getElementById('ovl-done').classList.add('active');
-            window.loadRooms();
-        }
+        const { data } = await db.from('rooms').insert([{ name: n, password: p || null, created_by: user.id }]).select();
+        if(data) window.loadRooms(), window.nav('scr-lobby');
     };
 
     window.openVault = async (id, name) => {
@@ -303,38 +315,41 @@
         const box = document.getElementById('chat-messages');
         box.innerHTML = (data || []).map(m => render(m)).join('');
         box.scrollTop = box.scrollHeight;
-
         if(sub) db.removeChannel(sub);
         sub = db.channel(`room_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, 
-        p => {
-            box.insertAdjacentHTML('beforeend', render(p.new));
-            box.scrollTop = box.scrollHeight;
-        }).subscribe();
+        p => { box.insertAdjacentHTML('beforeend', render(p.new)); box.scrollTop = box.scrollHeight; }).subscribe();
     };
 
-    const render = (m) => `
-        <div class="msg ${m.user_id === user.id ? 'me' : 'them'}">
-            <div class="msg-user">${m.user_name}</div>
-            <div>${decrypt(m.content)}</div>
-        </div>
-    `;
+    const render = (m) => {
+        const d = decryptData(m.content);
+        return `<div class="msg ${m.user_id === user.id ? 'me' : 'them'}"><div class="msg-header"><span class="msg-user">${m.user_name}</span><span class="msg-time">${d.time}</span></div><div class="msg-text">${d.text}</div></div>`;
+    };
 
     window.sendMsg = async () => {
         const i = document.getElementById('chat-input');
-        if(!i.value.trim()) return;
-        const txt = i.value; i.value = '';
-        await db.from('messages').insert([{ room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(txt) }]);
+        const val = i.value.trim();
+        if(!val) return;
+        i.value = '';
+        i.style.height = '42px'; 
+        await db.from('messages').insert([{ room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(val) }]);
     };
 
-    window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); window.loadRooms(); };
-    window.copyId = () => { navigator.clipboard.writeText(room); window.toast("COPIED ID"); };
-    window.closeOverlay = () => { 
-        navigator.clipboard.writeText(document.getElementById('vault-id-display').innerText); 
-        document.getElementById('ovl-done').classList.remove('active');
-        window.openVault(document.getElementById('vault-id-display').innerText, "New Vault");
-    };
+    const tx = document.getElementById('chat-input');
+    tx.addEventListener('input', function() {
+        this.style.height = '42px';
+        this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+    });
 
-    document.getElementById('chat-input').addEventListener('keypress', e => e.key === 'Enter' && sendMsg());
+    tx.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMsg();
+        }
+    });
+
+    window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); };
+    window.copyId = () => { navigator.clipboard.writeText(room); window.toast("CHANNEL ID COPIED"); };
+
     lucide.createIcons();
 </script>
 </body>
