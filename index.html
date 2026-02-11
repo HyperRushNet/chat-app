@@ -3,212 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Hyperrush Chat V43</title>
+    <title>Hyperrush Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --bg: #050507;
-            --surface: rgba(255, 255, 255, 0.03);
-            --border: rgba(255, 255, 255, 0.12);
-            --border-active: rgba(255, 255, 255, 0.4);
-            --text-main: #ffffff;
-            --text-mute: #88888e;
-            --accent: #00d2ff;
-            --danger: #ff4444;
+            --bg: #fcfcfd;
+            --surface: #ffffff;
+            --border: #eeeef2;
+            --text-main: #1a1a1e;
+            --text-mute: #8e8e93;
+            --accent: #007aff;
+            --danger: #ff3b30;
+            --success: #34c759;
+            --pad: 24px;
         }
 
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
-
+        ::-webkit-scrollbar { width: 0px; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
         
-        body { 
-            height: 100dvh; 
-            background: var(--bg); 
-            color: var(--text-main); 
-            display: flex; 
-            justify-content: center; 
-            overflow: hidden; 
-        }
+        body { height: 100dvh; background: #f4f4f7; color: var(--text-main); display: flex; justify-content: center; overflow: hidden; }
+        #app { width: 100%; max-width: 440px; height: 100%; position: relative; display: flex; flex-direction: column; background: var(--bg); }
+
+        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: var(--pad); }
+        .screen.active { display: flex; animation: fadeIn 0.4s ease; position: relative; flex: 1; height: 100%; }
+        .center-content { justify-content: center; text-align: center; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .break-text { word-break: break-all; overflow-wrap: break-word; }
+
+        /* Loader & Toasts */
+        #loader-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); backdrop-filter: blur(8px); z-index: 20000; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+        #loader-overlay.active { display: flex; }
+        .spinner { width: 24px; height: 24px; border: 1px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         
-        #app { 
-            width: 100%; 
-            max-width: 440px; 
-            height: 100%; 
-            position: relative; 
-            display: flex;
-            flex-direction: column;
-            border-left: 1px solid var(--border); 
-            border-right: 1px solid var(--border); 
-            background: rgba(5,5,7,0.8); 
-            backdrop-filter: blur(20px); 
-        }
+        #toast-container { position: fixed; top: 32px; left: 50%; transform: translateX(-50%); z-index: 30000; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: 85%; }
+        .toast-item { background: #1a1a1e; color: white; padding: 10px 18px; border-radius: 20px; font-weight: 600; font-size: 12px; animation: toastIn 0.3s ease forwards; pointer-events: auto; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .screen { 
-            position: absolute; 
-            inset: 0; 
-            display: none; 
-            flex-direction: column; 
-            padding: 25px;
-        }
+        /* Typography */
+        .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 24px; flex-shrink: 0; gap: 12px; }
+        .title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: #000; }
+        .subtitle { color: var(--text-mute); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; display: block; }
+        .center-text { text-align: center; }
+
+        /* Inputs & Buttons */
+        .input-field { width: 100%; background: #f2f2f7; border: 1px solid transparent; border-radius: 12px; padding: 14px 16px; color: var(--text-main); font-size: 15px; outline: none; margin-bottom: 12px; transition: 0.2s; }
+        .input-field:focus { border-color: var(--accent); background: #fff; }
         
-        .screen.active { 
-            display: flex; 
-            animation: fadeIn 0.2s ease-out; 
-            position: relative;
-            flex: 1;
-        }
+        .btn { width: 100%; height: 52px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); background: #f9f9fb; }
+        .btn-accent { border-color: var(--accent); color: var(--accent); }
+        .btn-cancel { border: none; margin-top: 8px; color: var(--text-mute); }
 
-        .centered-y { justify-content: center; }
+        /* Room List */
+        #room-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .room-card { width: 100%; padding: 16px; border-radius: 12px; background: var(--surface); display: flex; align-items: center; justify-content: space-between; cursor: pointer; border: 1px solid var(--border); min-width: 0; transition: 0.2s; }
+        .room-card span { font-weight: 600; font-size: 15px; color: #333; flex: 1; min-width: 0; margin-right: 12px; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        /* Chat UI */
+        #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
+        .msg { max-width: 80%; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--border); background: #fff; position: relative; font-size: 14px; line-height: 1.4; }
+        .msg-text { white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; }
+        .msg.me { align-self: flex-end; background: var(--accent); color: white; border: none; border-bottom-right-radius: 4px; }
+        .msg-user { font-size: 10px; font-weight: 700; color: var(--accent); margin-bottom: 4px; display: block; text-transform: uppercase; min-width: 0; cursor: pointer; }
+        .msg.me .msg-user { color: rgba(255,255,255,0.8); }
+        .msg-time { font-size: 8px; opacity: 0.6; display: block; text-align: right; margin-top: 4px; }
 
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-bottom: 15px;
-            margin-bottom: 10px;
-            border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
-        }
+        /* Chat Controls */
+        .chat-header-group { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .chat-input-container { display: flex; gap: 10px; padding-top: 16px; }
+        #chat-input { margin: 0; min-height: 48px; height: 48px; resize: none; padding-top: 14px; }
+        .btn-send { width: 48px; height: 48px; flex-shrink: 0; border-radius: 50%; }
 
-        .title { font-size: 28px; font-weight: 800; letter-spacing: -1px; text-align: center; margin-bottom: 4px; }
-        .subtitle { color: var(--text-mute); font-size: 8px; font-weight: 700; margin-bottom: 35px; text-align: center; text-transform: uppercase; letter-spacing: 3px; }
+        /* Lobby Controls */
+        .lobby-header-icons { display: flex; gap: 16px; flex-shrink: 0; }
+        .lobby-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+        .join-group { display: flex; gap: 8px; }
+        #join-id { margin: 0; flex: 1; }
+        .btn-join { width: 80px; height: 48px; flex-shrink: 0; }
 
-        .btn { width: 100%; height: 52px; border-radius: 12px; border: 1px solid var(--border-active); background: transparent; color: #fff; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.2s; text-transform: uppercase; letter-spacing: 1.5px; }
-        .btn:active { transform: scale(0.98); background: rgba(255,255,255,0.05); }
-        .btn-mute { border: 1px solid var(--border); color: var(--text-mute); }
-
-        .input-field { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: white; font-size: 14px; outline: none; text-align: center; margin-bottom: 10px; }
-
-        #chat-messages { 
-            flex: 1; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 8px; 
-            padding: 10px 0;
-            scroll-behavior: smooth; 
-        }
-
-        .msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); align-self: flex-start; }
-        .msg.me { align-self: flex-end; border-color: rgba(0, 210, 255, 0.2); border-bottom-right-radius: 2px; }
-        
-        .msg-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 2px; }
-        .msg-user { font-size: 10px; font-weight: 700; color: var(--accent); }
-        .msg-time { font-size: 9px; color: var(--text-mute); }
-        .msg-text { font-size: 13px; line-height: 1.4; color: var(--text-main); white-space: pre-wrap; word-break: break-word; }
-
-        .chat-input-container { 
-            display: flex; 
-            align-items: flex-end; 
-            gap: 8px; 
-            padding-top: 10px;
-            padding-bottom: 5px; 
-            border-top: 1px solid var(--border); 
-            flex-shrink: 0;
-        }
-
-        #chat-input { 
-            flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; 
-            padding: 10px 14px; color: white; font-size: 14px; outline: none; resize: none; 
-            min-height: 42px; max-height: 100px; line-height: 1.4; 
-        }
-
-        .send-btn { border: 1px solid var(--accent); background: none; width: 42px; height: 42px; border-radius: 10px; color: var(--accent); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-
-        .overlay { position: absolute; inset: 0; background: rgba(5,5,7,0.98); z-index: 2000; display: none; flex-direction: column; justify-content: center; padding: 30px; backdrop-filter: blur(15px); }
+        /* Overlays & Modals */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.1); backdrop-filter: blur(4px); z-index: 9999; display: none; align-items: center; justify-content: center; padding: 24px; }
         .overlay.active { display: flex; }
+        .modal { width: 100%; max-width: 340px; background: #fff; border-radius: 20px; padding: 24px; border: 1px solid var(--border); }
+        
+        .name-popup-label { margin-bottom: 12px; }
+        #name-popup-text { font-size: 16px; font-weight: 600; color: var(--text-main); text-align: center; margin-bottom: 20px; }
 
-        #toast { position: fixed; top: 30px; left: 50%; transform: translateX(-50%); background: #fff; color: #000; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 10px; opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000; }
-        #toast.visible { opacity: 1; visibility: visible; }
+        /* Profile Modal */
+        #m-user-name { font-size: 18px; margin-bottom: 4px; }
+        .profile-subtitle { margin-bottom: 20px; }
+        .profile-id-box { background: #f2f2f7; padding: 16px; border-radius: 12px; margin-bottom: 20px; }
+        .id-label { font-size: 9px; color: var(--text-mute); text-transform: uppercase; }
+        #m-user-id { font-size: 11px; font-family: monospace; color: var(--text-main); display: block; margin-top: 4px; }
 
-        .room-card { width: 100%; padding: 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; cursor: pointer; margin-bottom: 8px; }
+        /* Create Room Screen */
+        .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 14px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; cursor: pointer; background: #f9f9fb; }
+        .toggle-label { font-size: 14px; font-weight: 600; }
+        .toggle-switch { width: 34px; height: 18px; background: #e2e2e7; border-radius: 20px; position: relative; }
+        .toggle-switch::after { content: ''; position: absolute; width: 14px; height: 14px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: 0.3s; }
+        .toggle-active .toggle-switch { background: var(--success); }
+        .toggle-active .toggle-switch::after { left: 18px; }
+
+        /* Success Screen */
+        #s-id { cursor: pointer; font-family: monospace; text-align: center; background: #fff; border: 1px dashed var(--accent); color: var(--accent); min-height: 48px; }
+
+        /* Misc */
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #d1d1d6; flex-shrink: 0; }
+        .status-dot.online { background: var(--success); }
+        .clickable { cursor: pointer; }
+        .shield-icon { margin: 0 auto 16px auto; }
+        .flex-shrink-0 { flex-shrink: 0; }
+        .flex-1 { flex: 1; }
+        .text-center { text-align: center; }
     </style>
 </head>
 <body>
 
+<div id="loader-overlay">
+    <div class="spinner"></div>
+</div>
+
+<div id="toast-container"></div>
+
+<div id="name-modal" class="overlay" onclick="closeNameModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <p class="subtitle center-text name-popup-label">Identifier</p>
+        <div id="name-popup-text" class="break-text">---</div>
+        <button class="btn" onclick="closeNameModal()">Close</button>
+    </div>
+</div>
+
 <div id="app">
-    <div id="toast">SYSTEM</div>
-
-    <div id="scr-start" class="screen active centered-y">
-        <i data-lucide="message-square" size="48" color="#fff" style="margin: 0 auto 20px auto;"></i>
-        <h1 class="title">HYPERRUSH</h1>
-        <p class="subtitle">Secure Chat 2026</p>
-        <button class="btn" onclick="nav('scr-login')">Sign in (E-mail)</button>
-        <button class="btn btn-mute" onclick="nav('scr-register')" style="margin-top:10px;">Sign up (E-mail)</button>
+    <div id="user-modal" class="overlay" onclick="closeUserModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2 class="title center-text truncate" id="m-user-name">Profile</h2>
+            <p class="subtitle center-text profile-subtitle">Identity Details</p>
+            <div class="profile-id-box">
+                <span class="id-label">Unique ID</span>
+                <span id="m-user-id" class="break-text">---</span>
+            </div>
+            <button class="btn" onclick="closeUserModal()">Back</button>
+        </div>
     </div>
 
-    <div id="scr-register" class="screen centered-y">
-        <h1 class="title">Sign Up | Chats</h1>
-        <p class="subtitle">New User Registration</p>
-        <input type="text" id="r-name" class="input-field" placeholder="Display Name">
+    <div id="scr-start" class="screen active center-content">
+        <i data-lucide="shield-check" size="48" color="#007aff" class="shield-icon"></i>
+        <h1 class="title truncate">Hyperrush</h1>
+        <p class="subtitle">Secure Node</p>
+        <button class="btn btn-accent" onclick="nav('scr-login')" style="margin-bottom:10px;">Sign In</button>
+        <button class="btn" onclick="nav('scr-register')">Sign Up</button>
+    </div>
+
+    <div id="scr-register" class="screen center-content">
+        <h1 class="title">Sign Up</h1>
+        <p class="subtitle">Create account</p>
+        <input type="text" id="r-name" class="input-field" placeholder="Full Name">
         <input type="email" id="r-email" class="input-field" placeholder="Email Address">
-        <input type="password" id="r-pass" class="input-field" placeholder="Create Password">
-        <button class="btn" onclick="handleRegister()">Continue</button>
-        <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Cancel</button>
+        <input type="password" id="r-pass" class="input-field" placeholder="Password">
+        <button class="btn btn-accent" onclick="handleRegister()">Continue</button>
+        <button onclick="nav('scr-start')" class="btn btn-cancel">Cancel</button>
     </div>
 
-    <div id="scr-verify" class="screen centered-y">
-        <h1 class="title">Verify</h1>
-        <p class="subtitle">Enter Confirmation Code</p>
-        <input type="number" id="v-code" class="input-field" placeholder="000000">
-        <button class="btn" onclick="handleVerify()">Join Hyperrush</button>
-    </div>
-
-    <div id="scr-login" class="screen centered-y">
-        <h1 class="title">Sign In | Chats</h1>
-        <p class="subtitle">Sign in with an e-mail adress.</p>
+    <div id="scr-login" class="screen center-content">
+        <h1 class="title">Sign In</h1>
+        <p class="subtitle">Access vault</p>
         <input type="email" id="l-email" class="input-field" placeholder="Email Address">
         <input type="password" id="l-pass" class="input-field" placeholder="Password">
-        <button class="btn" onclick="handleLogin()">Login</button>
-        <button onclick="nav('scr-start')" class="btn btn-mute" style="border:none; margin-top:10px;">Back</button>
+        <button class="btn btn-accent" onclick="handleLogin()">Unlock</button>
+        <button onclick="nav('scr-start')" class="btn btn-cancel">Go Back</button>
     </div>
 
     <div id="scr-lobby" class="screen">
         <div class="header">
-            <h1 class="title" style="font-size: 20px; margin:0;">Channels</h1>
-            <div style="display:flex; gap:16px;">
-                <i data-lucide="search" size="20" onclick="openJoinUI()" style="cursor:pointer; opacity:0.6;"></i>
-                <i data-lucide="plus" size="20" onclick="nav('scr-create')" style="cursor:pointer; color:var(--accent);"></i>
-                <i data-lucide="log-out" size="20" onclick="location.reload()" style="cursor:pointer; color:var(--danger);"></i>
+            <h1 class="title truncate flex-1" style="font-size: 20px;">Rooms</h1>
+            <div class="lobby-header-icons">
+                <i data-lucide="plus-circle" size="22" color="#1a1a1e" class="clickable" onclick="nav('scr-create')"></i>
+                <i data-lucide="log-out" size="20" color="#ff3b30" class="clickable" onclick="handleLogout()"></i>
             </div>
         </div>
-        <div id="room-list" style="flex:1; overflow-y:auto;"></div>
-    </div>
-
-    <div id="scr-create" class="screen centered-y">
-        <h1 class="title">New Channel</h1>
-        <p class="subtitle">Initialize Chatroom</p>
-        <input type="text" id="c-name" class="input-field" placeholder="Channel Name">
-        <input type="password" id="c-pass" class="input-field" placeholder="Access Code (Optional)">
-        <button class="btn" onclick="handleCreate()">Create</button>
-        <button onclick="nav('scr-lobby')" class="btn btn-mute" style="border:none; margin-top:10px;">Cancel</button>
+        <input type="text" id="search-bar" class="input-field" placeholder="Search..." oninput="filterRooms()">
+        <div id="room-list"></div>
+        <div class="lobby-footer">
+            <div class="join-group">
+                <input type="text" id="join-id" class="input-field" placeholder="Room ID">
+                <button class="btn btn-accent btn-join" onclick="joinPrivate()">Join</button>
+            </div>
+        </div>
     </div>
 
     <div id="scr-chat" class="screen">
         <div class="header">
-            <i data-lucide="chevron-left" onclick="leaveChat()" style="cursor:pointer;"></i>
-            <h2 id="chat-title" style="font-size: 14px; font-weight:800; letter-spacing: 1px;">CHANNEL</h2>
-            <i data-lucide="info" size="18" onclick="copyId()" style="cursor:pointer; opacity:0.4;"></i>
+            <div class="chat-header-group">
+                <i data-lucide="arrow-left" size="20" onclick="leaveChat()" class="clickable flex-shrink-0"></i>
+                <div id="live-indicator" class="status-dot"></div>
+                <h2 id="chat-title" class="truncate flex-1" style="font-size: 16px; font-weight: 700;">---</h2>
+            </div>
+            <i data-lucide="link" size="18" color="#8e8e93" class="clickable flex-shrink-0" onclick="copyId()"></i>
         </div>
         <div id="chat-messages"></div>
         <div class="chat-input-container">
-            <textarea id="chat-input" rows="1" placeholder="Send a message..."></textarea>
-            <button class="send-btn" onclick="sendMsg()"><i data-lucide="send" size="18"></i></button>
+            <textarea id="chat-input" class="input-field" placeholder="Message..."></textarea>
+            <button class="btn btn-accent btn-send" onclick="sendMsg()"><i data-lucide="send" size="18"></i></button>
         </div>
     </div>
 
-    <div id="ovl-join" class="overlay">
-        <div style="background:var(--surface); border:1px solid var(--border); padding:30px; border-radius:20px; text-align:center;">
-            <h3 style="margin-bottom:15px; letter-spacing: 1px;">JOIN BY ID</h3>
-            <input type="text" id="join-id-input" class="input-field" placeholder="Channel-ID-xxxx">
-            <button class="btn" onclick="handleJoinByID()">Connect</button>
-            <button class="btn btn-mute" onclick="closeJoinUI()" style="margin-top:10px; border:none;">Cancel</button>
+    <div id="scr-verify" class="screen center-content">
+        <h1 class="title">Verify</h1>
+        <p class="subtitle">Code from email</p>
+        <input type="number" id="v-code" class="input-field text-center" placeholder="000000">
+        <button class="btn btn-accent" onclick="handleVerify()">Confirm</button>
+    </div>
+
+    <div id="scr-gate" class="screen center-content">
+        <h1 class="title truncate">Password</h1>
+        <p class="subtitle">Restricted</p>
+        <input type="password" id="gate-pass" class="input-field text-center" placeholder="Password">
+        <button class="btn btn-accent" onclick="submitGate()">Unlock</button>
+    </div>
+
+    <div id="scr-create" class="screen center-content">
+        <h1 class="title">New Room</h1>
+        <p class="subtitle">Configure</p>
+        <input type="text" id="c-name" class="input-field" placeholder="Room Name">
+        <input type="password" id="c-pass" class="input-field" placeholder="Password (Optional)">
+        <div id="private-toggle" class="toggle-container" onclick="this.classList.toggle('toggle-active')">
+            <span class="toggle-label">Private</span>
+            <div class="toggle-switch"></div>
         </div>
+        <button class="btn btn-accent" onclick="handleCreate()">Create</button>
+        <button onclick="nav('scr-lobby')" class="btn btn-cancel">Cancel</button>
+    </div>
+
+    <div id="scr-success" class="screen center-content">
+        <h1 class="title">Ready</h1>
+        <p class="subtitle">Room ID</p>
+        <div class="input-field break-text" id="s-id" onclick="copySId()">---</div>
+        <button class="btn btn-accent" onclick="enterCreated()">Enter</button>
     </div>
 </div>
 
@@ -218,10 +254,38 @@
     const URL = "https://fahbqdajxnhswevdagdn.supabase.co";
     const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwoHBjaZgzAiv0G9iKfKriKMPxA9Zjm0Fg9dQjtuJuCntuSe3oPP9uvxu1LzwF8aPER/exec";
-    const SALT = "HyperRush_99_Vault";
+    const SALT = "H7a1lPjHvVBA5";
 
     const db = createClient(URL, KEY);
-    let user = null, room = null, sub = null, tempReg = {};
+    let user = null, room = null, sub = null, allRooms = [], tempReg = {}, lastCreated = null;
+
+    // --- Interaction ---
+    let pressTimer;
+    window.startLongPress = (e) => {
+        const text = e.target.innerText;
+        if(!text || text === "---") return;
+        pressTimer = window.setTimeout(() => {
+            document.getElementById('name-popup-text').innerText = text;
+            document.getElementById('name-modal').classList.add('active');
+        }, 600);
+        const stop = () => clearTimeout(pressTimer);
+        e.target.addEventListener('mouseup', stop, {once:true});
+        e.target.addEventListener('touchend', stop, {once:true});
+    };
+    window.closeNameModal = () => document.getElementById('name-modal').classList.remove('active');
+
+    window.toast = (msg) => {
+        const container = document.getElementById('toast-container');
+        const t = document.createElement('div');
+        t.className = 'toast-item';
+        t.innerText = msg;
+        container.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 2500);
+    };
+
+    window.setLoading = (isLoading) => {
+        document.getElementById('loader-overlay').classList.toggle('active', isLoading);
+    };
 
     const escapeHTML = (s) => s ? s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : "";
     
@@ -235,11 +299,11 @@
         try {
             const raw = CryptoJS.AES.decrypt(c, SALT).toString(CryptoJS.enc.Utf8);
             if(raw.startsWith('[')) {
-                const endBracket = raw.indexOf(']');
-                return { time: raw.substring(1, endBracket), text: escapeHTML(raw.substring(endBracket + 1)) };
+                const end = raw.indexOf(']');
+                return { time: raw.substring(1, end), text: escapeHTML(raw.substring(end + 1)) };
             }
             return { time: "--:--", text: escapeHTML(raw) };
-        } catch { return { time: "??:??", text: "[ENCRYPTION ERROR]" }; }
+        } catch { return { time: "??:??", text: "[ENCRYPTED]" }; }
     };
 
     window.nav = (id) => {
@@ -248,107 +312,151 @@
         lucide.createIcons();
     };
 
-    window.toast = (m) => {
-        const t = document.getElementById('toast');
-        t.innerText = m; t.classList.add('visible');
-        setTimeout(() => t.classList.remove('visible'), 2500);
+    window.handleLogout = async () => {
+        window.setLoading(true);
+        await db.auth.signOut(); user = null;
+        window.setLoading(false);
+        window.nav('scr-start');
     };
 
     window.handleRegister = async () => {
         tempReg = { n: document.getElementById('r-name').value, e: document.getElementById('r-email').value, p: document.getElementById('r-pass').value };
-        if(!tempReg.n || !tempReg.e || !tempReg.p) return window.toast("DATA REQUIRED");
-        window.toast("SENDING CODE...");
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "send", email: tempReg.e }) });
-        window.nav('scr-verify');
+        if(!tempReg.n || !tempReg.e || !tempReg.p) return window.toast("Fill all");
+        window.setLoading(true);
+        try {
+            await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "send", email: tempReg.e }) });
+            window.nav('scr-verify');
+        } catch(e) { window.toast("Error"); } finally { window.setLoading(false); }
     };
 
     window.handleVerify = async () => {
+        window.setLoading(true);
         const { data, error } = await db.auth.signUp({ email: tempReg.e, password: tempReg.p, options: { data: { full_name: tempReg.n } } });
-        if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); }
-        else window.toast(error.message.toUpperCase());
+        window.setLoading(false);
+        if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); } else window.toast(error.message);
     };
 
     window.handleLogin = async () => {
         const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value;
+        if(!e || !p) return window.toast("Fill all");
+        window.setLoading(true);
         const { data, error } = await db.auth.signInWithPassword({ email: e, password: p });
-        if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); }
-        else window.toast("LOGIN FAILED");
+        window.setLoading(false);
+        if(!error) { user = data.user; window.nav('scr-lobby'); window.loadRooms(); } else window.toast("Failed");
     };
 
     window.loadRooms = async () => {
-        const { data } = await db.from('rooms').select('*').or(`is_private.eq.false,created_by.eq.${user.id}`).order('created_at', { ascending: false });
-        document.getElementById('room-list').innerHTML = (data || []).map(r => `
+        window.setLoading(true);
+        const { data } = await db.from('rooms').select('*').eq('is_private', false).order('created_at', { ascending: false });
+        allRooms = data || [];
+        renderRoomList(allRooms);
+        window.setLoading(false);
+    };
+
+    const renderRoomList = (list) => {
+        const container = document.getElementById('room-list');
+        container.innerHTML = list.map(r => `
             <div class="room-card" onclick="joinAttempt('${r.id}', '${escapeHTML(r.name)}', '${r.password}')">
-                <span style="font-size:13px; font-weight:600;">${escapeHTML(r.name)}</span>
-                <i data-lucide="${r.password ? 'lock' : 'chevron-right'}" size="14" style="opacity:0.4;"></i>
+                <span class="truncate">${escapeHTML(r.name)}</span>
+                <i data-lucide="${(r.password && r.password !== 'null') ? 'lock' : 'chevron-right'}" size="16" color="#8e8e93" class="flex-shrink-0"></i>
             </div>
         `).join('');
         lucide.createIcons();
     };
 
+    window.filterRooms = () => {
+        const q = document.getElementById('search-bar').value.toLowerCase();
+        renderRoomList(allRooms.filter(r => r.name.toLowerCase().includes(q)));
+    };
+
     window.joinAttempt = (id, name, p) => {
-        if(p && p !== "null" && p !== "" && prompt("ENTER CHANNEL CODE:") !== p) return window.toast("INVALID CODE");
-        window.openVault(id, name);
+        if(p && p !== "null" && p !== "") {
+            window.pendingRoom = { id, name, pass: p };
+            window.nav('scr-gate');
+        } else { window.openVault(id, name); }
     };
 
-    window.openJoinUI = () => document.getElementById('ovl-join').classList.add('active');
-    window.closeJoinUI = () => document.getElementById('ovl-join').classList.remove('active');
-    window.handleJoinByID = async () => {
-        const id = document.getElementById('join-id-input').value.trim();
-        const {data} = await db.from('rooms').select('*').eq('id', id).single();
-        if(data) { closeJoinUI(); joinAttempt(data.id, data.name, data.password); }
-        else window.toast("CHANNEL NOT FOUND");
+    window.submitGate = () => {
+        if(document.getElementById('gate-pass').value === window.pendingRoom.pass) {
+            window.openVault(window.pendingRoom.id, window.pendingRoom.name);
+        } else { window.toast("Wrong"); }
     };
 
-    window.handleCreate = async () => {
-        const n = document.getElementById('c-name').value, p = document.getElementById('c-pass').value;
-        if(!n) return window.toast("NAME REQUIRED");
-        const { data } = await db.from('rooms').insert([{ name: n, password: p || null, created_by: user.id }]).select();
-        if(data) window.loadRooms(), window.nav('scr-lobby');
+    window.joinPrivate = async () => {
+        const id = document.getElementById('join-id').value;
+        if(!id) return;
+        window.setLoading(true);
+        const { data } = await db.from('rooms').select('*').eq('id', id).single();
+        window.setLoading(false);
+        if(data) window.joinAttempt(data.id, data.name, data.password);
     };
 
     window.openVault = async (id, name) => {
-        room = id;
-        document.getElementById('chat-title').innerText = name.toUpperCase();
-        window.nav('scr-chat');
+        window.setLoading(true);
+        if(sub) { await db.removeChannel(sub); sub = null; }
+        room = id; 
+        document.getElementById('chat-title').innerText = name;
+        const indicator = document.getElementById('live-indicator');
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: true });
         const box = document.getElementById('chat-messages');
-        box.innerHTML = (data || []).map(m => render(m)).join('');
+        box.innerHTML = (data || []).map(m => renderMsg(m)).join('');
         box.scrollTop = box.scrollHeight;
-        if(sub) db.removeChannel(sub);
-        sub = db.channel(`room_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, 
-        p => { box.insertAdjacentHTML('beforeend', render(p.new)); box.scrollTop = box.scrollHeight; }).subscribe();
+        sub = db.channel(`room_${id}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, p => { 
+                box.insertAdjacentHTML('beforeend', renderMsg(p.new)); 
+                box.scrollTop = box.scrollHeight; 
+            })
+            .subscribe((status) => { indicator.classList.toggle('online', status === 'SUBSCRIBED'); });
+        window.setLoading(false);
+        window.nav('scr-chat');
     };
 
-    const render = (m) => {
+    const renderMsg = (m) => {
         const d = decryptData(m.content);
-        return `<div class="msg ${m.user_id === user.id ? 'me' : 'them'}"><div class="msg-header"><span class="msg-user">${m.user_name}</span><span class="msg-time">${d.time}</span></div><div class="msg-text">${d.text}</div></div>`;
+        return `<div class="msg ${m.user_id === user.id ? 'me' : 'them'}">
+            <span class="msg-user truncate" onclick="showUserInfo('${m.user_id}')">${m.user_name}</span>
+            <div class="msg-text">${d.text}</div>
+            <span class="msg-time">${d.time}</span>
+        </div>`;
     };
 
     window.sendMsg = async () => {
         const i = document.getElementById('chat-input');
-        const val = i.value.trim();
-        if(!val) return;
-        i.value = '';
-        i.style.height = '42px'; 
+        if(!i.value.trim()) return;
+        const val = i.value; i.value = '';
         await db.from('messages').insert([{ room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(val) }]);
     };
 
-    const tx = document.getElementById('chat-input');
-    tx.addEventListener('input', function() {
-        this.style.height = '42px';
-        this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-    });
-
-    tx.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMsg();
+    window.showUserInfo = async (userId) => {
+        window.setLoading(true);
+        const { data } = await db.from('profiles').select('*').eq('id', userId).single();
+        window.setLoading(false);
+        if (data) {
+            document.getElementById('m-user-name').innerText = data.full_name;
+            document.getElementById('m-user-id').innerText = userId;
+            document.getElementById('user-modal').classList.add('active');
         }
-    });
+    };
 
-    window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); };
-    window.copyId = () => { navigator.clipboard.writeText(room); window.toast("CHANNEL ID COPIED"); };
+    window.closeUserModal = () => document.getElementById('user-modal').classList.remove('active');
+    window.leaveChat = async () => { 
+        if(sub) { await db.removeChannel(sub); sub = null; }
+        window.nav('scr-lobby'); 
+    };
+
+    window.handleCreate = async () => {
+        const n = document.getElementById('c-name').value, p = document.getElementById('c-pass').value;
+        const isPriv = document.getElementById('private-toggle').classList.contains('toggle-active');
+        if(!n) return;
+        window.setLoading(true);
+        const { data } = await db.from('rooms').insert([{ name: n, password: p || null, is_private: isPriv, created_by: user.id }]).select();
+        window.setLoading(false);
+        if(data) { lastCreated = data[0]; document.getElementById('s-id').innerText = lastCreated.id; window.nav('scr-success'); }
+    };
+
+    window.copyId = () => { navigator.clipboard.writeText(room); window.toast("ID Copied"); };
+    window.copySId = () => { navigator.clipboard.writeText(lastCreated.id); window.toast("ID Copied"); };
+    window.enterCreated = () => window.openVault(lastCreated.id, lastCreated.name);
 
     lucide.createIcons();
 </script>
