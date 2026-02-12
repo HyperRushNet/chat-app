@@ -79,7 +79,6 @@
                 // De chained parameter: Als er een invite is, direct joinen
                 const { data: roomData } = await db.from('rooms').select('*').eq('id', inviteId).single();
                 if (roomData) {
-                    window.toast("Invite Accepted");
                     window.joinAttempt(roomData.id, roomData.name, roomData.password);
                 } else {
                     window.toast("Invite Invalid");
