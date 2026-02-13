@@ -94,7 +94,7 @@
             justify-content: space-between;
             padding-bottom: 20px;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 32px;
+            margin-bottom: 12px; /* Iets minder marge om hoger te komen */
             flex-shrink: 0
         }
 
@@ -273,30 +273,50 @@
             border: 1px solid var(--border)
         }
 
+        /* Chat messages container met fade effect */
         #chat-messages {
             flex: 1;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px
+            gap: 12px;
+            padding: 10px 0;
+            /* Fade effect mask */
+            mask-image: linear-gradient(to bottom, 
+                transparent 0%, 
+                black 8%, 
+                black 92%, 
+                transparent 100%
+            );
+            -webkit-mask-image: linear-gradient(to bottom, 
+                transparent 0%, 
+                black 8%, 
+                black 92%, 
+                transparent 100%
+            );
         }
 
         .msg {
             max-width: 85%;
             padding: 10px 16px;
             border-radius: 16px;
-            background: #f2f2f7;
-            align-self: flex-start;
             display: flex;
             flex-direction: column;
             line-height: 1.4
         }
 
-        .msg.me {
+        .message-me {
             align-self: flex-end;
             background: var(--accent);
             color: #fff;
             border-bottom-right-radius: 4px
+        }
+
+        .message-other {
+            align-self: flex-start;
+            background: #f2f2f7;
+            color: var(--text-main);
+            border-bottom-left-radius: 4px
         }
 
         .msg-user {
@@ -487,7 +507,7 @@
                 <i data-lucide="copy" onclick="window.copyId()" style="cursor:pointer;opacity:0.5"></i>
             </div>
             <div id="chat-messages"></div>
-            <div style="display:flex;gap:12px;padding-top:20px">
+            <div style="display:flex;gap:12px;padding-top:10px">
                 <input id="chat-input" class="input-field" style="margin:0;flex:1" placeholder="Type a message..." onkeyup="if(event.key==='Enter') window.sendMsg()">
                 <button class="btn btn-accent" style="width:52px;height:52px;border-radius:14px" onclick="window.sendMsg()">
                     <i data-lucide="arrow-up"></i>
@@ -695,7 +715,11 @@
                 const n = CryptoJS.AES.decrypt(e.content, SALT).toString(CryptoJS.enc.Utf8);
                 if (n.includes("|")) { const a = n.split("|"); s = a[0], t = a[1] }
             } catch { }
-            return `<div class="msg ${e.user_id === user.id ? 'me' : ''}"><span class="msg-user" onclick="window.showUser('${e.user_id}')">${e.user_name}</span>${t}<span class="msg-time">${s}</span></div>`
+            
+            const isMe = e.user_id === user.id;
+            const bubbleClass = isMe ? 'message-me' : 'message-other';
+
+            return `<div class="msg ${bubbleClass}"><span class="msg-user" onclick="window.showUser('${e.user_id}')">${e.user_name}</span>${t}<span class="msg-time">${s}</span></div>`
         };
 
         window.sendMsg = async () => {
