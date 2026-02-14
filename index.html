@@ -3,115 +3,527 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Hyperrush Secure Chat v2</title>
+    <title>Hyperrush Secure Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --bg: #fff; --surface: #fff; --border: #e2e2e7;
-            --text-main: #1c1c1e; --text-mute: #636366;
-            --accent: #007aff; --danger: #ff3b30; --success: #34c759;
+            --bg: #fff;
+            --surface: #fff;
+            --border: #e2e2e7;
+            --text-main: #1c1c1e;
+            --text-mute: #636366;
+            --accent: #007aff;
+            --danger: #ff3b30;
+            --success: #34c759;
             --pad: 32px;
+            --btn-subtle: #3a3a3c
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent }
-        body { height: 100dvh; background: #f2f2f7; color: var(--text-main); display: flex; justify-content: center; align-items: center; overflow: hidden }
-        
-        #app { width: 100%; max-width: 440px; height: 100%; position: relative; display: flex; flex-direction: column; background: var(--bg); box-shadow: 0 0 50px rgba(0, 0, 0, 0.1); }
-        
-        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: var(--pad); background: var(--bg) }
-        .screen.active { display: flex; animation: fadeIn 0.3s ease }
-        
-        /* Connection Toast */
-        #conn-status {
-            position: absolute; top: 0; left: 0; width: 100%; height: 4px;
-            background: var(--success); transition: 0.3s; z-index: 99999;
-        }
-        #conn-status.offline { background: var(--danger); }
 
-        /* UI Components */
-        .title { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; margin-bottom: 8px }
-        .subtitle { color: var(--text-mute); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 32px }
-        .input-field { width: 100%; background: #f2f2f7; border: 1px solid transparent; border-radius: 12px; padding: 16px; font-size: 16px; margin-bottom: 16px; outline: none }
-        .btn { width: 100%; height: 56px; border-radius: 12px; border: 1px solid var(--border); font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px }
-        .btn-accent { background: var(--text-main); color: #fff; border: none }
-        
-        #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 10px 0 }
-        .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; line-height: 1.4; position: relative }
-        .message-me { align-self: flex-end; background: #e3f2fd; border: 1px solid #bbdefb; border-bottom-right-radius: 4px }
-        .message-other { align-self: flex-start; background: #f5f5f7; border: 1px solid #e2e2e7; border-bottom-left-radius: 4px }
-        
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d1d6; margin-right: 8px }
-        .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success) }
-        
-        #loader-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); z-index: 10000; display: none; align-items: center; justify-content: center }
-        .spinner { width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #000; border-radius: 50%; animation: spin 1s linear infinite }
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d1d1d6;
+            border-radius: 10px
+        }
+
+        body {
+            height: 100dvh;
+            background: #f2f2f7;
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden
+        }
+
+        #app {
+            width: 100%;
+            max-width: 440px;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.1);
+            overflow: hidden
+        }
+
+        .screen {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            padding: var(--pad);
+            background: var(--bg)
+        }
+
+        .screen.active {
+            display: flex;
+            animation: fadeIn 0.3s ease
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0 }
+            to { opacity: 1 }
+        }
+
+        .center-content {
+            justify-content: center;
+            text-align: center
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 32px;
+            flex-shrink: 0
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.8px;
+            color: #000;
+            margin-bottom: 8px
+        }
+
+        .subtitle {
+            color: var(--text-mute);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 32px;
+            display: block
+        }
+
+        .input-field {
+            width: 100%;
+            background: #f2f2f7;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            padding: 16px;
+            color: var(--text-main);
+            font-size: 16px;
+            outline: none;
+            margin-bottom: 16px;
+            transition: 0.2s
+        }
+
+        .input-field:focus {
+            border-color: var(--accent);
+            background: #fff
+        }
+
+        .btn {
+            width: 100%;
+            height: 56px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-main);
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: 0.2s
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed
+        }
+
+        .btn:active:not(:disabled) {
+            opacity: 0.7
+        }
+
+        .btn-accent {
+            background: var(--text-main);
+            color: #fff;
+            border: none
+        }
+
+        #toast-container {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100000;
+            width: 85%;
+            pointer-events: none
+        }
+
+        .toast-item {
+            background: #1c1c1e;
+            color: #fff;
+            padding: 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 13px;
+            text-align: center;
+            pointer-events: auto;
+            margin-bottom: 8px;
+            display: none;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, .1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            animation: tIn 0.3s ease-out forwards
+        }
+
+        .toast-item.visible {
+            display: flex;
+            justify-content: center;
+            align-items: center
+        }
+
+        @keyframes tIn {
+            from { opacity: 0; transform: translateY(-10px) }
+            to { opacity: 1; transform: translateY(0) }
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: var(--pad)
+        }
+
+        .overlay.active {
+            display: flex
+        }
+
+        .modal {
+            width: 100%;
+            background: #fff;
+            border-radius: 20px;
+            padding: 32px
+        }
+
+        .profile-info-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 24px
+        }
+
+        .info-item {
+            text-align: left
+        }
+
+        .info-item label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--text-mute);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 4px
+        }
+
+        .info-item span {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            word-break: break-all
+        }
+
+        #room-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .room-card {
+            padding: 20px;
+            border-radius: 16px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            border: 1px solid var(--border)
+        }
+
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px
+        }
+
+        .msg {
+            max-width: 85%;
+            padding: 10px 16px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.4
+        }
+
+        /* Gesplitste klassen voor chat bubbles */
+        .message-me {
+            align-self: flex-end;
+            background: white;
+            border: 1px solid #9ec9db;
+            color: #000;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-other {
+            align-self: flex-start;
+            background: white;
+            color: var(--text-main);
+            border-bottom-left-radius: 4px;
+            border: 1px solid #c7c7c7;
+        }
+
+        .msg-user {
+            font-size: 10px;
+            font-weight: 800;
+            opacity: 0.7;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            cursor: pointer
+        }
+
+        .msg-time {
+            font-size: 9px;
+            opacity: 0.5;
+            align-self: flex-end;
+            margin-top: 4px
+        }
+
+        .switch-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f2f2f7;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px
+        }
+
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 26px
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0
+        }
+
+        .slider {
+            position: absolute;
+            inset: 0;
+            background: #d1d1d6;
+            border-radius: 34px;
+            cursor: pointer;
+            transition: .4s
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: #fff;
+            transition: .4s;
+            border-radius: 50%
+        }
+
+        input:checked + .slider {
+            background: var(--success)
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px)
+        }
+
+        #loader-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 20000;
+            display: none;
+            align-items: center;
+            justify-content: center
+        }
+
+        #loader-overlay.active {
+            display: flex
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #eee;
+            border-top-color: var(--text-main);
+            border-radius: 50%;
+            animation: spin .8s linear infinite
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg) }
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d1d1d6;
+            margin-right: 8px
+        }
+
+        .status-dot.online {
+            background: var(--success)
+        }
     </style>
 </head>
 <body>
     <div id="app">
-        <div id="conn-status"></div>
-        <div id="loader-overlay"><div class="spinner"></div></div>
+        <div id="loader-overlay">
+            <div class="spinner"></div>
+        </div>
+        <div id="toast-container"></div>
 
-        <div id="scr-start" class="screen active" style="text-align: center; justify-content: center;">
-            <i data-lucide="shield-check" style="margin: 0 auto 20px; width: 64px; height: 64px;"></i>
-            <h1 class="title">HRN Secure</h1>
-            <p class="subtitle">End-to-End Encrypted</p>
-            <button class="btn btn-accent" onclick="nav('scr-login')">Sign In</button>
-            <button class="btn" style="margin-top: 12px" onclick="nav('scr-register')">Register</button>
+        <div id="user-modal" class="overlay" onclick="this.classList.remove('active')">
+            <div class="modal" onclick="event.stopPropagation()">
+                <h2 class="title" style="text-align:center;margin-bottom:24px">User Profile</h2>
+                <div class="profile-info-stack">
+                    <div class="info-item"><label>Profile ID</label><span id="m-id">---</span></div>
+                    <div class="info-item"><label>Full Name</label><span id="m-name">---</span></div>
+                    <div class="info-item"><label>Email Address</label><span id="m-email">---</span></div>
+                    <div class="info-item"><label>Member Since</label><span id="m-date">---</span></div>
+                </div>
+                <button class="btn btn-accent" onclick="document.getElementById('user-modal').classList.remove('active')">Close</button>
+            </div>
         </div>
 
-        <div id="scr-login" class="screen">
-            <h1 class="title">Sign In</h1>
-            <p class="subtitle" id="login-sub">Enter your credentials</p>
-            <input id="l-email" class="input-field" type="email" placeholder="Email">
-            <input id="l-pass" class="input-field" type="password" placeholder="Password">
-            <button class="btn btn-accent" onclick="handleLogin()">Connect</button>
-            <button class="btn" style="border:none; margin-top:8px" onclick="nav('scr-start')">Back</button>
+        <div id="scr-start" class="screen active center-content">
+            <div><i data-lucide="shield-check" size="64"></i></div>
+            <h1 class="title">HRN Chat</h1>
+            <p class="subtitle">Secure Messaging</p>
+            <button class="btn btn-accent" onclick="window.nav('scr-login')" style="margin-bottom:12px">Sign In</button>
+            <button class="btn" onclick="window.nav('scr-register')">Create Account</button>
         </div>
 
-        <div id="scr-register" class="screen">
-            <h1 class="title">Create Account</h1>
-            <p class="subtitle">Join the secure network</p>
+        <div id="scr-register" class="screen center-content">
+            <h1 class="title">Sign Up</h1>
+            <p class="subtitle">Join the network</p>
             <input id="r-name" class="input-field" placeholder="Full Name">
             <input id="r-email" class="input-field" type="email" placeholder="Email">
-            <input id="r-pass" class="input-field" type="password" placeholder="Password (min 6 chars)">
-            <button class="btn btn-accent" onclick="handleRegister()">Create</button>
-            <button class="btn" style="border:none; margin-top:8px" onclick="nav('scr-start')">Back</button>
+            <input id="r-pass" type="password" class="input-field" placeholder="Password" onkeyup="if(event.key==='Enter') window.handleRegister()">
+            <button id="btn-reg" class="btn btn-accent" onclick="window.handleRegister()">Continue</button>
+            <button class="btn" style="border:none;margin-top:8px" onclick="window.nav('scr-start')">Cancel</button>
+        </div>
+
+        <div id="scr-login" class="screen center-content">
+            <h1 class="title">Welcome Back</h1>
+            <p class="subtitle">Identify yourself</p>
+            <input id="l-email" class="input-field" type="email" placeholder="Email">
+            <input id="l-pass" type="password" class="input-field" placeholder="Password" onkeyup="if(event.key==='Enter') window.handleLogin()">
+            <button id="btn-login" class="btn btn-accent" onclick="window.handleLogin()">Sign In</button>
+            <button class="btn" style="border:none;margin-top:8px" onclick="window.nav('scr-start')">Go Back</button>
         </div>
 
         <div id="scr-lobby" class="screen">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
-                <h2 class="title" style="font-size:20px; margin:0">Channels</h2>
-                <div style="display:flex; gap:15px">
-                    <i data-lucide="plus" onclick="nav('scr-create')" style="cursor:pointer"></i>
-                    <i data-lucide="log-out" onclick="handleLogout()" style="cursor:pointer; color:var(--danger)"></i>
+            <div class="header">
+                <h1 class="title" style="font-size:22px">Channels</h1>
+                <div style="display:flex;gap:15px;align-items:center">
+                    <i data-lucide="plus" onclick="window.nav('scr-create')" style="cursor:pointer"></i>
+                    <i data-lucide="log-out" onclick="window.handleLogout()" style="cursor:pointer;color:var(--danger)"></i>
                 </div>
             </div>
-            <div id="room-list" style="flex:1; overflow-y:auto"></div>
+            <input id="search-bar" class="input-field" placeholder="Search channels..." oninput="window.filterRooms()">
+            <div id="room-list"></div>
+            <div style="display:flex;gap:12px;margin-top:20px">
+                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID">
+                <button class="btn btn-accent" style="width:80px" onclick="window.joinPrivate()">Join</button>
+            </div>
+        </div>
+
+        <div id="scr-gate" class="screen center-content">
+            <h1 class="title">Restricted</h1>
+            <p class="subtitle">Access Key Required</p>
+            <input id="gate-pass" type="password" class="input-field" placeholder="••••••••" onkeyup="if(event.key==='Enter') window.submitGate()">
+            <button class="btn btn-accent" onclick="window.submitGate()">Unlock Access</button>
+            <button class="btn" style="border:none;margin-top:8px" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
 
         <div id="scr-chat" class="screen">
-            <div style="display:flex; align-items:center; padding-bottom:15px; border-bottom:1px solid var(--border); margin-bottom:15px">
-                <i data-lucide="arrow-left" onclick="leaveChat()" style="cursor:pointer; margin-right:15px"></i>
-                <div id="chat-hb" class="status-dot"></div>
-                <h3 id="chat-title" style="flex:1; font-size:16px">---</h3>
+            <div class="header">
+                <div style="display:flex;align-items:center;flex:1">
+                    <i data-lucide="chevron-left" onclick="window.leaveChat()" style="cursor:pointer;margin-right:16px"></i>
+                    <div id="live-indicator" class="status-dot"></div>
+                    <h2 id="chat-title" class="title" style="font-size:18px;margin-bottom:0">---</h2>
+                </div>
+                <i data-lucide="copy" onclick="window.copyId()" style="cursor:pointer;opacity:0.5"></i>
             </div>
             <div id="chat-messages"></div>
-            <div style="display:flex; gap:10px; padding-top:15px">
-                <input id="chat-input" class="input-field" style="margin:0" placeholder="Secure message...">
-                <button class="btn btn-accent" style="width:60px" onclick="sendMsg()"><i data-lucide="send"></i></button>
+            <div style="display:flex;gap:12px;padding-top:20px">
+                <input id="chat-input" class="input-field" style="margin:0;flex:1" placeholder="Type a message..." onkeyup="if(event.key==='Enter') window.sendMsg()">
+                <button class="btn btn-accent" style="width:52px;height:52px;border-radius:14px" onclick="window.sendMsg()">
+                    <i data-lucide="arrow-up"></i>
+                </button>
             </div>
         </div>
 
-        <div id="scr-create" class="screen">
+        <div id="scr-create" class="screen center-content">
             <h1 class="title">New Channel</h1>
+            <p class="subtitle">Set parameters</p>
             <input id="c-name" class="input-field" placeholder="Channel Name">
             <input id="c-pass" class="input-field" placeholder="Password (Optional)">
-            <button class="btn btn-accent" onclick="handleCreate()">Create</button>
-            <button class="btn" style="border:none; margin-top:8px" onclick="nav('scr-lobby')">Cancel</button>
+            <div class="switch-container">
+                <span>Hidden Channel</span>
+                <label class="switch">
+                    <input type="checkbox" id="c-priv">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <button class="btn btn-accent" onclick="window.handleCreate()">Create Channel</button>
+            <button class="btn" style="border:none;margin-top:8px" onclick="window.nav('scr-lobby')">Cancel</button>
+        </div>
+
+        <div id="scr-success" class="screen center-content">
+            <h1 class="title">Created</h1>
+            <p class="subtitle">Your Channel ID</p>
+            <div id="s-id" class="input-field" style="font-family:monospace;cursor:pointer;border:1px solid var(--accent);color:var(--accent)" onclick="window.copySId()">---</div>
+            <button class="btn btn-accent" onclick="window.enterCreated()">Enter Channel</button>
         </div>
     </div>
 
@@ -120,215 +532,226 @@
 
         const URL = "https://fahbqdajxnhswevdagdn.supabase.co",
               KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI",
-              SALT = "H7a1lPjHvVBA5";
-        
-        const db = createClient(URL, KEY);
-        let user = null, room = null, sub = null;
-        let isOnline = navigator.onLine;
+              SALT = "H7a1lPjHvVBA5",
+              db = createClient(URL, KEY);
 
-        // --- CORE FUNCTIONS ---
-        const nav = (id) => {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            lucide.createIcons();
+        let user, room, sub, allRooms = [], lastCreated, toastQueue = [], isToastActive = !1;
+
+        const iI = () => { if (window.lucide) lucide.createIcons(); else setTimeout(iI, 50) };
+
+        window.nav = e => {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')),
+            document.getElementById(e).classList.add('active'),
+            iI()
         };
 
-        const loader = (show) => document.getElementById('loader-overlay').style.display = show ? 'flex' : 'none';
+        window.toast = e => { toastQueue.push(e), isToastActive || pQ() };
 
-        // --- HEARTBEAT & OFFLINE LOGIC ---
-        const updateOnlineStatus = () => {
-            isOnline = navigator.onLine;
-            const bar = document.getElementById('conn-status');
-            bar.className = isOnline ? '' : 'offline';
-            if (!isOnline) {
-                console.log("App is offline. Using cached data.");
-            }
-        };
-
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        // Heartbeat interval om Supabase connectie te checken
-        setInterval(async () => {
-            if (isOnline) {
-                const { error } = await db.from('profiles').select('count', { count: 'exact', head: true }).limit(1);
-                if (error) updateOnlineStatus(false);
-            }
-        }, 30000);
-
-        // --- AUTH LOGIC (Met LocalStorage cache) ---
-        const handleLogin = async () => {
-            const email = document.getElementById('l-email').value;
-            const pass = document.getElementById('l-pass').value;
-
-            if (!isOnline) {
-                // Simpele offline check tegen cache
-                const cachedUser = JSON.parse(localStorage.getItem('hrn_user'));
-                if (cachedUser && cachedUser.email === email) {
-                    user = cachedUser;
-                    alert("Offline mode: Logged in with cached profile.");
-                    nav('scr-lobby');
-                    renderCachedRooms();
-                    return;
-                }
-                alert("Offline: Connection required for first-time login.");
-                return;
-            }
-
-            loader(true);
-            const { data, error } = await db.auth.signInWithPassword({ email, password: pass });
-            loader(false);
-
-            if (error) alert(error.message);
-            else {
-                user = data.user;
-                localStorage.setItem('hrn_user', JSON.stringify(user));
-                nav('scr-lobby');
-                loadRooms();
-            }
-        };
-
-        const handleRegister = async () => {
-            if (!isOnline) return alert("Internet required to register.");
-            const name = document.getElementById('r-name').value;
-            const email = document.getElementById('r-email').value;
-            const pass = document.getElementById('r-pass').value;
-
-            loader(true);
-            const { data, error } = await db.auth.signUp({ email, password: pass, options: { data: { full_name: name } } });
-            if (!error) {
-                await db.from('profiles').insert([{ id: data.user.id, full_name: name, email: email }]);
-                alert("Account created! You can now sign in.");
-                nav('scr-login');
-            } else {
-                alert(error.message);
-            }
-            loader(false);
-        };
-
-        const handleLogout = () => {
-            db.auth.signOut();
-            localStorage.removeItem('hrn_user');
-            nav('scr-start');
-        };
-
-        // --- ROOMS & MESSAGES ---
-        async function loadRooms() {
-            if (!isOnline) return renderCachedRooms();
-            const { data } = await db.from('rooms').select('*').eq('is_private', false);
-            if (data) {
-                localStorage.setItem('hrn_rooms', JSON.stringify(data));
-                renderRooms(data);
-            }
+        async function pQ() {
+            if (0 === toastQueue.length) return void(isToastActive = !1);
+            isToastActive = !0;
+            const e = toastQueue.shift(),
+                  t = document.getElementById('toast-container'),
+                  s = document.createElement('div');
+            s.className = 'toast-item',
+            s.innerText = e,
+            t.appendChild(s),
+            s.classList.add('visible');
+            await new Promise(r => {
+                const timeout = setTimeout(r, 3500);
+                s.onclick = () => { clearTimeout(timeout), r() }
+            });
+            s.remove();
+            pQ()
         }
 
-        function renderRooms(rooms) {
-            const list = document.getElementById('room-list');
-            list.innerHTML = rooms.map(r => `
-                <div class="btn" style="margin-bottom:10px; justify-content:space-between; padding:0 20px" onclick="openChat('${r.id}', '${r.name}')">
-                    <span>${r.name}</span>
-                    <i data-lucide="chevron-right" size="16"></i>
-                </div>
-            `).join('');
-            lucide.createIcons();
-        }
+        const cN = () => navigator.onLine || (window.toast("Check connection"), !1);
+        const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-        function renderCachedRooms() {
-            const cached = JSON.parse(localStorage.getItem('hrn_rooms') || '[]');
-            renderRooms(cached);
-        }
+        window.handleLogin = async () => {
+            if (!cN()) return;
+            const e = document.getElementById('l-email').value.trim(),
+                  t = document.getElementById('l-pass').value,
+                  btn = document.getElementById('btn-login');
 
-        window.openChat = async (id, name) => {
-            room = id;
-            document.getElementById('chat-title').innerText = name;
-            nav('scr-chat');
+            if (!e || !t) return window.toast("Fill in all fields");
+            if (!validateEmail(e)) return window.toast("Invalid email address");
 
-            // Load cache first
-            const cachedMsgs = JSON.parse(localStorage.getItem(`msgs_${id}`) || '[]');
-            renderMessages(cachedMsgs);
+            btn.innerText = "Signing in...";
+            btn.disabled = true;
+            document.getElementById('loader-overlay').classList.add('active');
 
-            if (isOnline) {
-                const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: true });
-                if (data) {
-                    localStorage.setItem(`msgs_${id}`, JSON.stringify(data));
-                    renderMessages(data);
-                }
-                
-                // Real-time subscription
-                if (sub) db.removeChannel(sub);
-                sub = db.channel(`room_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, (payload) => {
-                    appendMessage(payload.new);
-                }).subscribe(s => {
-                    document.getElementById('chat-hb').classList.toggle('online', s === 'SUBSCRIBED');
-                });
-            }
-        };
-
-        function renderMessages(msgs) {
-            const cont = document.getElementById('chat-messages');
-            cont.innerHTML = msgs.map(m => createMsgHTML(m)).join('');
-            cont.scrollTop = cont.scrollHeight;
-        }
-
-        function createMsgHTML(m) {
-            let content = "Encrypted";
             try {
-                const dec = CryptoJS.AES.decrypt(m.content, SALT).toString(CryptoJS.enc.Utf8);
-                content = dec.split('|')[1] || dec;
-            } catch(e) {}
-            const isMe = m.user_id === user?.id;
-            return `<div class="msg ${isMe ? 'message-me' : 'message-other'}">
-                <div style="font-size:9px; font-weight:800; opacity:0.6; margin-bottom:4px">${m.user_name}</div>
-                ${content}
-            </div>`;
+                const { error } = await db.auth.signInWithPassword({ email: e, password: t });
+                if (error) window.toast("Auth failed: " + error.message);
+            } catch {
+                window.toast("Connection error")
+            } finally {
+                btn.innerText = "Sign In";
+                btn.disabled = false;
+                document.getElementById('loader-overlay').classList.remove('active');
+            }
+        };
+
+        window.handleRegister = async () => {
+            if (!cN()) return;
+            const n = document.getElementById('r-name').value.trim(),
+                  e = document.getElementById('r-email').value.trim(),
+                  p = document.getElementById('r-pass').value,
+                  btn = document.getElementById('btn-reg');
+
+            if (!n || !e || !p) return window.toast("Fill in all fields");
+            if (!validateEmail(e)) return window.toast("Invalid email address");
+            if (p.length < 6) return window.toast("Password: min 6 chars");
+
+            btn.innerText = "Creating account...";
+            btn.disabled = true;
+            document.getElementById('loader-overlay').classList.add('active');
+
+            try {
+                const { data, error } = await db.auth.signUp({ 
+                    email: e, 
+                    password: p, 
+                    options: { data: { full_name: n } } 
+                });
+                if (error) {
+                    window.toast(error.message);
+                } else {
+                    await db.from('profiles').insert([{ id: data.user.id, full_name: n, email: e }]);
+                    window.toast("Account Created! You can now sign in.");
+                    window.nav('scr-login');
+                }
+            } catch {
+                window.toast("Registration failed")
+            } finally {
+                btn.innerText = "Continue";
+                btn.disabled = false;
+                document.getElementById('loader-overlay').classList.remove('active');
+            }
+        };
+
+        window.handleLogout = () => db.auth.signOut();
+
+        db.auth.onAuthStateChange(async (e, s) => {
+            if (s) {
+                user = s.user;
+                const p = new URLSearchParams(window.location.search).get('invite');
+                if (p) {
+                    const { data: r } = await db.from('rooms').select('*').eq('id', p).single();
+                    if (r) return window.joinAttempt(r.id, r.name, r.password)
+                }
+                window.nav('scr-lobby');
+                loadRooms()
+            } else {
+                user = null;
+                window.nav('scr-start')
+            }
+        });
+
+        async function loadRooms() {
+            try {
+                const { data: e } = await db.from('rooms').select('*').eq('is_private', false);
+                allRooms = e || [], renderRooms(allRooms)
+            } catch {
+                window.toast("Sync error")
+            }
         }
 
-        function appendMessage(m) {
-            const cont = document.getElementById('chat-messages');
-            cont.insertAdjacentHTML('beforeend', createMsgHTML(m));
-            cont.scrollTop = cont.scrollHeight;
-        }
+        const renderRooms = e => {
+            document.getElementById('room-list').innerHTML = e.map(e => `
+                <div class="room-card" onclick="window.joinAttempt('${e.id}','${e.name}','${e.password}')">
+                    <span style="font-weight:700">${e.name}</span>
+                    <i data-lucide="${e.password ? 'lock' : 'chevron-right'}" size="18" color="#636366"></i>
+                </div>
+            `).join(''),
+            iI()
+        };
+
+        window.filterRooms = () => {
+            const q = document.getElementById('search-bar').value.toLowerCase();
+            renderRooms(allRooms.filter(r => r.name.toLowerCase().includes(q)))
+        };
+
+        window.joinAttempt = (i, n, p) => {
+            p && p !== 'null' ? (window.pending = { i, n, p }, window.nav('scr-gate')) : window.openVault(i, n)
+        };
+
+        window.submitGate = () => {
+            const val = document.getElementById('gate-pass').value;
+            if(val === window.pending.p) {
+                document.getElementById('gate-pass').value = "";
+                window.openVault(window.pending.i, window.pending.n);
+            } else {
+                window.toast("Invalid Key");
+            }
+        };
+
+        window.openVault = async (i, n) => {
+            if (!cN()) return;
+            room = i, document.getElementById('chat-title').innerText = n, window.nav('scr-chat');
+            const { data: s } = await db.from('messages').select('*').eq('room_id', i).order('created_at', { ascending: !0 });
+            const b = document.getElementById('chat-messages');
+            b.innerHTML = s.map(e => renderMsg(e)).join(''), b.scrollTop = b.scrollHeight;
+            sub = db.channel(`r_${i}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${i}` }, e => {
+                b.insertAdjacentHTML('beforeend', renderMsg(e.new)), b.scrollTop = b.scrollHeight
+            }).subscribe(s => document.getElementById('live-indicator').classList.toggle('online', s === 'SUBSCRIBED'))
+        };
+
+        const renderMsg = e => {
+            let t = "[ENCRYPTED]", s = "--:--";
+            try {
+                const n = CryptoJS.AES.decrypt(e.content, SALT).toString(CryptoJS.enc.Utf8);
+                if (n.includes("|")) { const a = n.split("|"); s = a[0], t = a[1] }
+            } catch { }
+            
+            const isMe = e.user_id === user.id;
+            const bubbleClass = isMe ? 'message-me' : 'message-other';
+
+            return `<div class="msg ${bubbleClass}"><span class="msg-user" onclick="window.showUser('${e.user_id}')">${e.user_name}</span>${t}<span class="msg-time">${s}</span></div>`
+        };
 
         window.sendMsg = async () => {
-            const input = document.getElementById('chat-input');
-            const val = input.value.trim();
-            if (!val) return;
-            if (!isOnline) return alert("Cannot send messages while offline.");
-
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const crypt = CryptoJS.AES.encrypt(time + "|" + val, SALT).toString();
-
-            input.value = "";
-            await db.from('messages').insert([{ 
-                room_id: room, 
-                user_id: user.id, 
-                user_name: user.user_metadata.full_name, 
-                content: crypt 
-            }]);
+            const i = document.getElementById('chat-input'), v = i.value.trim();
+            if (v && cN()) {
+                i.value = "";
+                const d = new Date(), t = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`, c = CryptoJS.AES.encrypt(t + "|" + v, SALT).toString();
+                await db.from('messages').insert([{ room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: c }])
+            }
         };
 
-        window.leaveChat = () => {
-            if (sub) db.removeChannel(sub);
-            nav('scr-lobby');
+        window.showUser = async (u) => {
+            document.getElementById('loader-overlay').classList.add('active');
+            const { data: d } = await db.from('profiles').select('*').eq('id', u).single();
+            document.getElementById('loader-overlay').classList.remove('active');
+            if (d) {
+                const date = new Date(d.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+                document.getElementById('m-id').innerText = d.id, document.getElementById('m-name').innerText = d.full_name, document.getElementById('m-email').innerText = d.email, document.getElementById('m-date').innerText = date;
+                document.getElementById('user-modal').classList.add('active')
+            }
         };
 
-        // Init
-        updateOnlineStatus();
-        const sessionUser = localStorage.getItem('hrn_user');
-        if (sessionUser) {
-            user = JSON.parse(sessionUser);
-            nav('scr-lobby');
-            loadRooms();
-        }
+        window.handleCreate = async () => {
+            const n = document.getElementById('c-name').value, p = document.getElementById('c-pass').value, v = document.getElementById('c-priv').checked;
+            if (n && cN()) {
+                const { data: d } = await db.from('rooms').insert([{ name: n, password: p || null, is_private: v, created_by: user.id }]).select();
+                if (d) lastCreated = d[0], document.getElementById('s-id').innerText = lastCreated.id, window.nav('scr-success')
+            }
+        };
 
-        // Global exposure for HTML onclicks
-        window.nav = nav;
-        window.handleLogin = handleLogin;
-        window.handleRegister = handleRegister;
-        window.handleLogout = handleLogout;
-        window.sendMsg = sendMsg;
-        window.leaveChat = leaveChat;
+        window.joinPrivate = async () => {
+            const i = document.getElementById('join-id').value.trim();
+            if (i) {
+                const { data: r } = await db.from('rooms').select('*').eq('id', i).single();
+                r ? window.joinAttempt(r.id, r.name, r.password) : window.toast("Channel Not Found")
+            }
+        };
 
+        window.copyId = () => { navigator.clipboard.writeText(room), window.toast("ID Copied") };
+        window.copySId = () => { navigator.clipboard.writeText(lastCreated.id), window.toast("ID Copied") };
+        window.enterCreated = () => window.openVault(lastCreated.id, lastCreated.name);
+        window.leaveChat = () => { sub && db.removeChannel(sub), window.nav('scr-lobby') };
+
+        iI();
     </script>
 </body>
 </html>
