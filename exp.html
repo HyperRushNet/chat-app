@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Hyperrush GAS Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg: #f8f9fc; --surface: #ffffff; --border: #e2e2e7;
+            --text-main: #1c1c1e; --text-mute: #8e8e93; --accent: #007aff;
+            --danger: #ff3b30; --success: #34c759; --pad: 24px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent }
+        body { height: 100dvh; background: var(--bg); color: var(--text-main); display: flex; justify-content: center; align-items: center; overflow: hidden }
+        
+        #app { width: 100%; max-width: 440px; height: 100%; position: relative; display: flex; flex-direction: column; background: var(--surface); box-shadow: 0 10px 40px rgba(0,0,0,0.05); overflow: hidden }
+        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: var(--pad); background: var(--surface); }
+        .screen.active { display: flex; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 25px; flex-shrink: 0 }
+        .title { font-size: 22px; font-weight: 800; letter-spacing: -0.6px; color: #000; }
+        
+        .input-field { width: 100%; background: #f2f2f7; border: 1px solid transparent; border-radius: 14px; padding: 16px; font-size: 16px; outline: none; margin-bottom: 12px; transition: 0.2s; }
+        .input-field:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(0,122,255,0.1); }
+        .btn { width: 100%; height: 54px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main); font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.2s; }
+        .btn-accent { background: var(--text-main); color: #fff; border: none; }
+        .btn:active { transform: scale(0.98); }
+
+        #room-list, #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .room-card { padding: 18px 22px; border-radius: 18px; background: #fff; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+
+        .msg { max-width: 82%; padding: 12px 16px; border-radius: 18px; line-height: 1.45; border: 1.5px solid #e2e2e7; font-size: 15px; }
+        .message-me { align-self: flex-end; border-color: #9ec9db; border-bottom-right-radius: 4px; }
+        .message-other { align-self: flex-start; border-bottom-left-radius: 4px; }
+        .msg-user { font-size: 10px; font-weight: 800; color: var(--text-mute); text-transform: uppercase; margin-bottom: 4px; display: block; }
+        .pending { opacity: 0.5; }
+
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #d1d1d6; margin-right: 12px; transition: all 0.3s ease; }
+        .status-dot.online { background: var(--success) !important; box-shadow: 0 0 12px var(--success); animation: pulseStatus 1.5s infinite; }
+        @keyframes pulseStatus { 0% { transform: scale(1); } 50% { transform: scale(0.8); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <div id="scr-start" class="screen active" style="justify-content:center; text-align:center">
+            <h1 class="title" style="font-size:32px">Hyperrush</h1>
+            <p style="color:var(--text-mute); margin-bottom:30px">Secure End-to-End</p>
+            <button class="btn btn-accent" onclick="window.nav('scr-login')">Sign In</button>
+        </div>
+
+        <div id="scr-login" class="screen" style="justify-content:center;">
+            <h1 class="title" style="margin-bottom:20px">Welcome</h1>
+            <input id="l-email" class="input-field" placeholder="Email">
+            <input id="l-pass" type="password" class="input-field" placeholder="Password">
+            <button class="btn btn-accent" onclick="window.handleLogin()">Login</button>
+            <button class="btn" style="border:none; margin-top:10px" onclick="window.nav('scr-start')">Back</button>
+        </div>
+
+        <div id="scr-lobby" class="screen">
+            <div class="header">
+                <h1 class="title">Rooms</h1>
+                <i data-lucide="plus" onclick="window.nav('scr-create')" style="cursor:pointer"></i>
+            </div>
+            <input id="search-bar" class="input-field" placeholder="Search..." oninput="window.filterRooms()">
+            <div id="room-list"></div>
+            <div style="display:flex; gap:10px; margin-top:20px; background:#f2f2f7; padding:10px; border-radius:16px;">
+                <input id="join-id" class="input-field" style="margin:0; background:#fff" placeholder="Join ID">
+                <button class="btn btn-accent" style="width:60px" onclick="window.joinPrivate()"><i data-lucide="hash"></i></button>
+            </div>
+        </div>
+
+        <div id="scr-gate" class="screen" style="justify-content:center; text-align:center">
+            <h1 class="title">Locked</h1>
+            <input id="gate-pass" type="password" class="input-field" placeholder="Enter Password">
+            <button class="btn btn-accent" onclick="window.submitGate()">Enter</button>
+            <button class="btn" style="border:none; margin-top:10px" onclick="window.nav('scr-lobby')">Cancel</button>
+        </div>
+
+        <div id="scr-chat" class="screen">
+            <div class="header">
+                <div style="display:flex; align-items:center;">
+                    <i data-lucide="chevron-left" onclick="window.leaveChat()" style="cursor:pointer; margin-right:15px"></i>
+                    <div id="live-indicator" class="status-dot"></div>
+                    <h2 id="chat-title" class="title" style="font-size:18px;">---</h2>
+                </div>
+            </div>
+            <div id="chat-messages"></div>
+            <div style="display:flex; gap:10px; padding-top:15px;">
+                <input id="chat-input" class="input-field" style="margin:0; flex:1" placeholder="Type..." onkeyup="if(event.key==='Enter') window.sendMsg()">
+                <button class="btn btn-accent" style="width:54px; height:54px;" onclick="window.sendMsg()"><i data-lucide="arrow-up"></i></button>
+            </div>
+        </div>
+
+        <div id="scr-create" class="screen">
+            <h1 class="title">New Room</h1>
+            <input id="c-name" class="input-field" placeholder="Room Name">
+            <input id="c-pass" class="input-field" placeholder="Password (Optional)">
+            <button class="btn btn-accent" onclick="window.handleCreate()">Launch</button>
+            <button class="btn" style="border:none" onclick="window.nav('scr-lobby')">Back</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+        const URL = "https://fahbqdajxnhswevdagdn.supabase.co", 
+              KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI",
+              SALT = "H7a1lPjHvVBA5",
+              db = createClient(URL, KEY);
+
+        let user, currentRoom, sub, allRooms = [], pendingRoom = null;
+
+        const crypt = (t) => CryptoJS.AES.encrypt(t, SALT).toString();
+        const decrypt = (c) => { try { return CryptoJS.AES.decrypt(c, SALT).toString(CryptoJS.enc.Utf8); } catch { return "[Secure]"; } };
+
+        window.nav = (id) => {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            lucide.createIcons();
+        };
+
+        db.auth.onAuthStateChange((ev, sess) => {
+            if(sess) { user = sess.user; window.nav('scr-lobby'); loadRooms(); }
+            else { window.nav('scr-start'); }
+        });
+
+        window.handleLogin = async () => {
+            const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value;
+            await db.auth.signInWithPassword({ email: e, password: p });
+        };
+
+        async function loadRooms() {
+            const { data } = await db.from('rooms').select('*').eq('is_private', false);
+            allRooms = data || [];
+            renderRooms(allRooms);
+        }
+
+        const renderRooms = (arr) => {
+            document.getElementById('room-list').innerHTML = arr.map(r => `
+                <div class="room-card" onclick="window.joinAttempt('${r.id}','${r.name}','${r.password}')">
+                    <span style="font-weight:700">${r.name}</span>
+                    <i data-lucide="${r.password ? 'lock' : 'chevron-right'}" size="18"></i>
+                </div>`).join('');
+            lucide.createIcons();
+        };
+
+        window.joinAttempt = (id, name, pass) => {
+            if(pass && pass !== 'null') { pendingRoom = { id, name, pass }; window.nav('scr-gate'); }
+            else window.openVault(id, name);
+        };
+
+        window.submitGate = () => {
+            if(document.getElementById('gate-pass').value === pendingRoom.pass) window.openVault(pendingRoom.id, pendingRoom.name);
+            else alert("Invalid Key");
+        };
+
+        window.openVault = async (id, name) => {
+            currentRoom = id;
+            const dot = document.getElementById('live-indicator');
+            dot.className = 'status-dot';
+            document.getElementById('chat-messages').innerHTML = "";
+            document.getElementById('chat-title').innerText = name;
+            window.nav('scr-chat');
+
+            // --- SUPER FELLE AFSLUITING OUDE WS ---
+            if (sub) {
+                console.log("Killing old WS...");
+                await db.removeChannel(sub);
+                sub = null; 
+            }
+
+            const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: true });
+            if(data) {
+                document.getElementById('chat-messages').innerHTML = data.map(m => renderMsgHtml(m)).join('');
+                document.getElementById('chat-messages').scrollTop = 999999;
+            }
+
+            // Nieuwe verbinding pas opzetten NADAT de rest staat
+            sub = db.channel(`r_${id}`)
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, e => {
+                    if(e.new.user_id !== user.id) {
+                        document.getElementById('chat-messages').insertAdjacentHTML('beforeend', renderMsgHtml(e.new));
+                        document.getElementById('chat-messages').scrollTop = 999999;
+                    }
+                })
+                .subscribe((status) => {
+                    console.log("Status:", status);
+                    if (status === 'SUBSCRIBED') dot.classList.add('online');
+                    else dot.classList.remove('online');
+                });
+        };
+
+        const renderMsgHtml = (m, pending = false) => {
+            const isMe = m.user_id === user.id;
+            return `
+                <div id="msg-${m.id || m.tempId}" class="msg ${isMe ? 'message-me' : 'message-other'} ${pending ? 'pending' : ''}">
+                    <span class="msg-user">${m.user_name}</span>
+                    ${decrypt(m.content)}
+                </div>`;
+        };
+
+        window.sendMsg = async () => {
+            const i = document.getElementById('chat-input'), v = i.value.trim();
+            if(!v) return; i.value = "";
+            const tId = "t"+Date.now();
+            document.getElementById('chat-messages').insertAdjacentHTML('beforeend', renderMsgHtml({ tempId: tId, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(v) }, true));
+            document.getElementById('chat-messages').scrollTop = 999999;
+            await db.from('messages').insert([{ room_id: currentRoom, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(v) }]);
+            document.getElementById(`msg-${tId}`).classList.remove('pending');
+        };
+
+        window.leaveChat = async () => {
+            if(sub) {
+                await db.removeChannel(sub);
+                sub = null;
+            }
+            window.nav('scr-lobby');
+        };
+
+        window.filterRooms = () => {
+            const q = document.getElementById('search-bar').value.toLowerCase();
+            renderRooms(allRooms.filter(r => r.name.toLowerCase().includes(q)));
+        };
+
+        window.joinPrivate = async () => {
+            const id = document.getElementById('join-id').value.trim();
+            const { data } = await db.from('rooms').select('*').eq('id', id).single();
+            if(data) window.joinAttempt(data.id, data.name, data.password);
+        };
+
+        window.handleCreate = async () => {
+            const n = document.getElementById('c-name').value, p = document.getElementById('c-pass').value;
+            await db.from('rooms').insert([{ name: n, password: p || null, created_by: user.id }]);
+            loadRooms(); window.nav('scr-lobby');
+        };
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
