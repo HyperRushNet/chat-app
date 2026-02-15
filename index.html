@@ -11,7 +11,7 @@
         :root {
             --bg: #fff; --surface: #fff; --border: #e2e2e7; --text-main: #1c1c1e;
             --text-mute: #636366; --accent: #007aff; --danger: #ff3b30;
-            --success: #34c759; --warning: #ff9500; --pad: 32px; --btn-subtle: #3a3a3c;
+            --success: #34c759; --warning: #ff9500; --pad: 32px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent }
         ::-webkit-scrollbar { width: 0px }
@@ -46,17 +46,14 @@
         .msg-user { font-size: 10px; font-weight: 700; color: var(--text-mute); margin-bottom: 2px; text-transform: uppercase; cursor: pointer }
         .msg.me .msg-user { color: rgba(255,255,255,0.7) }
         .msg-time { font-size: 9px; opacity: 0.5; text-align: right; margin-top: 2px }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d1d6; transition: 0.3s }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d1d6 }
         .status-dot.online { background: var(--success) }
-        .status-dot.reconnecting { background: var(--warning); animation: pulse 1s infinite }
-        @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
         #offline-overlay { position: absolute; inset: 0; background: rgba(255, 59, 48, 0.15); backdrop-filter: blur(12px); z-index: 30000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px }
         #offline-overlay.active { display: flex }
         #loader-overlay { position: absolute; inset: 0; background: #fff; z-index: 20000; display: none; align-items: center; justify-content: center }
         #loader-overlay.active { display: flex }
         .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--text-main); border-radius: 50%; animation: spin .8s linear infinite }
         @keyframes spin { to { transform: rotate(360deg) } }
-        .text-center { text-align: center; }
     </style>
 </head>
 <body>
@@ -102,7 +99,7 @@
         <div id="scr-verify" class="screen center-content">
             <h1 class="title">Verify</h1>
             <p class="subtitle">Check your inbox</p>
-            <input type="number" id="v-code" class="input-field text-center" placeholder="x x x x x x">
+            <input type="number" id="v-code" class="input-field" style="text-align:center" placeholder="x x x x x x">
             <button class="btn btn-accent" onclick="window.handleVerify()">Confirm Identity</button>
         </div>
 
@@ -134,7 +131,7 @@
         <div id="scr-gate" class="screen center-content">
             <h1 class="title">Restricted</h1>
             <p class="subtitle">Access Key Required</p>
-            <input id="gate-pass" type="password" class="input-field text-center" placeholder="••••••••">
+            <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="••••••••">
             <button class="btn btn-accent" onclick="window.submitGate()">Unlock Access</button>
             <button class="btn btn-cancel" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
@@ -169,7 +166,7 @@
         <div id="scr-success" class="screen center-content">
             <h1 class="title">Created</h1>
             <p class="subtitle">Your Channel ID</p>
-            <div id="s-id" class="input-field text-center" style="cursor:pointer;border:1px solid var(--accent);color:var(--accent);font-family:monospace;font-weight:700" onclick="window.copySId()">---</div>
+            <div id="s-id" class="input-field" style="text-align:center;cursor:pointer;border:1px solid var(--accent);color:var(--accent);font-family:monospace;font-weight:700" onclick="window.copySId()">---</div>
             <button class="btn btn-accent" onclick="window.enterCreated()">Enter Channel</button>
         </div>
     </div>
@@ -183,22 +180,33 @@
               SALT = "H7a1lPjHvVBA5",
               db = createClient(URL, KEY);
 
-        let user, room, roomName, sub, allRooms = [], tempReg = {}, lastCreated, wasOffline = false, isWSConnected = false;
+        let user, room, sub, allRooms = [], tempReg = {}, lastCreated, wasOffline = false;
 
-        // --- STABIELE WS CLEANUP ---
-        const forceKillWS = async () => {
-            isWSConnected = false;
-            if (document.getElementById('live-indicator')) document.getElementById('live-indicator').className = 'status-dot';
-            if (sub) {
-                try {
-                    await sub.unsubscribe();
-                    await db.removeChannel(sub);
-                } catch (e) {}
-                sub = null;
+        // --- STABIELE TIJD EN CRYPTO LOGIC ---
+        const escapeHTML = (s) => s ? s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : "";
+        
+        const crypt = (text) => {
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+            // Formaat: "HH:mm|Bericht"
+            return CryptoJS.AES.encrypt(timeStr + "|" + text, SALT).toString();
+        };
+
+        const decryptData = (ciphertext) => {
+            try {
+                const raw = CryptoJS.AES.decrypt(ciphertext, SALT).toString(CryptoJS.enc.Utf8);
+                const splitIdx = raw.indexOf('|');
+                if (splitIdx === -1) throw new Error();
+                return { 
+                    time: raw.substring(0, splitIdx), 
+                    text: escapeHTML(raw.substring(splitIdx + 1)) 
+                };
+            } catch { 
+                return { time: "??:??", text: "Decryption Error" }; 
             }
         };
 
-        // --- UI HELPERS ---
+        // --- UI & AUTH ---
         window.nav = id => {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(id).classList.add('active');
@@ -216,29 +224,13 @@
 
         window.setLoading = isLoading => document.getElementById('loader-overlay').classList.toggle('active', isLoading);
 
-        // --- CRYPTO LOGIC ---
-        const escapeHTML = (s) => s ? s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : "";
-        const crypt = (t) => {
-            const now = new Date();
-            const timeStr = `[${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}]`;
-            return CryptoJS.AES.encrypt(timeStr + t, SALT).toString();
-        };
-        const decryptData = (c) => {
-            try {
-                const raw = CryptoJS.AES.decrypt(c, SALT).toString(CryptoJS.enc.Utf8);
-                const end = raw.indexOf(']');
-                return { time: raw.substring(1, end), text: escapeHTML(raw.substring(end + 1)) };
-            } catch { return { time: "??:??", text: "Encrypted Data" }; }
-        };
-
-        // --- AUTH CHANGE (FIX: SLUIT GROEP NIET BIJ TAB FOCUS) ---
-        db.auth.onAuthStateChange(async (event, session) => {
+        db.auth.onAuthStateChange((event, session) => {
             if (session) {
                 user = session.user;
-                const activeScr = document.querySelector('.screen.active').id;
-                if (['scr-start', 'scr-login', 'scr-register', 'scr-verify'].includes(activeScr)) {
+                const activeId = document.querySelector('.screen.active').id;
+                if (['scr-start', 'scr-login', 'scr-register', 'scr-verify'].includes(activeId)) {
                     window.nav('scr-lobby');
-                    loadRooms();
+                    window.loadRooms();
                 }
             } else {
                 user = null;
@@ -246,19 +238,17 @@
             }
         });
 
-        // --- EXACT REGISTER LOGIC ---
+        // --- REGISTER LOGIC ---
         window.handleRegister = async () => {
-            const n = document.getElementById('r-name').value.trim();
-            const e = document.getElementById('r-email').value.trim();
-            const p = document.getElementById('r-pass').value.trim();
-            if(!n || !e || !p) return window.toast("All fields are required");
+            const n = document.getElementById('r-name').value.trim(), e = document.getElementById('r-email').value.trim(), p = document.getElementById('r-pass').value.trim();
+            if(!n || !e || !p) return window.toast("Fill all fields");
             tempReg = { n, e, p };
             window.setLoading(true);
             try {
                 await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "send", email: e }) });
-                window.toast("Verification code sent");
+                window.toast("Code sent to inbox");
                 window.nav('scr-verify');
-            } catch(e) { window.toast("Connection error"); } 
+            } catch { window.toast("Network error"); }
             finally { window.setLoading(false); }
         };
 
@@ -266,34 +256,25 @@
             const code = document.getElementById('v-code').value;
             if(!code) return window.toast("Enter code");
             window.setLoading(true);
-            const { data, error } = await db.auth.signUp({
-                email: tempReg.e, password: tempReg.p, options: { data: { full_name: tempReg.n } }
-            });
+            const { data, error } = await db.auth.signUp({ email: tempReg.e, password: tempReg.p, options: { data: { full_name: tempReg.n } } });
             if(!error) {
                 await db.from('profiles').insert([{ id: data.user.id, full_name: tempReg.n, email: tempReg.e }]);
-                user = data.user;
                 window.nav('scr-lobby');
-                window.loadRooms();
-            } else { window.toast(error.message); }
+            } else window.toast(error.message);
             window.setLoading(false);
         };
 
         window.handleLogin = async () => {
             const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value;
-            if(!e || !p) return window.toast("Enter credentials");
             window.setLoading(true);
-            const { data, error } = await db.auth.signInWithPassword({ email: e, password: p });
+            const { error } = await db.auth.signInWithPassword({ email: e, password: p });
             window.setLoading(false);
-            if(!error) {
-                user = data.user;
-                window.nav('scr-lobby');
-                window.loadRooms();
-            } else { window.toast("Authentication failed"); }
+            if(error) window.toast("Login failed");
         };
 
         window.handleLogout = () => db.auth.signOut();
 
-        // --- CHAT LOGIC ---
+        // --- CHAT & CHANNELS ---
         window.loadRooms = async () => {
             const { data } = await db.from('rooms').select('*').eq('is_private', false).order('created_at', { ascending: false });
             allRooms = data || [];
@@ -304,7 +285,7 @@
             document.getElementById('room-list').innerHTML = list.map(r => `
                 <div class="room-card" onclick="window.joinAttempt('${r.id}', '${escapeHTML(r.name)}', '${r.password}')">
                     <span style="font-weight:700;">${escapeHTML(r.name)}</span>
-                    <i data-lucide="${(r.password && r.password !== 'null') ? 'lock' : 'chevron-right'}" size="18" color="#636366"></i>
+                    <i data-lucide="${(r.password && r.password !== 'null') ? 'lock' : 'chevron-right'}" size="18"></i>
                 </div>
             `).join('');
             lucide.createIcons();
@@ -313,16 +294,6 @@
         window.filterRooms = () => {
             const q = document.getElementById('search-bar').value.toLowerCase();
             renderRoomList(allRooms.filter(r => r.name.toLowerCase().includes(q)));
-        };
-
-        window.joinPrivate = async () => {
-            const id = document.getElementById('join-id').value.trim();
-            if(!id) return;
-            window.setLoading(true);
-            const { data } = await db.from('rooms').select('*').eq('id', id).single();
-            window.setLoading(false);
-            if(data) window.joinAttempt(data.id, data.name, data.password);
-            else window.toast("Channel not found");
         };
 
         window.joinAttempt = (id, name, p) => {
@@ -335,14 +306,13 @@
         window.submitGate = () => {
             if(document.getElementById('gate-pass').value === window.pendingRoom.pass) {
                 window.openVault(window.pendingRoom.id, window.pendingRoom.name);
-                document.getElementById('gate-pass').value = '';
-            } else { window.toast("Invalid key"); }
+            } else window.toast("Invalid key");
         };
 
         window.openVault = async (id, name) => {
-            if (!navigator.onLine) return;
-            await forceKillWS();
-            room = id; roomName = name;
+            window.setLoading(true);
+            if(sub) { await db.removeChannel(sub); sub = null; }
+            room = id;
             document.getElementById('chat-title').innerText = name;
             window.nav('scr-chat');
 
@@ -355,10 +325,9 @@
                 box.insertAdjacentHTML('beforeend', renderMsg(p.new));
                 box.scrollTop = box.scrollHeight;
             }).subscribe(s => {
-                isWSConnected = (s === 'SUBSCRIBED');
-                const dot = document.getElementById('live-indicator');
-                if(dot) dot.className = 'status-dot ' + (isWSConnected ? 'online' : 'reconnecting');
+                document.getElementById('live-indicator').classList.toggle('online', s === 'SUBSCRIBED');
             });
+            window.setLoading(false);
         };
 
         const renderMsg = m => {
@@ -371,7 +340,6 @@
         };
 
         window.sendMsg = async () => {
-            if (!isWSConnected) return;
             const i = document.getElementById('chat-input'), v = i.value.trim();
             if(!v) return;
             i.value = '';
@@ -380,9 +348,9 @@
             }]);
         };
 
-        window.showUserInfo = async (userId) => {
+        window.showUserInfo = async (uId) => {
             window.setLoading(true);
-            const { data } = await db.from('profiles').select('*').eq('id', userId).single();
+            const { data } = await db.from('profiles').select('*').eq('id', uId).single();
             window.setLoading(false);
             if (data) {
                 const date = new Date(data.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -394,7 +362,7 @@
         };
 
         window.closeUserModal = () => document.getElementById('user-modal').classList.remove('active');
-        window.leaveChat = async () => { await forceKillWS(); room = null; window.nav('scr-lobby'); };
+        window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); };
         window.copyId = () => { navigator.clipboard.writeText(room); window.toast("ID Copied"); };
         window.copySId = () => { navigator.clipboard.writeText(lastCreated.id); window.toast("ID Copied"); };
 
@@ -409,20 +377,14 @@
 
         window.enterCreated = () => window.openVault(lastCreated.id, lastCreated.name);
 
-        // --- CONNECTION MONITOR ---
-        setInterval(async () => {
+        setInterval(() => {
             const isOnline = navigator.onLine;
-            const overlay = document.getElementById('offline-overlay');
-            if (!isOnline && !wasOffline) {
-                overlay.classList.add('active');
-                await forceKillWS();
-                wasOffline = true;
-            } else if (isOnline && wasOffline) {
-                overlay.classList.remove('active');
+            document.getElementById('offline-overlay').classList.toggle('active', !isOnline);
+            if (isOnline && wasOffline) {
+                if (user && room) window.openVault(room, document.getElementById('chat-title').innerText);
                 wasOffline = false;
-                if (user && room && roomName) window.openVault(room, roomName);
-            }
-        }, 500);
+            } else if (!isOnline) wasOffline = true;
+        }, 1000);
 
         lucide.createIcons();
     </script>
