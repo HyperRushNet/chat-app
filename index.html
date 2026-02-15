@@ -113,8 +113,7 @@
             <h1 class="title">New Channel</h1>
             <p class="subtitle">Set parameters</p>
             <input id="c-name" class="input-field" placeholder="Channel Name">
-            <input id="c-pass" class="input-field" placeholder="Password (Optional)">
-            
+            <input id="c-pass" class="input-field" type="password" placeholder="Password (Optional)">
             <div class="toggle-container">
                 <span class="toggle-label">Private Channel</span>
                 <label class="switch">
@@ -122,7 +121,6 @@
                     <span class="slider"></span>
                 </label>
             </div>
-
             <button class="btn btn-accent" onclick="window.handleCreate()">Create Channel</button>
             <button class="btn btn-cancel" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
@@ -141,22 +139,28 @@
         const URL = "https://fahbqdajxnhswevdagdn.supabase.co",
               KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI",
               GAS_URL = "https://script.google.com/macros/s/AKfycbwoHBjaZgzAiv0G9iKfKriKMPxA9Zjm0Fg9dQjtuJuCntuSe3oPP9uvxu1LzwF8aPER/exec",
-              SALT = "H7a1lPjHvVBA5",
+              GLOBAL_SALT = "H7a1lPjHvVBA5", // Base salt
               db = createClient(URL, KEY);
 
         let user, room, sub, allRooms = [], tempReg = {}, lastCreated, wasOffline = false;
 
+        // Security Helpers
         const escapeHTML = (s) => s ? s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : "";
         
-        const crypt = (text) => {
+        // Per-room encryption key based on Room ID + Global Salt
+        const getRoomKey = (roomId) => roomId + GLOBAL_SALT;
+
+        const hashPassword = (p) => p ? CryptoJS.SHA256(p + GLOBAL_SALT).toString() : null;
+
+        const crypt = (text, roomId) => {
             const now = new Date();
             const timeStr = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
-            return CryptoJS.AES.encrypt(timeStr + "|" + text, SALT).toString();
+            return CryptoJS.AES.encrypt(timeStr + "|" + text, getRoomKey(roomId)).toString();
         };
 
-        const decryptData = (ciphertext) => {
+        const decryptData = (ciphertext, roomId) => {
             try {
-                const raw = CryptoJS.AES.decrypt(ciphertext, SALT).toString(CryptoJS.enc.Utf8);
+                const raw = CryptoJS.AES.decrypt(ciphertext, getRoomKey(roomId)).toString(CryptoJS.enc.Utf8);
                 const splitIdx = raw.indexOf('|');
                 if (splitIdx === -1) throw new Error();
                 return { 
@@ -164,7 +168,7 @@
                     text: escapeHTML(raw.substring(splitIdx + 1)) 
                 };
             } catch { 
-                return { time: "??:??", text: "Decryption Error" }; 
+                return { time: "??:??", text: "Decryption Error (Wrong Key)" }; 
             }
         };
 
@@ -255,9 +259,9 @@
             renderRoomList(allRooms.filter(r => r.name.toLowerCase().includes(q)));
         };
 
-        window.joinAttempt = (id, name, p) => {
-            if(p && p !== "null") {
-                window.pendingRoom = { id, name, pass: p };
+        window.joinAttempt = (id, name, hashedPass) => {
+            if(hashedPass && hashedPass !== "null") {
+                window.pendingRoom = { id, name, hashedPass };
                 window.nav('scr-gate');
             } else { window.openVault(id, name); }
         };
@@ -274,7 +278,8 @@
         };
 
         window.submitGate = () => {
-            if(document.getElementById('gate-pass').value === window.pendingRoom.pass) {
+            const inputPass = document.getElementById('gate-pass').value;
+            if(hashPassword(inputPass) === window.pendingRoom.hashedPass) {
                 window.openVault(window.pendingRoom.id, window.pendingRoom.name);
             } else window.toast("Invalid key");
         };
@@ -301,7 +306,7 @@
         };
 
         const renderMsg = m => {
-            const d = decryptData(m.content);
+            const d = decryptData(m.content, m.room_id);
             return `<div class="msg ${m.user_id === user.id ? 'me' : ''}">
                 <span class="msg-user" onclick="window.showUserInfo('${m.user_id}')">${escapeHTML(m.user_name)}</span>
                 <div>${d.text}</div>
@@ -312,9 +317,10 @@
         window.sendMsg = async () => {
             const i = document.getElementById('chat-input'), v = i.value.trim();
             if(!v) return;
+            const encrypted = crypt(v, room);
             i.value = '';
             await db.from('messages').insert([{
-                room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: crypt(v)
+                room_id: room, user_id: user.id, user_name: user.user_metadata.full_name, content: encrypted
             }]);
         };
 
@@ -343,12 +349,16 @@
 
             if(!n) return window.toast("Enter name");
             window.setLoading(true);
+
+            const hashed = hashPassword(p);
+
             const { data } = await db.from('rooms').insert([{ 
                 name: n, 
-                password: p || null, 
-                is_private: isPriv, 
+                password: hashed, // Password is now hashed!
+                is_private: isPriv,
                 created_by: user.id 
             }]).select();
+            
             window.setLoading(false);
             if(data) { 
                 lastCreated = data[0]; 
