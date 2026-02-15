@@ -188,29 +188,97 @@
         });
 
         window.handleRegister = async () => {
-            const n = document.getElementById('r-name').value.trim(), e = document.getElementById('r-email').value.trim(), p = document.getElementById('r-pass').value.trim();
-            if(!n || !e || !p) return window.toast("Fill all fields");
-            tempReg = { n, e, p };
-            window.setLoading(true);
-            try {
-                await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "send", email: e }) });
-                window.toast("Code sent to inbox");
-                window.nav('scr-verify');
-            } catch { window.toast("Network error"); }
-            finally { window.setLoading(false); }
-        };
+        const n = document.getElementById('r-name').value.trim();
+        const e = document.getElementById('r-email').value.trim();
+        const p = document.getElementById('r-pass').value.trim();
+
+        if (!n || !e || !p) {
+            window.toast("Fill all fields");
+            return;
+        }
+
+        tempReg = { n, e, p };
+        window.setLoading(true);
+
+        try {
+            const response = await fetch(GAS_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "send",
+                    email: e
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.status !== 200) {
+                window.toast(result.message || "Failed to send code");
+                return;
+            }
+
+            window.toast("Verification code sent");
+            window.nav('scr-verify');
+
+        } catch (err) {
+            window.toast("Network error");
+        } finally {
+            window.setLoading(false);
+        }
+    };
+
 
         window.handleVerify = async () => {
-            const code = document.getElementById('v-code').value;
-            if(!code) return window.toast("Enter code");
-            window.setLoading(true);
-            const { data, error } = await db.auth.signUp({ email: tempReg.e, password: tempReg.p, options: { data: { full_name: tempReg.n } } });
-            if(!error) {
-                await db.from('profiles').insert([{ id: data.user.id, full_name: tempReg.n, email: tempReg.e }]);
-                window.nav('scr-lobby');
-            } else window.toast(error.message);
-            window.setLoading(false);
-        };
+    const code = document.getElementById('v-code').value.trim();
+
+    if (!code) {
+        window.toast("Enter verification code");
+        return;
+    }
+
+    window.setLoading(true);
+
+    try {
+        const response = await fetch(GAS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action: "verify",
+                email: tempReg.e,
+                code: code
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status !== 200) {
+            window.toast("Invalid or expired code");
+            return;
+        }
+
+        const { data, error } = await db.auth.signUp({
+            email: tempReg.e,
+            password: tempReg.p,
+            options: {
+                data: { full_name: tempReg.n }
+            }
+        });
+
+        if (error) {
+            window.toast(error.message);
+            return;
+        }
+
+        window.toast("Account created");
+        window.nav('scr-lobby');
+
+    } catch (err) {
+        window.toast("Verification failed");
+    } finally {
+        window.setLoading(false);
+    }
+};
+
 
         window.handleLogin = async () => {
             const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value;
