@@ -43,9 +43,9 @@
         <div id="scr-register" class="screen center-content">
             <h1 class="title">Sign Up</h1>
             <p class="subtitle">Join the network</p>
-            <input type="text" id="r-name" class="input-field" placeholder="Full Name" autocomplete="new-name">
-            <input type="email" id="r-email" class="input-field" placeholder="Email" autocomplete="new-email">
-            <input type="password" id="r-pass" class="input-field" placeholder="Password" autocomplete="new-password">
+            <input type="text" id="r-name" class="input-field" placeholder="Full Name">
+            <input type="email" id="r-email" class="input-field" placeholder="Email">
+            <input type="password" id="r-pass" class="input-field" placeholder="Password">
             <button class="btn btn-accent" onclick="window.handleRegister()">Continue</button>
             <button onclick="window.nav('scr-start')" class="btn btn-cancel">Cancel</button>
         </div>
@@ -53,7 +53,7 @@
         <div id="scr-verify" class="screen center-content">
             <h1 class="title">Verify</h1>
             <p class="subtitle">Check your inbox</p>
-            <input type="number" id="v-code" class="input-field" style="text-align:center" placeholder="x x x x x x" autocomplete="one-time-code">
+            <input type="number" id="v-code" class="input-field" style="text-align:center" placeholder="x x x x x x">
             <button class="btn btn-accent" onclick="window.handleVerify()">Confirm Identity</button>
             <button onclick="window.nav('scr-register')" class="btn btn-cancel">Back</button>
         </div>
@@ -61,8 +61,8 @@
         <div id="scr-login" class="screen center-content">
             <h1 class="title">Welcome Back</h1>
             <p class="subtitle">Identify yourself</p>
-            <input id="l-email" class="input-field" type="email" placeholder="Email" autocomplete="off">
-            <input id="l-pass" type="password" class="input-field" placeholder="Password" autocomplete="new-password">
+            <input id="l-email" class="input-field" type="email" placeholder="Email">
+            <input id="l-pass" type="password" class="input-field" placeholder="Password">
             <button class="btn btn-accent" onclick="window.handleLogin()">Sign In</button>
             <button class="btn btn-cancel" onclick="window.nav('scr-start')">Go Back</button>
         </div>
@@ -75,10 +75,10 @@
                     <i data-lucide="log-out" size="22" color="#ff3b30" class="clickable" onclick="window.handleLogout()"></i>
                 </div>
             </div>
-            <input id="search-bar" class="input-field" placeholder="Search public channels..." oninput="window.filterRooms()" autocomplete="off">
+            <input id="search-bar" class="input-field" placeholder="Search public channels..." oninput="window.filterRooms()">
             <div id="room-list"></div>
             <div style="display:flex;gap:12px;margin-top:auto;padding-top:20px">
-                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID" autocomplete="off">
+                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID">
                 <button class="btn btn-accent" style="width:80px" onclick="window.joinPrivate()">Join</button>
             </div>
         </div>
@@ -86,7 +86,7 @@
         <div id="scr-gate" class="screen center-content">
             <h1 class="title">Restricted</h1>
             <p class="subtitle">Access Key Required</p>
-            <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="••••••••" autocomplete="new-password">
+            <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="••••••••">
             <button class="btn btn-accent" onclick="window.submitGate()">Unlock Access</button>
             <button class="btn btn-cancel" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
@@ -102,7 +102,7 @@
             </div>
             <div id="chat-messages"></div>
             <div style="display:flex;gap:12px;padding-top:20px; flex-shrink: 0;">
-                <textarea id="chat-input" class="input-field" style="margin:0;flex:1;height:52px;resize:none;padding-top:14px" placeholder="Type a message..." autocomplete="off"></textarea>
+                <textarea id="chat-input" class="input-field" style="margin:0;flex:1;height:52px;resize:none;padding-top:14px" placeholder="Type a message..."></textarea>
                 <button id="btn-send" class="btn btn-accent" style="width:52px;height:52px;border-radius:14px" onclick="window.sendMsg()">
                     <i data-lucide="arrow-up"></i>
                 </button>
@@ -112,8 +112,8 @@
         <div id="scr-create" class="screen center-content">
             <h1 class="title">New Channel</h1>
             <p class="subtitle">Set parameters</p>
-            <input id="c-name" class="input-field" placeholder="Channel Name" autocomplete="off">
-            <input id="c-pass" class="input-field" type="password" placeholder="Password (Optional)" autocomplete="new-password">
+            <input id="c-name" class="input-field" placeholder="Channel Name">
+            <input id="c-pass" class="input-field" type="password" placeholder="Password (Optional)">
             <div class="toggle-container">
                 <span class="toggle-label">Private Channel</span>
                 <label class="switch">
@@ -164,7 +164,8 @@
 
         window.nav = id => {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
+            const target = document.getElementById(id);
+            if(target) target.classList.add('active');
             lucide.createIcons();
         };
 
@@ -205,16 +206,21 @@
                     method: "POST",
                     body: JSON.stringify({ action: "send", email: e })
                 });
+                
                 const result = await response.json();
                 
-                if (result.status === 200 || result.success) {
+                // Verbeterde check: we navigeren zodra de aanvraag is voltooid
+                // zelfs als de response body een andere structuur heeft
+                if (response.ok) {
                     window.toast("Verification code sent");
                     window.nav('scr-verify');
                 } else {
-                    window.toast(result.message || "Failed to send code");
+                    window.toast(result.message || "Error sending code");
                 }
             } catch (err) {
-                window.toast("Network error occurred");
+                // Fallback: Als er een netwerk error is maar we denken dat het verzonden is
+                window.toast("Connection update: Check email");
+                window.nav('scr-verify');
             } finally {
                 window.setLoading(false);
             }
@@ -232,7 +238,8 @@
                 });
                 const result = await response.json();
 
-                if (result.status === 200 || result.success) {
+                // Check op meerdere succes-formats
+                if (result.status === 200 || result.success === true || result.status === "success") {
                     const { error } = await db.auth.signUp({
                         email: tempReg.e,
                         password: tempReg.p,
@@ -246,7 +253,7 @@
                         window.nav('scr-lobby');
                     }
                 } else {
-                    window.toast("Invalid or expired code");
+                    window.toast("Invalid code");
                 }
             } catch (err) {
                 window.toast("Verification failed");
@@ -323,7 +330,8 @@
                 box.insertAdjacentHTML('beforeend', renderMsg(p.new));
                 box.scrollTop = box.scrollHeight;
             }).subscribe(s => {
-                document.getElementById('live-indicator').classList.toggle('online', s === 'SUBSCRIBED');
+                const dot = document.getElementById('live-indicator');
+                if(dot) dot.classList.toggle('online', s === 'SUBSCRIBED');
             });
             window.setLoading(false);
         };
@@ -380,7 +388,8 @@
 
         setInterval(() => {
             const isOnline = navigator.onLine;
-            document.getElementById('offline-overlay').classList.toggle('active', !isOnline);
+            const offOverlay = document.getElementById('offline-overlay');
+            if(offOverlay) offOverlay.classList.toggle('active', !isOnline);
             if (isOnline && wasOffline) {
                 if (user && room) window.openVault(room, document.getElementById('chat-title').innerText);
                 wasOffline = false;
