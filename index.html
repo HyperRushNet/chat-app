@@ -9,57 +9,90 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-:root{--bg:#fff;--surface:#fff;--border:#e2e2e7;--text-main:#1c1c1e;--text-mute:#636366;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--pad:32px}*{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:#fff0}::-webkit-scrollbar{width:0}body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center;overflow:hidden}#app{width:100%;max-width:440px;height:100%;position:relative;display:flex;flex-direction:column;background:var(--bg);box-shadow:0 0 50px rgb(0 0 0 / .1);overflow:hidden}.screen{position:absolute;inset:0;display:none;flex-direction:column;padding:var(--pad);background:var(--bg)}.screen.active{display:flex;animation:fadeIn .3s ease}@keyframes fadeIn{from{opacity:0}to{opacity:1}}.center-content{justify-content:center;align-items:center;text-align:center}.header{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--border);margin-bottom:32px;flex-shrink:0;width:100%;gap:10px}.online-indicator{display:inline-flex;align-items:center;gap:5px;background:rgba(52,199,89,0.1);color:var(--success);padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800;vertical-align:middle;margin-left:8px}.dot{width:6px;height:6px;background:var(--success);border-radius:50%;box-shadow:0 0 5px var(--success)}.title{font-size:26px;font-weight:800;letter-spacing:-.8px;color:#000;margin-bottom:8px}.subtitle{color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:32px;display:block}.input-field{width:100%;background:#f2f2f7;border:1px solid #fff0;border-radius:10px;padding:16px;color:var(--text-main);font-size:16px;outline:none;margin-bottom:16px;transition:.2s}.input-field:focus{border-color:var(--accent);background:#fff}.btn{width:100%;height:56px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-main);font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:.2s}.btn:hover:not(:disabled){background:rgba(0,0,0,.03);border-color:var(--text-main)}.btn-accent{border:1px solid var(--text-main);color:var(--text-main)}.btn:disabled{opacity:0.3;cursor:not-allowed}#toast-container{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:30000;width:85%;pointer-events:none;display:flex;flex-direction:column;gap:12px}.toast-item{background:rgb(28 28 30 / .95);color:#fff;padding:14px 20px;border-radius:80px;font-weight:500;font-size:13px;text-align:center;box-shadow:0 10px 20px rgba(0,0,0,0.1)}.overlay{position:absolute;inset:0;background:rgb(0 0 0 / .4);backdrop-filter:blur(4px);z-index:9999;display:none;align-items:center;justify-content:center;padding:var(--pad)}.overlay.active{display:flex}#limit-screen{position:absolute;inset:0;background:var(--bg);z-index:40000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:var(--pad);text-align:center}#limit-screen.active{display:flex}.room-card{padding:20px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border:1px solid var(--border);margin-bottom:12px}#chat-messages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px}.msg{width:fit-content;max-width:85%;padding:10px 14px;border-radius:14px;background:#f2f2f7;font-size:15px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word}.msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:2px}.msg-user{font-size:10px;font-weight:700;color:var(--text-mute);margin-bottom:4px;text-transform:uppercase}.msg.me .msg-user{color:rgba(255,255,255,0.7)}.msg-time{font-size:9px;opacity:.6;text-align:right;margin-top:4px}#loader-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.8);backdrop-filter:blur(4px);z-index:50000;display:none;align-items:center;justify-content:center}#loader-overlay.active{display:flex}.spinner{width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.clickable{cursor:pointer;transition:opacity 0.2s}.clickable:active{opacity:0.5}
+        :root{--bg:#fff;--surface:#fff;--border:#e2e2e7;--text-main:#1c1c1e;--text-mute:#636366;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--pad:32px}
+        *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
+        ::-webkit-scrollbar{width:0}
+        body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center;overflow:hidden}
+        #app{width:100%;max-width:440px;height:100%;position:relative;display:flex;flex-direction:column;background:var(--bg);box-shadow:0 0 50px rgb(0 0 0 / .1)}
+        .screen{position:absolute;inset:0;display:none;flex-direction:column;padding:var(--pad);background:var(--bg)}
+        .screen.active{display:flex;animation:fadeIn .3s ease}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        .center-content{justify-content:center;align-items:center;text-align:center}
+        .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--border);margin-bottom:32px;flex-shrink:0}
+        .online-indicator{display:inline-flex;align-items:center;gap:6px;background:rgba(52,199,89,0.1);color:var(--success);padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800;line-height:1;align-self:center}
+        .dot{width:6px;height:6px;background:var(--success);border-radius:50%;box-shadow:0 0 5px var(--success)}
+        .title{font-size:26px;font-weight:800;letter-spacing:-.8px;color:#000;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:10px}
+        .subtitle{color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:32px}
+        .input-field{width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:12px;padding:16px;color:var(--text-main);font-size:16px;outline:none;margin-bottom:16px;transition:.2s}
+        .input-field:focus{border-color:var(--accent);background:#fff}
+        .btn{width:100%;height:56px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text-main);font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:.2s}
+        .btn-accent{border:1px solid var(--text-main);color:var(--text-main)}
+        .btn:active{transform:scale(0.98)}
+        .btn:disabled{opacity:0.3}
+        #toast-container{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:999;width:85%;pointer-events:none;display:flex;flex-direction:column;gap:12px}
+        .toast-item{background:rgb(28 28 30 / .95);color:#fff;padding:14px 20px;border-radius:80px;font-weight:500;font-size:13px;text-align:center;box-shadow:0 10px 20px rgba(0,0,0,0.1)}
+        #limit-screen{position:absolute;inset:0;background:var(--bg);z-index:400;display:none;flex-direction:column;align-items:center;justify-content:center;padding:var(--pad);text-align:center}
+        #limit-screen.active{display:flex}
+        .room-card{padding:20px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border:1px solid var(--border);margin-bottom:12px}
+        #chat-messages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding:4px}
+        .msg{width:fit-content;max-width:85%;padding:12px 16px;border-radius:16px;background:#f2f2f7;font-size:15px;line-height:1.5;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word}
+        .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:2px}
+        .msg-user{font-size:10px;font-weight:800;color:var(--text-mute);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px}
+        .msg.me .msg-user{color:rgba(255,255,255,0.7)}
+        .msg-time{font-size:9px;opacity:.6;text-align:right;margin-top:6px}
+        #loader-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.8);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center}
+        #loader-overlay.active{display:flex}
+        .spinner{width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .switch{position:relative;display:inline-block;width:44px;height:24px}.switch input{opacity:0;width:0;height:0}
+        .slider{position:absolute;cursor:pointer;inset:0;background-color:#ccc;transition:.3s;border-radius:24px}
+        .slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background-color:#fff;transition:.3s;border-radius:50%}
+        input:checked+.slider{background-color:var(--accent)}input:checked+.slider:before{transform:translateX(20px)}
+        .clickable:active{opacity:0.5}
     </style>
 </head>
 <body>
     <div id="app">
         <div id="limit-screen">
-            <div style="background:rgba(255,149,0,0.1); padding:24px; border-radius:30px; margin-bottom:24px">
-                <i data-lucide="users" size="48" color="var(--warning)"></i>
-            </div>
+            <div style="background:rgba(255,149,0,0.1); padding:28px; border-radius:35px; margin-bottom:24px"><i data-lucide="users" size="48" color="var(--warning)"></i></div>
             <h1 class="title">Capacity Reached</h1>
-            <p style="color:var(--text-mute); max-width:280px; line-height:1.5">We currently limit access to 475 concurrent users to ensure security. Please wait for a slot.</p>
-            <div style="margin-top:32px; font-weight:800; font-size:14px; color:var(--text-main)">
-                CURRENTLY ONLINE: <span id="limit-val" style="color:var(--warning)">0</span> / 475
-            </div>
+            <p style="color:var(--text-mute); max-width:280px; line-height:1.6; margin-bottom:32px">We currently limit access to 475 concurrent users. Please wait for a spot.</p>
+            <div style="font-weight:800; font-size:14px; color:var(--text-main); background:#f2f2f7; padding:12px 24px; border-radius:50px">ONLINE: <span id="limit-val" style="color:var(--warning)">0</span> / 475</div>
         </div>
 
         <div id="loader-overlay"><div class="spinner"></div></div>
         <div id="toast-container"></div>
 
         <div id="scr-start" class="screen active center-content">
-            <i data-lucide="shield-check" size="60" style="margin-bottom:32px; color:var(--accent)"></i>
+            <i data-lucide="shield-check" size="64" style="margin-bottom:32px; color:var(--accent)"></i>
             <h1 class="title">HRN Chat <span class="online-indicator"><div class="dot"></div><span class="live-count">0</span></span></h1>
-            <p class="subtitle">Secure Network 2026</p>
-            <button class="btn btn-accent auth-btn" onclick="window.nav('scr-login')" style="margin-bottom:12px">Sign In</button>
+            <p class="subtitle" style="margin-bottom:48px">Secure Network 2026</p>
+            <button class="btn btn-accent auth-btn" onclick="window.nav('scr-login')" style="margin-bottom:16px">Sign In</button>
             <button class="btn auth-btn" onclick="window.nav('scr-register')">Create Account</button>
         </div>
 
         <div id="scr-login" class="screen center-content">
             <h1 class="title">Sign In</h1>
-            <p class="subtitle">Enter your credentials</p>
+            <p class="subtitle">Welcome back</p>
             <input id="l-email" class="input-field" type="email" placeholder="Email">
             <input id="l-pass" type="password" class="input-field" placeholder="Password">
-            <button class="btn btn-accent auth-btn" onclick="window.handleLogin()">Access Account</button>
-            <button class="btn" style="border:none;margin-top:10px" onclick="window.nav('scr-start')">Cancel</button>
+            <button class="btn btn-accent auth-btn" onclick="window.handleLogin()" style="margin-top:16px">Access Account</button>
+            <button class="btn" style="border:none;margin-top:12px" onclick="window.nav('scr-start')">Cancel</button>
         </div>
 
         <div id="scr-lobby" class="screen">
             <div class="header">
-                <div>
-                    <h1 class="title" style="font-size:22px;margin:0">Channels <span class="online-indicator"><div class="dot"></div><span class="live-count">0</span></span></h1>
-                </div>
-                <div style="display:flex;gap:18px">
+                <h1 class="title" style="font-size:22px;margin:0;justify-content:flex-start">Channels <span class="online-indicator"><div class="dot"></div><span class="live-count">0</span></span></h1>
+                <div style="display:flex;gap:20px">
                     <i data-lucide="plus-circle" size="24" class="clickable" onclick="window.nav('scr-create')"></i>
                     <i data-lucide="log-out" size="22" color="var(--danger)" class="clickable" onclick="window.handleLogout()"></i>
                 </div>
             </div>
-            <input id="search-bar" class="input-field" placeholder="Search public channels..." oninput="window.filterRooms()">
+            <input id="search-bar" class="input-field" style="margin-bottom:24px" placeholder="Search public channels..." oninput="window.filterRooms()">
             <div id="room-list" style="flex:1; overflow-y:auto"></div>
-            <div style="display:flex;gap:12px;margin-top:20px">
-                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID">
-                <button class="btn btn-accent" style="width:80px" onclick="window.joinPrivate()">Join</button>
+            <div style="display:flex;gap:12px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
+                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Private ID">
+                <button class="btn btn-accent" style="width:90px" onclick="window.joinPrivate()">Join</button>
             </div>
         </div>
 
@@ -67,245 +100,218 @@
             <div class="header">
                 <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
                     <i data-lucide="arrow-left" size="24" onclick="window.leaveChat()" class="clickable"></i>
-                    <div style="min-width:0">
-                        <h2 id="chat-title" class="title" style="font-size:18px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">---</h2>
-                    </div>
+                    <h2 id="chat-title" class="title" style="font-size:18px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">---</h2>
                 </div>
                 <i data-lucide="copy" size="20" color="var(--text-mute)" onclick="window.copyId()" class="clickable"></i>
             </div>
             <div id="chat-messages"></div>
-            <div style="display:flex;gap:10px;padding-top:20px">
-                <textarea id="chat-input" class="input-field" style="margin:0;flex:1;height:54px;resize:none;padding-top:15px" placeholder="Message..."></textarea>
-                <button id="btn-send" class="btn btn-accent" style="width:54px;height:54px;border-radius:12px" onclick="window.sendMsg()">
-                    <i data-lucide="send"></i>
-                </button>
+            <div style="display:flex;gap:12px;padding-top:24px">
+                <textarea id="chat-input" class="input-field" style="margin:0;flex:1;height:56px;resize:none;padding-top:16px;border-radius:16px" placeholder="Type a message..."></textarea>
+                <button id="btn-send" class="btn btn-accent" style="width:56px;height:56px;border-radius:16px" onclick="window.sendMsg()"><i data-lucide="send"></i></button>
             </div>
         </div>
 
         <div id="scr-create" class="screen center-content">
             <h1 class="title">New Channel</h1>
-            <p class="subtitle">Set parameters</p>
+            <p class="subtitle">Global or Restricted</p>
             <input id="c-name" class="input-field" placeholder="Channel Name">
-            <input id="c-pass" class="input-field" type="password" placeholder="Password (Optional)">
-            <div style="display:flex;justify-content:space-between;width:100%;background:#f2f2f7;padding:16px;border-radius:10px;margin-bottom:16px">
-                <span style="font-weight:700">Private Channel</span>
-                <input type="checkbox" id="c-private" style="width:20px;height:20px">
+            <input id="c-pass" class="input-field" type="password" placeholder="Passkey (Optional)">
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:20px;background:#f2f2f7;border-radius:16px;margin-bottom:24px">
+                <span style="font-weight:700;font-size:15px">Private Channel</span>
+                <label class="switch"><input type="checkbox" id="c-private"><span class="slider"></span></label>
             </div>
             <button class="btn btn-accent" onclick="window.handleCreate()">Create Channel</button>
-            <button class="btn" style="border:none;margin-top:10px" onclick="window.nav('scr-lobby')">Cancel</button>
+            <button class="btn" style="border:none;margin-top:12px" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
 
         <div id="scr-register" class="screen center-content">
             <h1 class="title">Sign Up</h1>
+            <p class="subtitle" style="margin-bottom:40px">Create your secure identity</p>
             <input id="r-name" class="input-field" placeholder="Full Name">
-            <input id="r-email" class="input-field" type="email" placeholder="Email">
-            <input id="r-pass" class="input-field" type="password" placeholder="Password (8+ chars)">
-            <button class="btn btn-accent auth-btn" onclick="window.handleRegister()">Register</button>
-            <button class="btn" style="border:none;margin-top:10px" onclick="window.nav('scr-start')">Back</button>
+            <input id="r-email" class="input-field" type="email" placeholder="Email Address">
+            <input id="r-pass" class="input-field" type="password" placeholder="Password (Min. 8 chars)">
+            <button class="btn btn-accent auth-btn" onclick="window.handleRegister()" style="margin-top:24px">Create Account</button>
+            <button class="btn" style="border:none; margin-top:12px; color:var(--text-mute)" onclick="window.nav('scr-start')">Cancel</button>
         </div>
 
         <div id="scr-verify" class="screen center-content">
             <h1 class="title">Verify</h1>
-            <input id="v-code" class="input-field" style="text-align:center" placeholder="000000">
-            <button class="btn btn-accent" onclick="window.handleVerify()">Confirm</button>
-            <div style="margin-top:20px;font-size:12px;font-weight:700;color:var(--text-mute)">TIME: <span id="v-timer">10:00</span></div>
+            <p class="subtitle">Check your email</p>
+            <input id="v-code" class="input-field" style="text-align:center;font-size:24px;letter-spacing:4px" placeholder="000000">
+            <button class="btn btn-accent" onclick="window.handleVerify()">Confirm Code</button>
+            <div id="v-timer" style="margin-top:20px;font-weight:800;color:var(--accent)">10:00</div>
         </div>
 
         <div id="scr-gate" class="screen center-content">
-            <h1 class="title">Restricted</h1>
-            <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Passkey">
-            <button class="btn btn-accent" onclick="window.submitGate()">Unlock</button>
-            <button class="btn" style="border:none;margin-top:10px" onclick="window.nav('scr-lobby')">Back</button>
+            <h1 class="title">Protected</h1>
+            <p class="subtitle">Authentication Required</p>
+            <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Channel Passkey">
+            <button class="btn btn-accent" onclick="window.submitGate()">Unlock Access</button>
+            <button class="btn" style="border:none;margin-top:12px" onclick="window.nav('scr-lobby')">Back to Lobby</button>
         </div>
 
         <div id="scr-success" class="screen center-content">
             <h1 class="title">Channel ID</h1>
-            <div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:700" onclick="window.copySId()">---</div>
-            <button class="btn btn-accent" onclick="window.enterCreated()">Enter</button>
+            <p class="subtitle">Share this ID for private access</p>
+            <div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:800;border:1px dashed var(--accent);background:rgba(0,122,255,0.05)" onclick="window.copySId()">---</div>
+            <button class="btn btn-accent" onclick="window.enterCreated()">Enter Channel</button>
         </div>
     </div>
 
     <script type="module">
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-        
-        const URL = "https://fahbqdajxnhswevdagdn.supabase.co",
+        const URL = "https://fahbqdajxnhswevdagdn.supabase.co", 
               KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI",
-              PROXY_URL = "https://chat-app-theta-teal-31.vercel.app/api/proxy",
-              GLOBAL_SALT = "H7a1lPjHvVBA5",
-              MAX_USERS = 475,
-              db = createClient(URL, KEY);
+              PROXY = "https://chat-app-theta-teal-31.vercel.app/api/proxy",
+              SALT = "H7a1lPjHvVBA5", LIMIT = 475, db = createClient(URL, KEY);
 
-        let user, room, sub, allRooms = [], tempReg = {}, lastCreated, isFull = false, globalPresenceSub;
-        let verificationTimer, expiryTime;
+        let user, room, sub, allRooms = [], tempReg = {}, lastCreated, isFull = false, presSub, vTimer;
 
-        // --- PRESENCE & CAPACITY CONTROL ---
-        const updatePresence = (count) => {
-            document.querySelectorAll('.live-count').forEach(el => el.innerText = count);
-            document.getElementById('limit-val').innerText = count;
-            
-            isFull = count >= MAX_USERS;
+        // XSS Helper
+        const esc = t => {
+            const p = document.createElement('p');
+            p.textContent = t;
+            return p.innerHTML;
+        };
+
+        const syncPres = (n) => {
+            isFull = n >= LIMIT;
+            document.querySelectorAll('.live-count').forEach(el => el.innerText = n);
+            document.getElementById('limit-val').innerText = n;
             document.getElementById('limit-screen').classList.toggle('active', isFull);
             document.querySelectorAll('.auth-btn').forEach(b => b.disabled = isFull);
         };
 
-        const initPresence = () => {
-            if (globalPresenceSub) db.removeChannel(globalPresenceSub);
-            globalPresenceSub = db.channel('global_presence');
-            globalPresenceSub
-                .on('presence', { event: 'sync' }, () => {
-                    const count = Object.keys(globalPresenceSub.presenceState()).length;
-                    updatePresence(count);
-                })
-                .subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') await globalPresenceSub.track({ online_at: new Date().toISOString() });
-                });
+        const initPres = () => {
+            presSub = db.channel('global_presence').on('presence',{event:'sync'},() => syncPres(Object.keys(presSub.presenceState()).length)).subscribe(async s => {
+                if(s==='SUBSCRIBED') await presSub.track({u:Math.random()});
+            });
         };
 
-        // --- CORE LOGIC ---
-        window.nav = id => {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            lucide.createIcons();
-        };
-
-        window.toast = m => {
-            const container = document.getElementById('toast-container');
-            const t = document.createElement('div');
-            t.className = 'toast-item'; t.innerText = m;
-            container.appendChild(t);
-            setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 3000);
-        };
-
+        window.nav = id => { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); lucide.createIcons(); };
+        window.toast = m => { const c=document.getElementById('toast-container'), t=document.createElement('div'); t.className='toast-item'; t.innerText=m; c.appendChild(t); setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),400)},3000); };
         window.setLoading = s => document.getElementById('loader-overlay').classList.toggle('active', s);
-        const hashPass = p => p ? CryptoJS.SHA256(p + GLOBAL_SALT).toString() : null;
+        const hash = p => p ? CryptoJS.SHA256(p + SALT).toString() : null;
 
-        // --- AUTH ---
-        db.auth.onAuthStateChange((event, session) => {
-            if (isFull && !session) return; // Prevent any interaction if full
-            user = session?.user;
-            if (user && !isFull && ['scr-start', 'scr-login', 'scr-register'].includes(document.querySelector('.screen.active').id)) {
+        db.auth.onAuthStateChange((ev, ses) => {
+            user = ses?.user;
+            if (user && !isFull && ['scr-start','scr-login','scr-register'].includes(document.querySelector('.screen.active').id)) {
                 window.nav('scr-lobby'); window.loadRooms();
             }
         });
 
         window.handleLogin = async () => {
-            if(isFull) return window.toast("Server is full");
-            const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value;
+            if(isFull) return;
             window.setLoading(true);
-            const { error } = await db.auth.signInWithPassword({ email: e, password: p });
+            const {error} = await db.auth.signInWithPassword({email:document.getElementById('l-email').value, password:document.getElementById('l-pass').value});
             if(error) window.toast("Invalid credentials");
             window.setLoading(false);
         };
 
         window.handleRegister = async () => {
-            if(isFull) return window.toast("Server full");
-            const n = document.getElementById('r-name').value, e = document.getElementById('r-email').value, p = document.getElementById('r-pass').value;
-            if(!n || !e || p.length < 8) return window.toast("Check fields (min 8 chars pass)");
-            tempReg = {n, e, p}; window.setLoading(true);
+            const n=document.getElementById('r-name').value, e=document.getElementById('r-email').value, p=document.getElementById('r-pass').value;
+            if(!n||!e||p.length<8) return window.toast("Incomplete data");
+            tempReg={n,e,p}; window.setLoading(true);
             try {
-                const res = await fetch(PROXY_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"send", email:e})});
-                const j = await res.json();
-                if(j.message === "Code sent") { window.nav('scr-verify'); startVerifyTimer(); } else window.toast(j.message);
+                const r = await fetch(PROXY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"send",email:e})});
+                if((await r.json()).message==="Code sent") { window.nav('scr-verify'); startVTimer(); }
             } catch { window.toast("Network error"); } finally { window.setLoading(false); }
         };
 
-        const startVerifyTimer = () => {
-            expiryTime = Date.now() + 600000;
-            verificationTimer = setInterval(() => {
-                const diff = Math.max(0, Math.floor((expiryTime - Date.now())/1000));
-                document.getElementById('v-timer').innerText = `${Math.floor(diff/60)}:${(diff%60).toString().padStart(2,'0')}`;
-                if(diff <= 0) { clearInterval(verificationTimer); window.nav('scr-register'); }
+        const startVTimer = () => {
+            let left = 600;
+            vTimer = setInterval(() => {
+                left--;
+                document.getElementById('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`;
+                if(left<=0) { clearInterval(vTimer); window.nav('scr-register'); }
             }, 1000);
         };
 
         window.handleVerify = async () => {
-            const code = document.getElementById('v-code').value;
             window.setLoading(true);
-            const res = await fetch(PROXY_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"verify", email:tempReg.e, code})});
-            const j = await res.json();
-            if(j.message === "Verified") {
-                const { error } = await db.auth.signUp({email:tempReg.e, password:tempReg.p, options:{data:{full_name:tempReg.n}}});
+            const r = await fetch(PROXY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verify",email:tempReg.e,code:document.getElementById('v-code').value})});
+            if((await r.json()).message==="Verified") {
+                const {error} = await db.auth.signUp({email:tempReg.e, password:tempReg.p, options:{data:{full_name:tempReg.n}}});
                 if(error) window.toast(error.message);
-            } else window.toast("Invalid code");
+            } else window.toast("Code incorrect");
             window.setLoading(false);
         };
 
-        // --- CHAT LOGIC ---
         window.loadRooms = async () => {
-            const { data } = await db.from('rooms').select('*').eq('is_private', false).order('created_at', {ascending:false});
-            allRooms = data || [];
-            document.getElementById('room-list').innerHTML = allRooms.map(r => `
-                <div class="room-card" onclick="window.joinAttempt('${r.id}', '${r.name}', '${r.password}')">
-                    <span style="font-weight:700">${r.name}</span>
-                    <i data-lucide="${r.password && r.password !== 'null' ? 'lock' : 'chevron-right'}" size="18"></i>
+            const {data} = await db.from('rooms').select('*').eq('is_private',false).order('created_at',{ascending:false});
+            allRooms = data || []; window.filterRooms();
+        };
+
+        window.filterRooms = () => {
+            const q = document.getElementById('search-bar').value.toLowerCase();
+            document.getElementById('room-list').innerHTML = allRooms.filter(r=>r.name.toLowerCase().includes(q)).map(r => `
+                <div class="room-card" onclick="window.joinAttempt('${r.id}','${esc(r.name)}','${r.password}')">
+                    <span style="font-weight:700">${esc(r.name)}</span>
+                    <i data-lucide="${r.password && r.password !== 'null' ? 'lock' : 'chevron-right'}" size="18" color="${r.password && r.password !== 'null' ? 'var(--warning)' : 'var(--text-mute)'}"></i>
                 </div>
-            `).join('');
-            lucide.createIcons();
+            `).join(''); lucide.createIcons();
         };
 
-        window.joinAttempt = (id, name, pass) => {
-            if(pass && pass !== 'null') { window.pending = {id, name, pass}; window.nav('scr-gate'); }
-            else window.openVault(id, name);
+        window.joinAttempt = (id, n, p) => {
+            if(p && p!=='null') { window.pending={id,n,p}; window.nav('scr-gate'); }
+            else window.openVault(id,n);
         };
 
-        window.openVault = async (id, name) => {
-            window.setLoading(true); room = id;
-            if(sub) db.removeChannel(sub);
-            document.getElementById('chat-title').innerText = name; window.nav('scr-chat');
-            const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', {ascending:true});
-            const box = document.getElementById('chat-messages');
-            box.innerHTML = (data || []).map(m => renderMsg(m)).join('');
-            box.scrollTop = box.scrollHeight;
-            sub = db.channel(`room_${id}`).on('postgres_changes', {event:'INSERT', schema:'public', table:'messages', filter:`room_id=eq.${id}`}, p => {
-                box.insertAdjacentHTML('beforeend', renderMsg(p.new)); box.scrollTop = box.scrollHeight;
+        window.joinPrivate = async () => {
+            const id = document.getElementById('join-id').value.trim();
+            if(!id) return;
+            window.setLoading(true);
+            const {data} = await db.from('rooms').select('*').eq('id',id).single();
+            window.setLoading(false);
+            if(data) window.joinAttempt(data.id, data.name, data.password);
+            else window.toast("Channel not found");
+        };
+
+        window.openVault = async (id, n) => {
+            window.setLoading(true); room=id; if(sub) db.removeChannel(sub);
+            document.getElementById('chat-title').innerText=n; window.nav('scr-chat');
+            const {data} = await db.from('messages').select('*').eq('room_id',id).order('created_at',{ascending:true});
+            const b = document.getElementById('chat-messages');
+            b.innerHTML = (data||[]).map(m=>render(m)).join(''); b.scrollTop=b.scrollHeight;
+            sub = db.channel(`room_${id}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`room_id=eq.${id}`},p=>{
+                b.insertAdjacentHTML('beforeend',render(p.new)); b.scrollTop=b.scrollHeight;
             }).subscribe();
             window.setLoading(false);
         };
 
-        const renderMsg = m => {
-            let txt = "[Encrypted]", time = "--";
-            try {
-                const raw = CryptoJS.AES.decrypt(m.content, m.room_id + GLOBAL_SALT).toString(CryptoJS.enc.Utf8);
-                const p = raw.split('|'); time = p[0]; txt = p.slice(1).join('|');
-            } catch(e){}
-            return `<div class="msg ${m.user_id === user.id ? 'me' : ''}">
-                <span class="msg-user">${m.user_name}</span>
-                <div>${txt}</div>
-                <span class="msg-time">${time}</span>
-            </div>`;
+        const render = m => {
+            let t="[Encrypted Message]", d="--:--";
+            try { const r=CryptoJS.AES.decrypt(m.content,m.room_id+SALT).toString(CryptoJS.enc.Utf8).split('|'); d=r[0]; t=r.slice(1).join('|'); } catch(e){}
+            return `<div class="msg ${m.user_id===user.id?'me':''}"><span class="msg-user">${esc(m.user_name)}</span><div>${esc(t)}</div><span class="msg-time">${esc(d)}</span></div>`;
         };
 
         window.sendMsg = async () => {
-            const i = document.getElementById('chat-input'), v = i.value.trim();
-            if(!v) return;
-            const t = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-            const enc = CryptoJS.AES.encrypt(t + "|" + v, room + GLOBAL_SALT).toString();
-            i.value = '';
-            await db.from('messages').insert([{room_id:room, user_id:user.id, user_name:user.user_metadata.full_name, content:enc}]);
+            const i=document.getElementById('chat-input'), v=i.value.trim(); if(!v) return;
+            const now = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+            const enc = CryptoJS.AES.encrypt(now+"|"+v, room+SALT).toString();
+            i.value=''; await db.from('messages').insert([{room_id:room,user_id:user.id,user_name:user.user_metadata.full_name,content:enc}]);
         };
 
         window.handleCreate = async () => {
-            const n = document.getElementById('c-name').value, p = document.getElementById('c-pass').value, isP = document.getElementById('c-private').checked;
-            if(!n) return window.toast("Name required");
-            window.setLoading(true);
-            const { data } = await db.from('rooms').insert([{name:n, password:hashPass(p), is_private:isP, created_by:user.id}]).select();
-            if(data) { lastCreated = data[0]; document.getElementById('s-id').innerText = lastCreated.id; window.nav('scr-success'); }
+            const n=document.getElementById('c-name').value, p=document.getElementById('c-pass').value, isP=document.getElementById('c-private').checked;
+            if(!n) return window.toast("Name required"); window.setLoading(true);
+            const {data} = await db.from('rooms').insert([{name:n,password:hash(p),is_private:isP,created_by:user.id}]).select();
+            if(data) { lastCreated=data[0]; document.getElementById('s-id').innerText=data[0].id; window.nav('scr-success'); }
             window.setLoading(false);
         };
 
         window.submitGate = () => {
-            if(hashPass(document.getElementById('gate-pass').value) === window.pending.pass) window.openVault(window.pending.id, window.pending.name);
-            else window.toast("Access Denied");
+            if(hash(document.getElementById('gate-pass').value)===window.pending.p) window.openVault(window.pending.id, window.pending.n);
+            else window.toast("Access denied");
         };
 
+        window.copyId = () => { navigator.clipboard.writeText(room); window.toast("ID Copied"); };
+        window.copySId = () => { navigator.clipboard.writeText(lastCreated.id); window.toast("ID Copied"); };
         window.leaveChat = () => { window.nav('scr-lobby'); window.loadRooms(); };
-        window.handleLogout = () => db.auth.signOut().then(() => window.nav('scr-start'));
-        window.copyId = () => { navigator.clipboard.writeText(room); window.toast("Copied"); };
+        window.handleLogout = () => db.auth.signOut().then(()=>window.nav('scr-start'));
         window.enterCreated = () => window.openVault(lastCreated.id, lastCreated.name);
 
-        // Bootstrap
-        initPresence();
-        lucide.createIcons();
+        initPres();
     </script>
 </body>
 </html>
