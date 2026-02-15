@@ -33,6 +33,16 @@
         .input-field { width: 100%; background: #f2f2f7; border: 1px solid transparent; border-radius: 8px; padding: 16px; color: var(--text-main); font-size: 16px; outline: none; margin-bottom: 16px; transition: 0.2s }
         .input-field:focus { border-color: var(--accent); background: #fff }
         
+        /* Toggle Switch Styling */
+        .toggle-container { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #f2f2f7; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+        .toggle-label { font-size: 15px; font-weight: 600; color: var(--text-main); }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; inset: 0; background-color: #d1d1d6; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--success); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
         .btn { width: 100%; height: 56px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-main); font-weight: 700; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.2s; flex-shrink: 0; }
         .btn:active { opacity: 0.7 }
         .btn-accent { background: var(--text-main); color: #fff; border: none }
@@ -140,7 +150,7 @@
                     <i data-lucide="log-out" size="22" color="#ff3b30" class="clickable" onclick="window.handleLogout()"></i>
                 </div>
             </div>
-            <input id="search-bar" class="input-field" placeholder="Search channels..." oninput="window.filterRooms()">
+            <input id="search-bar" class="input-field" placeholder="Search public channels..." oninput="window.filterRooms()">
             <div id="room-list"></div>
             <div style="display:flex;gap:12px;margin-top:auto;padding-top:20px">
                 <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID">
@@ -179,6 +189,15 @@
             <p class="subtitle">Set parameters</p>
             <input id="c-name" class="input-field" placeholder="Channel Name">
             <input id="c-pass" class="input-field" placeholder="Password (Optional)">
+            
+            <div class="toggle-container">
+                <span class="toggle-label">Private Channel</span>
+                <label class="switch">
+                    <input type="checkbox" id="c-private">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
             <button class="btn btn-accent" onclick="window.handleCreate()">Create Channel</button>
             <button class="btn btn-cancel" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
@@ -318,6 +337,17 @@
             } else { window.openVault(id, name); }
         };
 
+        window.joinPrivate = async () => {
+            const id = document.getElementById('join-id').value.trim();
+            if(!id) return;
+            window.setLoading(true);
+            const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
+            window.setLoading(false);
+            if(data) {
+                window.joinAttempt(data.id, data.name, data.password);
+            } else window.toast("Channel not found");
+        };
+
         window.submitGate = () => {
             if(document.getElementById('gate-pass').value === window.pendingRoom.pass) {
                 window.openVault(window.pendingRoom.id, window.pendingRoom.name);
@@ -377,17 +407,29 @@
         };
 
         window.closeUserModal = () => document.getElementById('user-modal').classList.remove('active');
-        window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); };
+        window.leaveChat = () => { if(sub) db.removeChannel(sub); window.nav('scr-lobby'); window.loadRooms(); };
         window.copyId = () => { navigator.clipboard.writeText(room); window.toast("ID Copied"); };
         window.copySId = () => { navigator.clipboard.writeText(lastCreated.id); window.toast("ID Copied"); };
 
         window.handleCreate = async () => {
-            const n = document.getElementById('c-name').value.trim(), p = document.getElementById('c-pass').value;
-            if(!n) return;
+            const n = document.getElementById('c-name').value.trim(), 
+                  p = document.getElementById('c-pass').value,
+                  isPriv = document.getElementById('c-private').checked;
+
+            if(!n) return window.toast("Enter name");
             window.setLoading(true);
-            const { data } = await db.from('rooms').insert([{ name: n, password: p || null, is_private: false, created_by: user.id }]).select();
+            const { data } = await db.from('rooms').insert([{ 
+                name: n, 
+                password: p || null, 
+                is_private: isPriv, 
+                created_by: user.id 
+            }]).select();
             window.setLoading(false);
-            if(data) { lastCreated = data[0]; document.getElementById('s-id').innerText = lastCreated.id; window.nav('scr-success'); }
+            if(data) { 
+                lastCreated = data[0]; 
+                document.getElementById('s-id').innerText = lastCreated.id; 
+                window.nav('scr-success'); 
+            }
         };
 
         window.enterCreated = () => window.openVault(lastCreated.id, lastCreated.name);
