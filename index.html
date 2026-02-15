@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Hyperrush Chat</title>
+    <title>Hyperrush Secure Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -44,8 +44,8 @@
         <div id="scr-register" class="screen center-content">
             <h1 class="title">Sign Up</h1>
             <p class="subtitle">Join the network</p>
-            <input type="text" id="r-name" class="input-field" placeholder="Full Name" autocomplete="new-password">
-            <input type="email" id="r-email" class="input-field" placeholder="Email" autocomplete="new-password">
+            <input type="text" id="r-name" class="input-field" placeholder="Full Name" autocomplete="new-name">
+            <input type="email" id="r-email" class="input-field" placeholder="Email" autocomplete="new-email">
             <input type="password" id="r-pass" class="input-field" placeholder="Password" autocomplete="new-password">
             <button class="btn btn-accent" onclick="window.handleRegister()">Continue</button>
             <button onclick="window.nav('scr-start')" class="btn btn-cancel">Cancel</button>
@@ -54,14 +54,14 @@
         <div id="scr-verify" class="screen center-content">
             <h1 class="title">Verify</h1>
             <p class="subtitle">Check your inbox</p>
-            <input type="number" id="v-code" class="input-field" style="text-align:center" placeholder="x x x x x x" autocomplete="new-password">
+            <input type="number" id="v-code" class="input-field" style="text-align:center" placeholder="x x x x x x" autocomplete="one-time-code">
             <button class="btn btn-accent" onclick="window.handleVerify()">Confirm Identity</button>
         </div>
 
         <div id="scr-login" class="screen center-content">
             <h1 class="title">Welcome Back</h1>
             <p class="subtitle">Identify yourself</p>
-            <input id="l-email" class="input-field" type="email" placeholder="Email" autocomplete="new-password">
+            <input id="l-email" class="input-field" type="email" placeholder="Email" autocomplete="off">
             <input id="l-pass" type="password" class="input-field" placeholder="Password" autocomplete="new-password">
             <button class="btn btn-accent" onclick="window.handleLogin()">Sign In</button>
             <button class="btn btn-cancel" onclick="window.nav('scr-start')">Go Back</button>
@@ -75,10 +75,10 @@
                     <i data-lucide="log-out" size="22" color="#ff3b30" class="clickable" onclick="window.handleLogout()"></i>
                 </div>
             </div>
-            <input id="search-bar" class="input-field" placeholder="Search public channels..." oninput="window.filterRooms()" autocomplete="new-password">
+            <input id="search-bar" class="input-field" placeholder="Search public channels..." oninput="window.filterRooms()" autocomplete="off">
             <div id="room-list"></div>
             <div style="display:flex;gap:12px;margin-top:auto;padding-top:20px">
-                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID" autocomplete="new-password">
+                <input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Channel ID" autocomplete="off">
                 <button class="btn btn-accent" style="width:80px" onclick="window.joinPrivate()">Join</button>
             </div>
         </div>
@@ -102,7 +102,7 @@
             </div>
             <div id="chat-messages"></div>
             <div style="display:flex;gap:12px;padding-top:20px; flex-shrink: 0;">
-                <textarea id="chat-input" class="input-field" style="margin:0;flex:1;height:52px;resize:none;padding-top:14px" placeholder="Type a message..." autocomplete="new-password"></textarea>
+                <textarea id="chat-input" class="input-field" style="margin:0;flex:1;height:52px;resize:none;padding-top:14px" placeholder="Type a message..." autocomplete="off"></textarea>
                 <button id="btn-send" class="btn btn-accent" style="width:52px;height:52px;border-radius:14px" onclick="window.sendMsg()">
                     <i data-lucide="arrow-up"></i>
                 </button>
@@ -112,7 +112,7 @@
         <div id="scr-create" class="screen center-content">
             <h1 class="title">New Channel</h1>
             <p class="subtitle">Set parameters</p>
-            <input id="c-name" class="input-field" placeholder="Channel Name" autocomplete="new-password">
+            <input id="c-name" class="input-field" placeholder="Channel Name" autocomplete="off">
             <input id="c-pass" class="input-field" type="password" placeholder="Password (Optional)" autocomplete="new-password">
             <div class="toggle-container">
                 <span class="toggle-label">Private Channel</span>
