@@ -1,59 +1,66 @@
 export default async function handler(req, res) {
-  // 1. Uitgebreide CORS configuratie
+  // 1. CORS Headers - Laat browsers weten dat deze API toegankelijk is
   res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Voor productie kun je dit beperken tot je eigen domein
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Voor maximale compatibiliteit
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle OPTIONS request (preflight)
+  // 2. Belangrijk: Reageer direct op de browser check (OPTIONS)
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
+  // De Google Apps Script URL (Hardcoded voor veiligheid)
   const GAS_URL = "https://script.google.com/macros/s/AKfycbyjjYmri3_TTlcRANHZLR-IghRbslxY2C-T7eJ7UzY2lPr7KN0Sv0HES7gKreT_IRcI/exec";
 
   try {
     const { email, code } = req.body;
-    const urlPath = req.url; // Kijk naar de URL om de actie te bepalen
-
+    
+    // Bepaal de actie op basis van het URL-pad
+    // Bijv: /api/proxy/send of /api/proxy/verify
     let action = "";
-    if (urlPath.includes("send")) {
+    const path = req.url;
+
+    if (path.includes("send")) {
       action = "send";
-    } else if (urlPath.includes("verify")) {
+    } else if (path.includes("verify")) {
       action = "verify";
     } else {
-      return res.status(400).json({ error: "Gebruik /api/proxy/send of /api/proxy/verify" });
+      return res.status(400).json({ error: "Gebruik /send of /verify endpoint" });
     }
 
     if (!email) {
-      return res.status(400).json({ error: "Email is verplicht" });
+      return res.status(400).json({ error: "Geen email opgegeven" });
     }
 
-    // Payload voorbereiden voor GAS
+    // Bouw de payload voor Google Apps Script
     const payload = {
       action: action,
       email: email,
       code: code || ""
     };
 
-    // 2. Fetch naar Google Apps Script met redirect handling
+    // Verstuur naar Google Apps Script
     const response = await fetch(GAS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-      redirect: 'follow' 
+      redirect: 'follow' // Cruciaal voor GAS 302 redirects
     });
 
     const data = await response.json();
 
-    // 3. Antwoord terugsturen naar de frontend
+    // Stuur resultaat terug naar je frontend
     return res.status(200).json(data);
 
   } catch (error) {
     console.error("Proxy Error:", error);
-    return res.status(500).json({ error: "Serverfout in de proxy", details: error.message });
+    return res.status(500).json({ 
+      error: "Backend Proxy Error", 
+      details: error.message 
+    });
   }
 }
