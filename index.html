@@ -1,4 +1,4 @@
-<!-- HyperRush Chat App | 2026 Ultimate Stable Build | GitHub: HyperRushNet | MIT License -->
+<!-- HyperRush Chat App | 2026 Ultimate Secure Build -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/5962/5962463.png">
-    <title>HRN Chat 2026</title>
+    <title>HRN Chat Secure</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -30,7 +30,6 @@
         .subtitle{color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:32px;display:block}
         .input-field{width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:12px;padding:16px;color:var(--text-main);font-size:16px;outline:none;margin-bottom:16px;transition:.1s}
         .input-field:focus{border-color:var(--accent);background:#fff}
-        .input-field:disabled{background:#e5e5ea;color:var(--text-mute);opacity:0.9;cursor:not-allowed}
         .btn{width:100%;height:56px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text-main);font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:.1s}
         .btn-accent{background:var(--text-main);color:#fff;border:none}
         .btn:active{transform:scale(.96);opacity:.8}
@@ -819,7 +818,7 @@
                     <div class="room-card" onclick="window.joinAttempt('${r.id}')">
                         <span style="font-weight:700">${esc(r.name)}</span>
                         <span style="display:flex; align-items:center; gap:5px">
-                            <i data-lucide="${r.password_hash ? 'lock' : 'chevron-right'}" style="width:18px; height:18px; color:var(--text-mute)"></i>
+                            <i data-lucide="${r.has_password ? 'lock' : 'chevron-right'}" style="width:18px; height:18px; color:var(--text-mute)"></i>
                         </span>
                     </div>
                 `).join(''); 
@@ -832,8 +831,8 @@
                 const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
                 window.setLoading(false);
                 if (error || !data) return window.toast("Room not found");
-                if (data.password_hash) { 
-                    state.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
+                if (data.has_password) { 
+                    state.pending = { id: data.id, name: data.name, salt: data.salt }; 
                     window.nav('scr-gate'); 
                 } else { 
                     window.openVault(data.id, data.name, null, data.salt); 
@@ -849,8 +848,8 @@
                 const {data} = await db.from('rooms').select('*').eq('id',id).single(); 
                 window.setLoading(false); 
                 if(data) { 
-                    if(data.password_hash) { 
-                        state.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
+                    if(data.has_password) { 
+                        state.pending = { id: data.id, name: data.name, salt: data.salt }; 
                         window.nav('scr-gate'); 
                     } else { 
                         window.openVault(data.id, data.name, null, data.salt); 
@@ -1166,13 +1165,18 @@
                 if(!n) { window.toast("Name required"); state.processingAction = false; return; } 
                 window.setLoading(true, "Deploying..."); 
                 const roomSalt = generateSalt();
-                const accessHash = p ? await sha256(p + roomSalt) : null;
-                const {data, error} = await db.from('rooms').insert([{name:n,password_hash:accessHash,salt:roomSalt,is_private:isP,created_by:state.user.id}]).select(); 
-                if(error) window.toast("Error: " + error.message);
-                if(data && data.length > 0) { 
-                    state.lastCreated=data[0]; 
+                const {data, error} = await db.from('rooms').insert([{name:n,has_password:!!p,is_private:isP,salt:roomSalt,created_by:state.user.id}]).select(); 
+                if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; }
+                
+                if(data && data.length > 0) {
+                    const newRoom = data[0];
+                    if(p) {
+                        const accessHash = await sha256(p + roomSalt);
+                        await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
+                    }
+                    state.lastCreated=newRoom; 
                     state.lastCreatedPass = p; 
-                    $('s-id').innerText=data[0].id; 
+                    $('s-id').innerText=newRoom.id; 
                     window.nav('scr-success'); 
                 }
                 state.processingAction = false;
@@ -1182,7 +1186,8 @@
             window.submitGate = async () => { 
                 const inputPass = $('gate-pass').value; 
                 const inputHash = await sha256(inputPass + state.pending.salt); 
-                if(inputHash === state.pending.hash) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); 
+                const { data, error } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash });
+                if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); 
                 else window.toast("Access Denied"); 
             };
             
