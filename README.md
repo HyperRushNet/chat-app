@@ -22,7 +22,7 @@ This repository follows a branch-based versioning model.
 
 To use a specific version, switch to the corresponding branch:
 
-# Screenshots
+## Screenshots
 <p align="left">
   <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp" alt="Screenshot Chat App" width="200" style="margin-right: 20px;">
   <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp" alt="Screenshot Chat App" width="200" style="margin-right: 20px;">
