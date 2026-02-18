@@ -1,4 +1,4 @@
-# HRN Chat 2026 - v1.0
+# HRN Chat 2026 - v1.1 - Experiment
 
 A high-security, real-time messaging interface built with modern web technologies. This project focuses on privacy, end-to-end encryption, and a seamless user experience.
 
