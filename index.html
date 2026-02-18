@@ -6,17 +6,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/5962/5962463.png">
-    <meta http-equiv="Content-Security-Policy" content="
-      default-src 'self';
-      script-src 'self';
-      style-src 'self' 'unsafe-inline';
-      object-src 'none';
-      base-uri 'self';
-    ">
-
     <title>HRN Chat Secure</title>
-    <link href="./libraries/font.css" rel="stylesheet">
-    <script src="./libraries/lucide.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root{--bg:#fff;--surface:#fff;--border:#e2e2e7;--text-main:#1c1c1e;--text-mute:#636366;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--connecting:#5856d6;--offline:#8e8e93;--pad:32px}
         *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
@@ -399,7 +391,7 @@
     </div>
     
     <script type="module">
-        import { createClient } from './libraries/supabase.min.js';
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
         
         function startChatApp(config) {
             const SUPABASE_URL = "https://fahbqdajxnhswevdagdn.supabase.co";
