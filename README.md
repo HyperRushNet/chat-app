@@ -1,38 +1,66 @@
 # HyperRush Chat App
 
-A secure real-time chat application built with Supabase, end-to-end encryption, and a lightweight client architecture.
+A secure, real-time messaging application built with Supabase and modern web technologies.
 
+<p align="left">
+  <img src="https://img.shields.io/badge/version-1.0.1-blue">
+  <img src="https://img.shields.io/badge/encryption-AES--GCM-green">
+  <img src="https://img.shields.io/badge/backend-Supabase-3ECF8E">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey">
+</p>
 
-## Status
+---
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](https://github.com/HyperRushNet/chat-app/tree/1.0.1)
-![Architecture](https://img.shields.io/badge/architecture-branch--based-black)
-![Encryption](https://img.shields.io/badge/encryption-AES--GCM-green)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey)](https://opensource.org/licenses/MIT)
+## Overview
 
+HyperRush Chat App is a lightweight real-time messaging platform focused on privacy, cryptographic isolation, and performance.  
+The project follows a branch-based versioning model to preserve release history and architectural evolution.
 
+---
 
-## Project Structure
+## Features
 
-This repository follows a branch-based versioning model.
+- End-to-end encryption using AES-GCM
+- Real-time messaging via Supabase Realtime
+- OTP-based authentication
+- Per-room unique cryptographic salt
+- Device-based rate limiting
+- Single active session enforcement
+- Minimal metadata storage
 
-- `main` → Documentation and project overview  
-- `1.0` → First release (rough and insecure, improved a lot in later versions)
-- Future versions → Separate branches  
-
-To use a specific version, switch to the corresponding branch:
+---
 
 ## Screenshots
+
 <p align="left">
   <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp">
-    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp" width="200" style="margin-right: 20px;">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp" width="220" style="margin-right: 15px;">
   </a>
   <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp">
-    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp" width="200" style="margin-right: 20px;">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp" width="220" style="margin-right: 15px;">
   </a>
   <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp">
-    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp" width="200">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp" width="220">
   </a>
 </p>
 
+---
 
+## Architecture
+
+Frontend: Vanilla JavaScript with modern Web APIs  
+Backend: Supabase (Auth, Realtime, Postgres)  
+Encryption: AES-256-GCM via Web Crypto API  
+
+Security principles:
+
+- No plaintext message storage
+- Cryptographic isolation per room
+- Device-based abuse mitigation
+- Minimal retained metadata
+
+---
+
+## License
+
+This project is licensed under the MIT License.
