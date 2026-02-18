@@ -1,4 +1,4 @@
-<!-- HyperRush Chat App | 2026 Ultimate Secure Build -->
+<!-- HyperRush Chat App | 2026 Ultimate Stable Build | GitHub: HyperRushNet | MIT License -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -394,9 +394,9 @@
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
         
         function startChatApp(config) {
-            const SUPABASE_URL = config.supabaseUrl;
-            const SUPABASE_KEY = config.supabaseKey;
-            const MAIL_API = config.mailApi;
+            const SUPABASE_URL = "https://fahbqdajxnhswevdagdn.supabase.co";
+            const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
+            const MAIL_API = "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI";
             const MAX_USERS = config.maxUsers;
             const MESSAGE_FETCH_LIMIT = config.messageFetchLimit;
             const RATE_LIMIT_MS = config.rateLimitMs;
@@ -428,7 +428,11 @@
                 serverFull: false
             };
 
-            const LOGOUT_FLAG = 'hrn_user_logged_out';
+            const FLAG_LOGOUT = 'hrn_flag_logged_out';
+            const FLAG_GUEST_NAME = 'hrn_flag_guest_name';
+            const FLAG_GUEST_ID = 'hrn_flag_guest_id';
+            const FLAG_USER_TYPE = 'hrn_flag_user_type';
+
             let toastQueue = [];
             let toastVisible = false;
             const tabChannel = new BroadcastChannel('hrn_tab_sync');
@@ -673,7 +677,7 @@
                     state.isMasterTab = true;
                     tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
                     $('block-overlay').classList.remove('active');
-                    const isLoggedOut = localStorage.getItem(LOGOUT_FLAG) === 'true';
+                    const isLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
                     if (!isLoggedOut && state.user) {
                         initPresence();
                     }
@@ -763,7 +767,7 @@
             };
 
             const prepareGuestScreen = () => {
-                const storedName = localStorage.getItem('hrn_guest_name');
+                const storedName = localStorage.getItem(FLAG_GUEST_NAME);
                 const nameInput = $('g-name');
                 const lockIcon = document.querySelector('.input-lock-icon');
                 if (storedName) { 
@@ -1067,7 +1071,7 @@
                 const e = $('l-email').value, p = $('l-pass').value; 
                 if(!e || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
                 window.setLoading(true, "Verifying..."); 
-                localStorage.removeItem(LOGOUT_FLAG); 
+                localStorage.removeItem(FLAG_LOGOUT); 
                 const {error} = await db.auth.signInWithPassword({email:e, password:p}); 
                 if(error) window.toast(error.message);
                 state.processingAction = false;
@@ -1118,7 +1122,7 @@
                 if(state.processingAction) return;
                 const nameInput = $('g-name');
                 let name = nameInput.value.trim();
-                const lockedName = localStorage.getItem('hrn_guest_name');
+                const lockedName = localStorage.getItem(FLAG_GUEST_NAME);
                 if (lockedName) name = lockedName;
                 else { if (!name) return window.toast("Please enter a name."); }
                 if (!lockedName) { window.openHub(); window.showOverlayView('guest-warn'); } 
@@ -1130,7 +1134,7 @@
             const performGuestLogin = async (name) => {
                 window.closeOverlay();
                 window.setLoading(true, "Initializing...");
-                localStorage.removeItem(LOGOUT_FLAG);
+                localStorage.removeItem(FLAG_LOGOUT);
                 const { data: { user: existingUser } } = await db.auth.getUser();
                 if (existingUser) {
                     const currentName = existingUser.user_metadata?.full_name;
@@ -1140,7 +1144,9 @@
                         state.user.user_metadata = state.user.user_metadata || {}; 
                         state.user.user_metadata.full_name = name; 
                     } else { state.user = existingUser; }
-                    localStorage.setItem('hrn_guest_id', state.user.id); localStorage.setItem('hrn_guest_name', name);
+                    localStorage.setItem(FLAG_GUEST_ID, state.user.id); 
+                    localStorage.setItem(FLAG_GUEST_NAME, name);
+                    localStorage.setItem(FLAG_USER_TYPE, 'guest');
                     window.nav('scr-lobby'); window.loadRooms(); claimMaster();
                     window.setLoading(false);
                     return;
@@ -1150,7 +1156,9 @@
                 if (data.user) {
                     await db.auth.updateUser({ data: { full_name: name } });
                     state.user = data.user; state.user.user_metadata = state.user.user_metadata || {}; state.user.user_metadata.full_name = name;
-                    localStorage.setItem('hrn_guest_id', state.user.id); localStorage.setItem('hrn_guest_name', name);
+                    localStorage.setItem(FLAG_GUEST_ID, state.user.id); 
+                    localStorage.setItem(FLAG_GUEST_NAME, name);
+                    localStorage.setItem(FLAG_USER_TYPE, 'guest');
                     window.nav('scr-lobby'); window.loadRooms(); claimMaster();
                 }
                 window.setLoading(false);
@@ -1195,13 +1203,15 @@
                 window.setLoading(true, "Signing out..."); 
                 await cleanupChannels();
                 if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
-                localStorage.setItem(LOGOUT_FLAG, 'true');
+                localStorage.setItem(FLAG_LOGOUT, 'true');
+                state.user = null;
                 if (state.user && state.user.is_anonymous) { 
                     window.toast("Session saved."); 
                     window.nav('scr-start'); 
                 } else { 
-                    localStorage.removeItem('hrn_guest_id'); 
-                    localStorage.removeItem('hrn_guest_name'); 
+                    localStorage.removeItem(FLAG_GUEST_ID); 
+                    localStorage.removeItem(FLAG_GUEST_NAME);
+                    localStorage.removeItem(FLAG_USER_TYPE);
                     await db.auth.signOut(); 
                     state.lastKnownOnlineCount = null; 
                     updateOnlineDisplay('--', 'disconnected'); 
@@ -1239,14 +1249,23 @@
             });
 
             db.auth.onAuthStateChange(async (ev, ses) => {
+                const isLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
+                if (isLoggedOut) {
+                    state.user = null;
+                    return;
+                }
+
                 state.user = ses?.user;
                 const createBtn = $('icon-plus-lobby');
                 const activeScreenId = document.querySelector('.screen.active')?.id;
                 if (createBtn) createBtn.style.display = state.user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
                 if (ev === 'SIGNED_IN') {
                     if(state.user) {
-                        localStorage.setItem('hrn_guest_id', state.user.id);
-                        if(state.user.user_metadata?.full_name) localStorage.setItem('hrn_guest_name', state.user.user_metadata.full_name);
+                        localStorage.setItem(FLAG_GUEST_ID, state.user.id);
+                        if(state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
+                        if(state.user.is_anonymous) localStorage.setItem(FLAG_USER_TYPE, 'guest');
+                        else localStorage.setItem(FLAG_USER_TYPE, 'registered');
+                        
                         const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
                         if (authScreens.includes(activeScreenId)) {
                             window.nav('scr-lobby'); 
@@ -1260,9 +1279,10 @@
                     await cleanupChannels();
                     state.lastKnownOnlineCount = null; 
                     updateOnlineDisplay('--', 'disconnected'); 
-                    localStorage.removeItem('hrn_guest_id'); 
-                    localStorage.removeItem('hrn_guest_name'); 
-                    localStorage.removeItem(LOGOUT_FLAG); 
+                    localStorage.removeItem(FLAG_GUEST_ID); 
+                    localStorage.removeItem(FLAG_GUEST_NAME);
+                    localStorage.removeItem(FLAG_USER_TYPE);
+                    localStorage.removeItem(FLAG_LOGOUT); 
                     window.nav('scr-start'); 
                 }
             });
@@ -1270,11 +1290,13 @@
             const init = async () => {
                 if (!navigator.onLine) $('offline-screen').classList.add('active');
                 const { data: { session } } = await db.auth.getSession();
-                const isLoggedOut = localStorage.getItem(LOGOUT_FLAG) === 'true';
+                const isLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
+                
                 if (session && !isLoggedOut) {
                     state.user = session.user;
-                    localStorage.setItem('hrn_guest_id', state.user.id);
-                    if(state.user.user_metadata?.full_name) localStorage.setItem('hrn_guest_name', state.user.user_metadata.full_name);
+                    localStorage.setItem(FLAG_GUEST_ID, state.user.id);
+                    if(state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
+                    
                     const masterExists = await checkMaster();
                     if (masterExists) {
                         showInactiveOverlay();
@@ -1296,9 +1318,6 @@
         }
 
         startChatApp({
-            supabaseUrl: "https://fahbqdajxnhswevdagdn.supabase.co",
-            supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI",
-            mailApi: "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI",
             maxUsers: 475,
             messageFetchLimit: 50,
             rateLimitMs: 1000
