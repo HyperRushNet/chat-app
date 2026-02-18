@@ -638,7 +638,13 @@
                 if (overlay.classList.contains('active')) {
                     overlay.classList.remove('active');
                 }
-                if (user) initPresence();
+                
+                const isLoggedOut = localStorage.getItem(LOGOUT_FLAG) === 'true';
+                if (isLoggedOut) {
+                    window.nav('scr-start');
+                } else if (user) {
+                    initPresence();
+                }
             }
         };
 
@@ -652,7 +658,9 @@
 
         tabChannel.onmessage = (ev) => {
             if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== tabId) {
-                handleTabConflict();
+                if (isMasterTab) {
+                    handleTabConflict();
+                }
             }
             if (ev.data.type === 'PING_MASTER' && isMasterTab) {
                 tabChannel.postMessage({ type: 'PONG_MASTER', id: tabId });
@@ -1018,6 +1026,9 @@
             if (heartbeatInterval) clearInterval(heartbeatInterval); 
             if (presenceChannel) await db.removeChannel(presenceChannel).catch(()=>{}); 
             presenceChannel = null; 
+            
+            isMasterTab = false; 
+            
             localStorage.setItem(LOGOUT_FLAG, 'true');
             if (user && user.is_anonymous) { 
                 window.toast("Session saved. Come back soon!"); 
