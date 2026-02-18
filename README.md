@@ -24,8 +24,15 @@ To use a specific version, switch to the corresponding branch:
 
 ## Screenshots
 <p align="left">
-  <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp" alt="Screenshot Chat App" width="200" style="margin-right: 20px;">
-  <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp" alt="Screenshot Chat App" width="200" style="margin-right: 20px;">
-  <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp" alt="Screenshot Chat App" width="200">
+  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp" width="200" style="margin-right: 20px;">
+  </a>
+  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp" width="200" style="margin-right: 20px;">
+  </a>
+  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp" width="200">
+  </a>
 </p>
+
 
