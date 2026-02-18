@@ -1,5 +1,7 @@
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_user_update();
+DROP FUNCTION IF EXISTS public.verify_room_password();
+DROP FUNCTION IF EXISTS public.set_room_password();
 DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.room_passwords CASCADE;
 DROP TABLE IF EXISTS public.rooms CASCADE;
@@ -52,8 +54,8 @@ CREATE POLICY rooms_insert ON public.rooms FOR INSERT TO authenticated WITH CHEC
 CREATE POLICY rooms_update ON public.rooms FOR UPDATE USING (auth.uid() = created_by);
 CREATE POLICY rooms_delete ON public.rooms FOR DELETE USING (auth.uid() = created_by);
 
+CREATE POLICY room_passwords_select ON public.room_passwords FOR SELECT USING (false); 
 CREATE POLICY room_passwords_insert ON public.room_passwords FOR INSERT WITH CHECK (auth.uid() IN (SELECT created_by FROM rooms WHERE id = room_id));
-CREATE POLICY room_passwords_delete ON public.room_passwords FOR DELETE USING (auth.uid() IN (SELECT created_by FROM rooms WHERE id = room_id));
 
 CREATE POLICY messages_select ON public.messages FOR SELECT TO authenticated USING (true);
 CREATE POLICY messages_insert ON public.messages FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
@@ -90,6 +92,18 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$ BEGIN
   RETURN EXISTS (SELECT 1 FROM public.room_passwords WHERE room_id = p_room_id AND password_hash = p_hash);
+END;
+ $$;
+
+CREATE OR REPLACE FUNCTION public.set_room_password(p_room_id uuid, p_hash text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$ BEGIN
+  INSERT INTO public.room_passwords (room_id, password_hash)
+  VALUES (p_room_id, p_hash)
+  ON CONFLICT (room_id) DO UPDATE
+  SET password_hash = p_hash;
 END;
  $$;
 
