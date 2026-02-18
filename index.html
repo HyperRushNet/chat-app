@@ -15,8 +15,8 @@
     ">
 
     <title>HRN Chat Secure</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="./libraries/font.css" rel="stylesheet">
+    <script src="./libraries/lucide.min.js"></script>
     <style>
         :root{--bg:#fff;--surface:#fff;--border:#e2e2e7;--text-main:#1c1c1e;--text-mute:#636366;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--connecting:#5856d6;--offline:#8e8e93;--pad:32px}
         *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
@@ -399,7 +399,7 @@
     </div>
     
     <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+        import { createClient } from './libraries/supabase.min.js';
         
         function startChatApp(config) {
             const SUPABASE_URL = "https://fahbqdajxnhswevdagdn.supabase.co";
