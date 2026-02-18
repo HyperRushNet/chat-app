@@ -1,4 +1,5 @@
 const CACHE_EXPIRATION = 10 * 60;
+const RATE_LIMIT_SECONDS = 60; 
 
 function doGet(e) {
   return respond({ message: "API Online" });
@@ -11,9 +12,18 @@ function doPost(e) {
     const email = data.email;
     if (!email || !action) return respond({ message: "Invalid request" });
 
+    const cache = CacheService.getScriptCache();
+    const rateKey = "RATE_" + email;
+
     if (action === "send") {
+      const lastSent = cache.get(rateKey);
+      if (lastSent) return respond({ message: "Too many requests. Wait a moment." });
+
       const code = generateCode();
       saveCode(email, code);
+
+      cache.put(rateKey, "1", RATE_LIMIT_SECONDS);
+
       const sentTime = new Date();
       const expireTime = formatTime(new Date(sentTime.getTime() + CACHE_EXPIRATION * 1000));
 
