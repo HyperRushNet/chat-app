@@ -11,7 +11,7 @@ CREATE TABLE public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name text DEFAULT 'User',
   email text,
-  isGuest boolean DEFAULT false,
+  is_guest boolean DEFAULT false,
   updated_at timestamptz DEFAULT timezone('utc'::text, now())
 );
 
@@ -67,19 +67,19 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, email, isGuest, updated_at)
+  INSERT INTO public.profiles (id, full_name, email, is_guest, updated_at)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', 'User'),
     NEW.email,
-    COALESCE((NEW.raw_user_meta_data ->> 'isGuest')::boolean, false),
+    COALESCE((NEW.raw_user_meta_data ->> 'is_guest')::boolean, false),
     NOW()
   )
   ON CONFLICT (id) DO UPDATE
   SET
     full_name = COALESCE(NEW.raw_user_meta_data ->> 'full_name', profiles.full_name),
     email = NEW.email,
-    isGuest = COALESCE((NEW.raw_user_meta_data ->> 'isGuest')::boolean, profiles.isGuest),
+    is_guest = COALESCE((NEW.raw_user_meta_data ->> 'is_guest')::boolean, profiles.is_guest),
     updated_at = NOW();
   RETURN NEW;
 END;
