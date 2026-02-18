@@ -1,4 +1,4 @@
-<!-- HyperRush Chat App | 2026 | GitHub: HyperRushNet | MIT License -->
+<!-- HyperRush Chat App | 2026 Fixed Build | GitHub: HyperRushNet | MIT License -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -15,30 +15,52 @@
         ::-webkit-scrollbar{width:0;height:0}
         body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center;overflow:hidden}
         #app{width:100%;max-width:440px;height:100%;position:relative;display:flex;flex-direction:column;background:var(--bg);box-shadow:0 0 50px rgb(0 0 0 / .1);overflow:hidden}
+        
+        /* Status Bar */
         #status-bar{height:4px;width:100%;background:var(--offline);position:absolute;top:0;left:0;z-index:9999;transition:background 0.3s ease}
         #status-bar.connecting{background:var(--connecting)}#status-bar.online{background:var(--accent)}#status-bar.room{background:var(--success)}
+        
+        /* Screens */
         .screen{position:absolute;inset:0;display:none;flex-direction:column;padding:var(--pad);background:var(--bg);will-change:transform,opacity;padding-top:calc(var(--pad) + 10px);transition:transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease}
         .screen.active{display:flex;animation:instantFade 0.1s ease-out}
         .screen.slide-left{transform:translateX(-100%);opacity:0}.screen.slide-right{transform:translateX(100%);opacity:0}
         @keyframes instantFade{from{opacity:0;transform:scale(0.99)}to{opacity:1;transform:scale(1)}}
+        
         .center-content{justify-content:center;align-items:center;text-align:center}
         .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--border);margin-bottom:32px;flex-shrink:0;padding-top:8px}
+        
+        /* Online Indicator */
         .online-indicator{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.05);padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800;line-height:1;align-self:center;color:var(--success)!important}
         .dot{width:6px;height:6px;background:var(--success)!important;border-radius:50%;animation:pulse 2s ease-in-out infinite}
         @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.9)}}
+        
         .title{font-size:26px;font-weight:800;letter-spacing:-.8px;color:#000;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:10px}
         .subtitle{color:var(--text-mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:32px;display:block}
+        
+        /* Inputs & Buttons */
         .input-field{width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:12px;padding:16px;color:var(--text-main);font-size:16px;outline:none;margin-bottom:16px;transition:.1s}
         .input-field:focus{border-color:var(--accent);background:#fff}
         .input-field:disabled{background:#e5e5ea;color:var(--text-mute);opacity:0.9;cursor:not-allowed}
         .btn{width:100%;height:56px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text-main);font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:.1s}
         .btn-accent{background:var(--text-main);color:#fff;border:none}
         .btn:active{transform:scale(.96);opacity:.8}
+        .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+        
+        /* Toast System */
         #toast-container{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:3200;width:85%;pointer-events:none; display:flex; flex-direction:column; align-items:center;}
-        .toast-item{background:rgba(28,28,30,0.95);backdrop-filter:blur(22px);color:#fff;padding:14px 22px;border-radius:80px;font-weight:600;font-size:13px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.2);animation:slideUp 0.25s cubic-bezier(0.2,1,0.3,1); pointer-events:auto; cursor:pointer; width:100%}
+        .toast-item{background:rgba(28,28,30,0.95);backdrop-filter:blur(22px);color:#fff;padding:14px 22px;border-radius:80px;font-weight:600;font-size:13px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.2);animation:slideUp 0.25s cubic-bezier(0.2,1,0.3,1); pointer-events:auto; cursor:pointer; width:100%; margin-bottom:8px;}
         @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+        
+        /* Overlays */
         #offline-screen,#block-overlay{position:absolute;inset:0;background:var(--bg);z-index:6000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:var(--pad);text-align:center}
         #offline-screen.active,#block-overlay.active{display:flex}
+        #loader-overlay{position:absolute;inset:0;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);z-index:3500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:15px}
+        #loader-overlay:not(.active){display:none}
+        .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .loader-text{font-size:13px;font-weight:700;color:var(--text-mute);margin-top:8px}
+        
+        /* Chat Elements */
         .room-card{padding:20px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border:1px solid var(--border);margin-bottom:12px;transition:.1s}
         .room-card:active{transform:scale(.98);background:#f9f9f9}
         #chat-messages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px;position:relative}
@@ -49,11 +71,8 @@
         .msg-user{font-size:10px;font-weight:800;color:var(--accent);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
         .msg.me .msg-user{color:rgba(255,255,255,.7)}
         .msg-time{font-size:9px;opacity:.6;text-align:right;margin-top:4px}
-        #loader-overlay{position:absolute;inset:0;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);z-index:3500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:15px}
-        #loader-overlay:not(.active){display:none}
-        .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        .loader-text{font-size:13px;font-weight:700;color:var(--text-mute);margin-top:8px}
+        
+        /* Components */
         .switch{position:relative;display:inline-block;width:44px;height:24px}.switch input{opacity:0;width:0;height:0}
         .slider{position:absolute;cursor:pointer;inset:0;background-color:#ccc;transition:.2s;border-radius:24px}
         .slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background-color:#fff;transition:.2s;border-radius:50%}
@@ -68,28 +87,21 @@
         .p-info{display:flex;flex-direction:column;flex:1;min-width:0}.p-label{font-size:11px;font-weight:800;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
         .p-value{font-size:14px;font-weight:600;color:var(--text-main);word-break:break-all}
         .view-content{display:none}.view-content.active{display:block}
-        .proto-card{padding:14px;border-radius:14px;display:flex;align-items:center;gap:14px;margin-bottom:10px;border:1px solid var(--border)}
-        .proto-dot{width:10px;height:10px;border-radius:50%}
         .guide-box{background:#f2f2f7;padding:14px;border-radius:14px;margin-bottom:12px;font-size:13px;line-height:1.5}
         .guide-box b{color:var(--accent);display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase}
+        
+        /* Guest Bar */
         .guest-replies-bar{display:flex;gap:10px;overflow-x:auto;padding:8px 0;width:100%;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
         .guest-replies-bar::-webkit-scrollbar{display:none}
         .reply-block{flex:0 0 auto;padding:12px 20px;background:#f2f2f7;border:1px solid var(--border);border-radius:20px;font-weight:600;font-size:14px;white-space:nowrap;scroll-snap-align:start;cursor:pointer;transition:0.1s}
         .reply-block:active{transform:scale(0.95);background:var(--accent);color:#fff;border-color:var(--accent)}
         .guest-badge{font-size:9px;font-weight:800;background:var(--warning);color:#fff;padding:2px 6px;border-radius:4px;text-transform:uppercase;line-height:1}
+        
+        /* Misc */
         .bottom-hint{position:absolute;bottom:30px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--text-mute);display:flex;align-items:center;justify-content:center;gap:8px;opacity:0;animation:fadeInHint 1s ease 2s forwards;pointer-events:auto;cursor:pointer}
         @keyframes fadeInHint{to{opacity:0.6}}
-        #scr-start .start-icon-container{transform:translateY(-20px);margin-bottom:20px}
-        #scr-start .start-icon-container i{width:36px;height:36px;stroke-width:1.5}
-        #icon-copy-chat,#icon-check-chat{transition:opacity 0.2s ease,color 0.2s ease}
-        .live-count{min-width:16px;text-align:center}
-        .network-status{font-size:10px;font-weight:700;color:var(--text-mute);margin-top:8px;opacity:0.7}
-        .network-status.connected{color:var(--success)}
-        .network-status.connecting{color:var(--warning)}
-        .network-status.error{color:var(--danger)}
         .header-action-group{display:flex;gap:14px;align-items:center}
         .history-loader { display: flex; justify-content: center; padding: 10px; }
-        .rate-limit-active { opacity: 0.3 !important; pointer-events: none !important; transition: opacity 0.2s; }
         .input-wrapper { position: relative; width: 100%; margin-bottom: 16px; }
         .input-wrapper .input-field { margin-bottom: 0; padding-right: 44px; }
         .input-lock-icon { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--text-mute); pointer-events: none; }
@@ -182,10 +194,10 @@
                         <div class="network-status" id="network-status-text">Connecting...</div>
                     </div>
                     <div style="max-height:220px; overflow-y:auto; padding-right:4px">
-                        <div class="proto-card" style="border-left:4px solid var(--offline)"><div class="proto-dot" style="background:var(--offline)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Offline</span><span style="font-size:11px; color:var(--text-mute)">No active connection.</span></div></div>
-                        <div class="proto-card" style="border-left:4px solid var(--connecting)"><div class="proto-dot" style="background:var(--connecting)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Connecting</span><span style="font-size:11px; color:var(--text-mute)">Handshake with node...</span></div></div>
-                        <div class="proto-card" style="border-left:4px solid var(--accent)"><div class="proto-dot" style="background:var(--accent)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Lobby Linked</span><span style="font-size:11px; color:var(--text-mute)">Ready for data transfer.</span></div></div>
-                        <div class="proto-card" style="border-left:4px solid var(--success)"><div class="proto-dot" style="background:var(--success)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Room Sync</span><span style="font-size:11px; color:var(--text-mute)">AES-256-GCM Active.</span></div></div>
+                        <div class="panel-row" style="border-left:4px solid var(--offline); cursor:default; background:transparent"><div style="width:10px; height:10px; border-radius:50%; background:var(--offline)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Offline</span><span style="font-size:11px; color:var(--text-mute)">No active connection.</span></div></div>
+                        <div class="panel-row" style="border-left:4px solid var(--connecting); cursor:default; background:transparent"><div style="width:10px; height:10px; border-radius:50%; background:var(--connecting)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Connecting</span><span style="font-size:11px; color:var(--text-mute)">Handshake with node...</span></div></div>
+                        <div class="panel-row" style="border-left:4px solid var(--accent); cursor:default; background:transparent"><div style="width:10px; height:10px; border-radius:50%; background:var(--accent)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Lobby Linked</span><span style="font-size:11px; color:var(--text-mute)">Ready for data transfer.</span></div></div>
+                        <div class="panel-row" style="border-left:4px solid var(--success); cursor:default; background:transparent"><div style="width:10px; height:10px; border-radius:50%; background:var(--success)"></div><div class="p-info"><span style="font-weight:700; font-size:13px">Room Sync</span><span style="font-size:11px; color:var(--text-mute)">AES-256-GCM Active.</span></div></div>
                     </div>
                     <button class="btn" style="height:48px; margin-top:16px; width:100%; border:none; background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
                 </div>
@@ -196,7 +208,7 @@
                         <div class="guide-box"><b>Guest Mode</b>Guests cannot create rooms. They can only choose from predefined messages. Name cannot be changed once set.</div>
                         <div class="guide-box"><b>Private Rooms</b>Hidden from list. Share the Unique ID found in room header to let others join manually.</div>
                         <div class="guide-box"><b>Formatting</b>Use *text* for bold and _text_ for italic.</div>
-                        <div class="guide-box"><b>Privacy & Data</b>Messages are end-to-end encrypted with AES-256-GCM. Keys derived via PBKDF2 (200k iterations).</div>
+                        <div class="guide-box"><b>Privacy & Data</b>Messages are end-to-end encrypted with AES-256-GCM. Keys derived via PBKDF2 (300k iterations).</div>
                         <div class="guide-box"><b>Inspect Users</b>Click any name in chat to see public ID and status.</div>
                     </div>
                     <button class="btn" style="height:48px; margin-top:16px; width:100%; border:none; background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
@@ -241,6 +253,7 @@
                 </div>
             </div>
         </div>
+        
         <div id="block-overlay">
             <i data-lucide="copy" style="width:48px; height:48px; margin-bottom:24px; color:var(--warning)"></i>
             <h1 class="title">Active Session</h1>
@@ -248,19 +261,24 @@
             <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
             <button class="btn" style="margin-top:12px; border:none; background:#f2f2f7" onclick="window.closeTabAttempt()">Close Tab</button>
         </div>
+        
         <div id="offline-screen">
             <i data-lucide="wifi-off" style="width:48px; height:48px; margin-bottom:24px; color:var(--text-main); opacity:0.9"></i>
             <h1 class="title">No Signal</h1>
             <p class="subtitle" style="margin-bottom:48px">Waiting for a secure link...</p>
         </div>
+        
         <div id="loader-overlay" class="active">
             <div class="spinner"></div>
             <span id="loader-text" class="loader-text">Initializing...</span>
         </div>
+        
         <div id="toast-container"></div>
+
+        <!-- Screens -->
         <div id="scr-start" class="screen active center-content">
-            <div class="start-icon-container">
-                <i data-lucide="shield" style="color:var(--accent)"></i>
+            <div class="start-icon-container" style="transform:translateY(-20px);margin-bottom:20px">
+                <i data-lucide="shield" style="width:36px;height:36px;stroke-width:1.5; color:var(--accent)"></i>
             </div>
             <h1 class="title">HRN Chat</h1>
             <p class="subtitle">Secure Network 2026</p>
@@ -271,6 +289,7 @@
                 <span>Swipe for Guest Access</span>
             </div>
         </div>
+        
         <div id="scr-guest" class="screen center-content">
             <i data-lucide="user" style="width:32px; height:32px; color:var(--accent); margin-bottom:16px"></i>
             <h1 class="title">Guest Access</h1>
@@ -285,6 +304,7 @@
                 <span>Back to Home</span>
             </div>
         </div>
+        
         <div id="scr-login" class="screen center-content">
             <h1 class="title">Sign In</h1><p class="subtitle">Access Secure Room</p>
             <input id="l-email" class="input-field" type="email" placeholder="Email Address">
@@ -292,6 +312,7 @@
             <button class="btn btn-accent auth-btn" onclick="window.handleLogin()">Access</button>
             <button class="btn" style="border:none;margin-top:12px" onclick="window.nav('scr-start')">Back</button>
         </div>
+        
         <div id="scr-register" class="screen center-content">
             <h1 class="title">Sign Up</h1><p class="subtitle">Join the Network</p>
             <input id="r-name" class="input-field" placeholder="Full Name">
@@ -300,12 +321,14 @@
             <button class="btn btn-accent auth-btn" onclick="window.handleRegister()">Verify</button>
             <button class="btn" style="border:none; margin-top:12px" onclick="window.nav('scr-start')">Back</button>
         </div>
+        
         <div id="scr-verify" class="screen center-content">
             <h1 class="title">Verify</h1><p class="subtitle">Confirm Identity</p>
             <input id="v-code" class="input-field" style="text-align:center;font-size:24px" placeholder="000000">
             <button class="btn btn-accent" onclick="window.handleVerify()">Confirm</button>
             <div id="v-timer" style="margin-top:20px;font-weight:800;color:var(--accent)">10:00</div>
         </div>
+        
         <div id="scr-lobby" class="screen">
             <div class="header">
                 <div style="display:flex; align-items:center; gap:10px">
@@ -322,6 +345,7 @@
             <div id="room-list" style="flex:1; overflow-y:auto"></div>
             <div style="display:flex;gap:12px;margin-top:20px"><input id="join-id" class="input-field" style="margin:0;flex:1" placeholder="Direct ID"><button class="btn btn-accent" style="width:80px" onclick="window.joinPrivate()">Join</button></div>
         </div>
+        
         <div id="scr-chat" class="screen">
             <div class="header" style="margin-bottom:16px">
                 <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
@@ -352,6 +376,7 @@
                 <button id="send-btn" class="btn btn-accent" style="width:52px;height:52px" onclick="window.sendMsg()"><i data-lucide="arrow-up" style="width:20px; height:20px"></i></button>
             </div>
         </div>
+        
         <div id="scr-create" class="screen center-content">
             <h1 class="title">Create</h1><p class="subtitle">Deploy New Room</p>
             <input id="c-name" class="input-field" placeholder="Room Name">
@@ -360,18 +385,21 @@
             <button class="btn btn-accent" onclick="window.handleCreate()">Deploy</button>
             <button class="btn" style="border:none;margin-top:12px" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
+        
         <div id="scr-gate" class="screen center-content">
             <h1 class="title">Encrypted</h1><p class="subtitle">Authentication Required</p>
             <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Passkey">
             <button class="btn btn-accent" onclick="window.submitGate()">Decrypt</button>
             <button class="btn" style="border:none;margin-top:12px" onclick="window.nav('scr-lobby')">Abort</button>
         </div>
+        
         <div id="scr-success" class="screen center-content">
             <h1 class="title">Room Created</h1><p class="subtitle">Deployment Successful</p>
             <div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:800;border:1px dashed var(--accent)" onclick="window.copySId()">---</div>
             <button class="btn btn-accent" onclick="window.enterCreated()">Enter</button>
         </div>
     </div>
+    
     <script type="module">
         const SUPABASE_URL = "https://fahbqdajxnhswevdagdn.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI";
@@ -379,17 +407,77 @@
         const MAX_USERS = 475;
         const MESSAGE_FETCH_LIMIT = 50;
         const RATE_LIMIT_MS = 1000;
-        const CLEAN_CONSOLE = true;
-
+        
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
         lucide.createIcons();
 
-        const tabId = sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id'));
-        let isMasterTab = false;
+        const state = {
+            user: null,
+            currentRoomId: null,
+            chatChannel: null,
+            presenceChannel: null,
+            allRooms: [],
+            vTimer: null,
+            lastRenderedDateLabel: null,
+            lastKnownOnlineCount: null,
+            heartbeatInterval: null,
+            isPresenceInitializing: false,
+            roomGuestStatus: {},
+            lastSendTime: 0,
+            isLoadingMore: false,
+            noMoreMessages: false,
+            oldestMessageTimestamp: null,
+            pending: null,
+            lastCreated: null,
+            lastCreatedPass: null,
+            isMasterTab: false,
+            tabId: sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id')),
+            processingAction: false
+        };
+
+        const LOGOUT_FLAG = 'hrn_user_logged_out';
+        let toastQueue = [];
+        let toastVisible = false;
         const tabChannel = new BroadcastChannel('hrn_tab_sync');
+        const db = createClient(SUPABASE_URL, SUPABASE_KEY, { 
+            auth: { persistSession: true, autoRefreshToken: true }, 
+            realtime: { params: { eventsPerSecond: 10 } } 
+        });
+
+        const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
+        const $ = id => document.getElementById(id);
+        const updateStatusBar = (st) => $('status-bar').className = st || '';
+        
+        const processToastQueue = () => {
+            if (toastVisible || toastQueue.length === 0) return;
+            toastVisible = true;
+            const msg = toastQueue.shift();
+            const c = $('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast-item'; 
+            t.innerText = msg;
+            t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); };
+            c.appendChild(t);
+            setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if(t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000);
+        };
+
+        window.toast = m => { toastQueue.push(m); processToastQueue(); };
+        window.setLoading = (s, text = null) => { 
+            const loader = $('loader-overlay'); 
+            const loaderText = $('loader-text'); 
+            if(s) loader.classList.add('active');
+            else loader.classList.remove('active');
+            if(text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; 
+        };
+
+        const safeAwait = async (promise) => {
+            try { return [await promise, null]; } 
+            catch (error) { return [null, error]; }
+        };
 
         const workerCode = `
             self.onmessage = async (e) => {
-                const { type, payload } = e.data;
+                const { type, payload, id } = e.data;
                 const encoder = new TextEncoder();
                 const decoder = new TextDecoder();
                 try {
@@ -397,7 +485,7 @@
                         const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']);
                         const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
                         self.cryptoKey = key;
-                        self.postMessage({ type: 'keyDerived', success: true });
+                        self.postMessage({ type: 'response', id, success: true });
                     } else if (type === 'encrypt') {
                         if (!self.cryptoKey) throw new Error("Key not derived");
                         const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -406,7 +494,7 @@
                         const combined = new Uint8Array(iv.length + ciphertext.byteLength);
                         combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length);
                         const base64 = btoa(String.fromCharCode(...combined));
-                        self.postMessage({ type: 'encrypted', result: base64 });
+                        self.postMessage({ type: 'response', id, result: base64 });
                     } else if (type === 'decryptHistory') {
                         if (!self.cryptoKey) throw new Error("Key not derived");
                         const results = [];
@@ -421,9 +509,9 @@
                                 const text = decoder.decode(decrypted);
                                 const parts = text.split('|');
                                 results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at });
-                            } catch (err) {}
+                            } catch (err) { results.push({ id: m.id, error: true }); }
                         }
-                        self.postMessage({ type: 'historyDecrypted', results });
+                        self.postMessage({ type: 'response', id, results });
                     } else if (type === 'decryptSingle') {
                          if (!self.cryptoKey) throw new Error("Key not derived");
                          try {
@@ -435,23 +523,34 @@
                             const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext);
                             const text = decoder.decode(decrypted);
                             const parts = text.split('|');
-                            self.postMessage({ type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } });
-                         } catch(e) { self.postMessage({ type: 'singleDecrypted', error: e.message }); }
+                            self.postMessage({ type: 'response', id, result: { time: parts[0], text: parts.slice(1).join('|') } });
+                         } catch(e) { self.postMessage({ type: 'response', id, error: e.message }); }
                     }
-                } catch (error) { self.postMessage({ type: 'error', message: error.message }); }
+                } catch (error) { self.postMessage({ type: 'response', id, error: error.message }); }
             };
         `;
         
         const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
         const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
         const pendingCallbacks = {};
+        let callbackId = 0;
+
         cryptoWorker.onmessage = (e) => {
-            const { type } = e.data;
-            if (pendingCallbacks[type]) {
-                pendingCallbacks[type](e.data);
-                delete pendingCallbacks[type];
+            const { id, ...data } = e.data;
+            if (pendingCallbacks[id]) {
+                pendingCallbacks[id](data);
+                delete pendingCallbacks[id];
             }
         };
+
+        const workerPost = (type, payload) => new Promise((resolve, reject) => {
+            const id = callbackId++;
+            pendingCallbacks[id] = (data) => {
+                if (data.error) reject(data.error);
+                else resolve(data);
+            };
+            cryptoWorker.postMessage({ type, payload, id });
+        });
 
         const generateSalt = () => {
             const arr = new Uint8Array(16);
@@ -466,131 +565,82 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         };
 
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-        
-        const db = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 10 } } });
-        let user = null;
-        let currentRoomId = null;
-        let chatChannel = null;
-        let presenceChannel = null;
-        let allRooms = [];
-        let vTimer = null;
-        let lastRenderedDateLabel = null;
-        let lastKnownOnlineCount = null;
-        let heartbeatInterval = null;
-        let isPresenceInitializing = false;
-        let roomGuestStatus = {}; 
-        let lastSendTime = 0;
-        const LOGOUT_FLAG = 'hrn_user_logged_out';
-        let toastQueue = [];
-        let toastVisible = false;
-        let isLoadingMore = false;
-        let noMoreMessages = false;
-        let oldestMessageTimestamp = null;
-        let touchStartX = 0, touchEndX = 0;
-        const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
-        const updateStatusBar = (state) => document.getElementById('status-bar').className = state || '';
-
-        const processToastQueue = () => {
-            if (toastVisible || toastQueue.length === 0) return;
-            toastVisible = true;
-            const msg = toastQueue.shift();
-            const c = document.getElementById('toast-container');
-            const t = document.createElement('div');
-            t.className = 'toast-item'; 
-            t.innerText = msg;
-            t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); };
-            c.appendChild(t);
-            setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if(t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000);
-        };
-
-        window.toast = m => { toastQueue.push(m); processToastQueue(); };
-        window.setLoading = (s, text = null) => { const loader = document.getElementById('loader-overlay'); const loaderText = document.getElementById('loader-text'); loader.classList.toggle('active', s); if(text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
-
-        window.showGuestInfo = () => { document.getElementById('overlay-container').classList.add('active'); window.showOverlayView('guest-info'); lucide.createIcons(); };
-
         const updateOnlineDisplay = (count, status = 'connected') => {
-            if (typeof count === 'number') lastKnownOnlineCount = count;
-            document.querySelectorAll('.live-count').forEach(el => { el.innerText = (typeof count === 'number') ? count : (lastKnownOnlineCount !== null ? lastKnownOnlineCount : '--'); });
-            const hubCount = document.getElementById('hub-online-count');
-            if (hubCount) hubCount.innerText = (typeof count === 'number') ? count : (lastKnownOnlineCount !== null ? lastKnownOnlineCount : '--');
-            const statusText = document.getElementById('network-status-text');
-            if (statusText) { statusText.className = 'network-status ' + status; statusText.innerText = status === 'connected' ? 'Real-time sync active' : (status === 'connecting' ? 'Establishing connection...' : 'Disconnected'); }
+            if (typeof count === 'number') state.lastKnownOnlineCount = count;
+            const displayCount = (typeof count === 'number') ? count : (state.lastKnownOnlineCount !== null ? state.lastKnownOnlineCount : '--');
+            
+            document.querySelectorAll('.live-count').forEach(el => el.innerText = displayCount);
+            
+            const hubCount = $('hub-online-count');
+            if (hubCount) hubCount.innerText = displayCount;
+            
+            const statusText = $('network-status-text');
+            if (statusText) { 
+                statusText.className = 'network-status ' + status; 
+                statusText.innerText = status === 'connected' ? 'Real-time sync active' : (status === 'connecting' ? 'Establishing connection...' : 'Disconnected'); 
+            }
         };
 
-        window.deriveKey = (pass, salt) => new Promise((resolve, reject) => {
-            pendingCallbacks['keyDerived'] = (data) => { if(data.success) resolve(true); else reject("Key derivation failed"); };
-            cryptoWorker.postMessage({ type: 'deriveKey', payload: { password: pass, salt: salt } });
-        });
-
-        window.encryptMessage = (text) => new Promise((resolve, reject) => {
-            pendingCallbacks['encrypted'] = (data) => { if(data.result) resolve(data.result); else reject("Encryption failed"); };
-            const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-            cryptoWorker.postMessage({ type: 'encrypt', payload: { text: time + "|" + text } });
-        });
-
-        const prepareGuestScreen = () => {
-            const storedName = localStorage.getItem('hrn_guest_name');
-            const nameInput = document.getElementById('g-name');
-            const lockIcon = document.querySelector('.input-lock-icon');
-            if (storedName) { nameInput.value = storedName; nameInput.disabled = true; nameInput.placeholder = "Identity Locked"; if(lockIcon) lockIcon.style.display = 'block'; } 
-            else { nameInput.value = ''; nameInput.disabled = false; nameInput.placeholder = "Enter Name (Permanent)"; if(lockIcon) lockIcon.style.display = 'none'; }
-            lucide.createIcons();
+        const cleanupChannels = async () => {
+            if (state.presenceChannel) {
+                try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+                state.presenceChannel = null;
+            }
+            if (state.chatChannel) {
+                try { await db.removeChannel(state.chatChannel); } catch(e) {}
+                state.chatChannel = null;
+            }
+            state.isPresenceInitializing = false;
         };
 
-        window.nav = (id, direction = null) => {
-            const current = document.querySelector('.screen.active');
-            const next = document.getElementById(id);
-            if(id === 'scr-guest') prepareGuestScreen();
-            if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); }
-            else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); }
-            else document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            next.classList.add('active');
-            lucide.createIcons();
-            const createBtn = document.getElementById('icon-plus-lobby');
-            if (createBtn) createBtn.style.display = user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
-            if(id === 'scr-chat') updateStatusBar('room');
-            else if (['scr-lobby', 'scr-create', 'scr-success'].includes(id)) updateStatusBar('online');
-            else updateStatusBar('connecting');
-        };
-
-        window.openHub = () => { document.getElementById('overlay-container').classList.add('active'); lucide.createIcons(); };
-        window.closeOverlay = () => document.getElementById('overlay-container').classList.remove('active');
-        window.showOverlayView = (view) => { document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); document.getElementById(`view-${view}`).classList.add('active'); lucide.createIcons(); };
-
-        window.prepareMyAccount = () => {
-            const isGuest = user?.is_anonymous;
-            document.getElementById('my-acc-name').innerText = user?.user_metadata?.full_name || "Guest User";
-            document.getElementById('my-acc-id').innerText = user?.id || "---";
-            document.getElementById('my-acc-email').innerText = isGuest ? "Guest Mode (No Email)" : (user?.email || "No email linked");
-            document.getElementById('my-acc-type').innerText = isGuest ? "Guest Account" : "Full Account";
-            document.getElementById('my-acc-type').style.color = isGuest ? "var(--warning)" : "var(--success)";
-            window.showOverlayView('my-account');
-        };
-
-        window.inspectUser = async (uid) => {
-            if (uid === user?.id) return window.prepareMyAccount();
-            window.setLoading(true);
-            const { data, error } = await db.from('profiles').select('*').eq('id', uid).single();
-            window.setLoading(false);
-            if (error || !data) return window.toast("User not found");
-            const isRegistered = !!data.email;
-            document.getElementById('qv-user-name').innerText = data.full_name;
-            document.getElementById('qv-user-avatar').innerText = data.full_name.charAt(0).toUpperCase();
-            document.getElementById('qv-user-id').innerText = data.id;
-            document.getElementById('qv-user-email').innerText = data.email || "Guest (No Email)";
-            const statusEl = document.getElementById('qv-status');
-            statusEl.innerText = isRegistered ? "Verified User" : "Guest";
-            statusEl.style.color = isRegistered ? "var(--success)" : "var(--warning)";
-            const d = new Date(data.created_at || data.updated_at);
-            document.getElementById('qv-user-date').innerText = d.toLocaleDateString('en-GB') + " at " + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-            window.showOverlayView('quick-view-user');
-            document.getElementById('overlay-container').classList.add('active');
+        const initPresence = async () => {
+            if (!state.isMasterTab || !state.user || state.isPresenceInitializing) return;
+            
+            await cleanupChannels();
+            state.isPresenceInitializing = true;
+            
+            const myId = state.user.id;
+            updateOnlineDisplay('--', 'connecting');
+            
+            state.presenceChannel = db.channel('online-users', { config: { presence: { key: myId } } });
+            
+            state.presenceChannel
+            .on('presence', { event: 'sync' }, async () => {
+                const presState = state.presenceChannel.presenceState();
+                const allPresences = Object.values(presState).flat();
+                const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
+                updateOnlineDisplay(uniqueUserIds.size, 'connected');
+                
+                if (uniqueUserIds.size > MAX_USERS) {
+                    $('block-overlay').classList.add('active');
+                    await cleanupChannels();
+                    clearInterval(state.heartbeatInterval);
+                    state.heartbeatInterval = null;
+                }
+            })
+            .on('presence', { event: 'join' }, ({ newPresences }) => {
+            })
+            .subscribe(async (status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    state.isPresenceInitializing = false;
+                    await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() });
+                    
+                    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+                    state.heartbeatInterval = setInterval(async () => {
+                        if (state.presenceChannel && state.isMasterTab) {
+                            await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() });
+                        }
+                    }, 25000);
+                } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                    state.isPresenceInitializing = false;
+                    updateOnlineDisplay('--', 'error');
+                    setTimeout(() => { if(state.isMasterTab && state.user) initPresence(); }, 3000);
+                }
+            });
         };
 
         const showInactiveOverlay = () => {
-            const overlay = document.getElementById('block-overlay');
+            const overlay = $('block-overlay');
             overlay.innerHTML = `
                 <i data-lucide="copy" style="width:48px; height:48px; margin-bottom:24px; color:var(--warning)"></i>
                 <h1 class="title">Active Session</h1>
@@ -603,23 +653,15 @@
         };
 
         const handleTabConflict = () => {
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            heartbeatInterval = null;
+            cleanupChannels();
+            if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+            state.heartbeatInterval = null;
             
-            if (presenceChannel) { 
-                try { db.removeChannel(presenceChannel); } catch(e){} 
-                presenceChannel = null; 
-            }
-            if (chatChannel) { 
-                try { db.removeChannel(chatChannel); } catch(e){} 
-                chatChannel = null; 
-            }
-            
-            isPresenceInitializing = false;
-            isMasterTab = false;
+            state.isPresenceInitializing = false;
+            state.isMasterTab = false;
             updateOnlineDisplay('--', 'disconnected');
             
-            const overlay = document.getElementById('block-overlay');
+            const overlay = $('block-overlay');
             overlay.innerHTML = `
                 <i data-lucide="log-out" style="width:48px; height:48px; margin-bottom:24px; color:var(--danger)"></i>
                 <h1 class="title">Session Moved</h1>
@@ -631,39 +673,24 @@
         };
 
         const claimMaster = () => {
-            if (!isMasterTab) {
-                isMasterTab = true;
-                tabChannel.postMessage({ type: 'CLAIM_MASTER', id: tabId });
-                const overlay = document.getElementById('block-overlay');
-                if (overlay.classList.contains('active')) {
-                    overlay.classList.remove('active');
-                }
+            if (!state.isMasterTab) {
+                state.isMasterTab = true;
+                tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
+                $('block-overlay').classList.remove('active');
                 
                 const isLoggedOut = localStorage.getItem(LOGOUT_FLAG) === 'true';
-                if (isLoggedOut) {
-                    window.nav('scr-start');
-                } else if (user) {
+                if (!isLoggedOut && state.user) {
                     initPresence();
                 }
             }
         };
 
-        window.forceClaimMaster = () => {
-            claimMaster();
-        };
-
-        window.closeTabAttempt = () => {
-             window.open('', '_self'); window.close(); 
-        };
+        window.forceClaimMaster = () => claimMaster();
+        window.closeTabAttempt = () => { window.open('', '_self'); window.close(); };
 
         tabChannel.onmessage = (ev) => {
-            if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== tabId) {
-                if (isMasterTab) {
-                    handleTabConflict();
-                }
-            }
-            if (ev.data.type === 'PING_MASTER' && isMasterTab) {
-                tabChannel.postMessage({ type: 'PONG_MASTER', id: tabId });
+            if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) {
+                if (state.isMasterTab) handleTabConflict();
             }
         };
 
@@ -671,13 +698,10 @@
             return new Promise((resolve) => {
                 let masterFound = false;
                 const handler = (ev) => {
-                    if (ev.data.type === 'PONG_MASTER') {
-                        masterFound = true;
-                    }
+                    if (ev.data.type === 'PONG_MASTER') masterFound = true;
                 };
                 tabChannel.addEventListener('message', handler);
                 tabChannel.postMessage({ type: 'PING_MASTER' });
-                
                 setTimeout(() => {
                     tabChannel.removeEventListener('message', handler);
                     resolve(masterFound);
@@ -685,40 +709,14 @@
             });
         };
 
-        const initPresence = async () => {
-            if (!isMasterTab) return;
-            if (!user) return; 
-            
-            const myId = user.id;
-            if (isPresenceInitializing || presenceChannel) return;
-            isPresenceInitializing = true;
-            updateOnlineDisplay('--', 'connecting');
-            
-            presenceChannel = db.channel('online-users', { config: { presence: { key: myId } } });
-            presenceChannel.on('presence', { event: 'sync' }, async () => {
-                const state = presenceChannel.presenceState();
-                const allPresences = Object.values(state).flat();
-                const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
-                updateOnlineDisplay(uniqueUserIds.size, 'connected');
-                
-                if (uniqueUserIds.size > MAX_USERS) {
-                    document.getElementById('block-overlay').classList.add('active');
-                    try { await db.removeAllChannels(); } catch(e) {}
-                    presenceChannel = null; chatChannel = null;
-                    if (heartbeatInterval) clearInterval(heartbeatInterval);
-                    heartbeatInterval = null;
-                }
-            }).subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    isPresenceInitializing = false;
-                    await presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() });
-                    if (heartbeatInterval) clearInterval(heartbeatInterval);
-                    heartbeatInterval = setInterval(async () => { if (presenceChannel) await presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, 25000);
-                } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { isPresenceInitializing = false; presenceChannel = null; }
-            });
+        window.showGuestInfo = () => { $('overlay-container').classList.add('active'); window.showOverlayView('guest-info'); lucide.createIcons(); };
+        window.openHub = () => { $('overlay-container').classList.add('active'); lucide.createIcons(); };
+        window.closeOverlay = () => $('overlay-container').classList.remove('active');
+        window.showOverlayView = (view) => { 
+            document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); 
+            $(`view-${view}`).classList.add('active'); 
+            lucide.createIcons(); 
         };
-
-        const cleanupChatChannel = async () => { if (chatChannel) { try { await db.removeChannel(chatChannel); } catch (e) {} chatChannel = null; } };
 
         const getDateLabel = (d) => {
             const now = new Date();
@@ -731,131 +729,548 @@
             return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
         };
 
-        const render = m => {
+        const renderMsg = m => {
             let html = "";
             const msgDateObj = new Date(m.created_at);
             const currentLabel = getDateLabel(msgDateObj);
-            if (currentLabel !== lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; lastRenderedDateLabel = currentLabel; }
-            const isUserGuest = roomGuestStatus[m.user_id] || false;
+            
+            if (currentLabel !== state.lastRenderedDateLabel) { 
+                html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; 
+                state.lastRenderedDateLabel = currentLabel; 
+            }
+            
+            const isUserGuest = state.roomGuestStatus[m.user_id] || false;
             const guestLabel = isUserGuest ? '<span class="guest-badge">GUEST</span>' : '';
-            html += `<div class="msg ${m.user_id===user?.id?'me':''}" data-time="${m.created_at}"><span class="msg-user" onclick="window.inspectUser('${m.user_id}')">${esc(m.user_name)} ${guestLabel}</span><div>${esc(m.text).replace(/\*(.*?)\*/g, '<b>$1</b>').replace(/_(.*?)_/g, '<i>$1</i>')}</div><span class="msg-time">${esc(m.time)}</span></div>`;
+            html += `<div class="msg ${m.user_id===state.user?.id?'me':''}" data-time="${m.created_at}">
+                <span class="msg-user" onclick="window.inspectUser('${m.user_id}')">${esc(m.user_name)} ${guestLabel}</span>
+                <div>${esc(m.text).replace(/\*(.*?)\*/g, '<b>$1</b>').replace(/_(.*?)_/g, '<i>$1</i>')}</div>
+                <span class="msg-time">${esc(m.time)}</span>
+            </div>`;
             return html;
         };
 
+        window.prepareMyAccount = () => {
+            if(!state.user) return;
+            const isGuest = state.user.is_anonymous;
+            $('my-acc-name').innerText = state.user.user_metadata?.full_name || "Guest User";
+            $('my-acc-id').innerText = state.user.id;
+            $('my-acc-email').innerText = isGuest ? "Guest Mode (No Email)" : (state.user.email || "No email linked");
+            $('my-acc-type').innerText = isGuest ? "Guest Account" : "Full Account";
+            $('my-acc-type').style.color = isGuest ? "var(--warning)" : "var(--success)";
+            window.showOverlayView('my-account');
+        };
+
+        window.inspectUser = async (uid) => {
+            if (uid === state.user?.id) return window.prepareMyAccount();
+            window.setLoading(true);
+            const { data, error } = await db.from('profiles').select('*').eq('id', uid).single();
+            window.setLoading(false);
+            if (error || !data) return window.toast("User not found");
+            
+            const isRegistered = !!data.email;
+            $('qv-user-name').innerText = data.full_name;
+            $('qv-user-avatar').innerText = data.full_name.charAt(0).toUpperCase();
+            $('qv-user-id').innerText = data.id;
+            $('qv-user-email').innerText = data.email || "Guest (No Email)";
+            
+            const statusEl = $('qv-status');
+            statusEl.innerText = isRegistered ? "Verified User" : "Guest";
+            statusEl.style.color = isRegistered ? "var(--success)" : "var(--warning)";
+            
+            const d = new Date(data.created_at || data.updated_at);
+            $('qv-user-date').innerText = d.toLocaleDateString('en-GB') + " at " + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+            
+            window.showOverlayView('quick-view-user');
+            $('overlay-container').classList.add('active');
+        };
+
+        const prepareGuestScreen = () => {
+            const storedName = localStorage.getItem('hrn_guest_name');
+            const nameInput = $('g-name');
+            const lockIcon = document.querySelector('.input-lock-icon');
+            if (storedName) { 
+                nameInput.value = storedName; 
+                nameInput.disabled = true; 
+                nameInput.placeholder = "Identity Locked"; 
+                if(lockIcon) lockIcon.style.display = 'block'; 
+            } else { 
+                nameInput.value = ''; 
+                nameInput.disabled = false; 
+                nameInput.placeholder = "Enter Name (Permanent)"; 
+                if(lockIcon) lockIcon.style.display = 'none'; 
+            }
+            lucide.createIcons();
+        };
+
+        window.nav = (id, direction = null) => {
+            const current = document.querySelector('.screen.active');
+            const next = $(id);
+            if(!next) return;
+            
+            if(id === 'scr-guest') prepareGuestScreen();
+            
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
+            
+            if(direction === 'left') { 
+                current.classList.add('slide-left'); 
+                next.classList.remove('slide-right'); 
+            } else if(direction === 'right') { 
+                current.classList.add('slide-right'); 
+                next.classList.remove('slide-left'); 
+            } else {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            }
+            
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            next.classList.add('active');
+            
+            lucide.createIcons();
+            
+            const createBtn = $('icon-plus-lobby');
+            if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
+            
+            if(id === 'scr-chat') updateStatusBar('room');
+            else if (['scr-lobby', 'scr-create', 'scr-success'].includes(id)) updateStatusBar('online');
+            else updateStatusBar('connecting');
+        };
+
+        window.loadRooms = async () => { 
+            if(!state.user) return; 
+            const {data} = await db.from('rooms').select('*').eq('is_private',false).order('created_at',{ascending:false}); 
+            state.allRooms = data || []; 
+            window.filterRooms(); 
+        };
+        
+        window.filterRooms = () => { 
+            const q = $('search-bar').value.toLowerCase(); 
+            $('room-list').innerHTML = state.allRooms.filter(r=>r.name.toLowerCase().includes(q)).map(r => `
+                <div class="room-card" onclick="window.joinAttempt('${r.id}')">
+                    <span style="font-weight:700">${esc(r.name)}</span>
+                    <span style="display:flex; align-items:center; gap:5px">
+                        <i data-lucide="${r.password_hash ? 'lock' : 'chevron-right'}" style="width:18px; height:18px; color:var(--text-mute)"></i>
+                    </span>
+                </div>
+            `).join(''); 
+            lucide.createIcons(); 
+        };
+
+        window.joinAttempt = async (id) => {
+            window.setLoading(true);
+            const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
+            window.setLoading(false);
+            if (error || !data) return window.toast("Room not found");
+            
+            if (data.password_hash) { 
+                state.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
+                window.nav('scr-gate'); 
+            } else { 
+                window.openVault(data.id, data.name, null, data.salt); 
+            }
+        };
+
+        window.joinPrivate = async () => { 
+            if(!state.user) return window.toast("Login required"); 
+            const id = $('join-id').value.trim(); 
+            if(!id) return; 
+            window.setLoading(true); 
+            const {data} = await db.from('rooms').select('*').eq('id',id).single(); 
+            window.setLoading(false); 
+            if(data) { 
+                if(data.password_hash) { 
+                    state.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
+                    window.nav('scr-gate'); 
+                } else { 
+                    window.openVault(data.id, data.name, null, data.salt); 
+                }
+            } else window.toast("Not found"); 
+        };
+
         window.openVault = async (id, n, rawPassword, roomSalt) => {
-            if (!user) return window.toast("Please login first");
+            if (!state.user) return window.toast("Please login first");
             window.setLoading(true, "Deriving Secure Key...");
-            await cleanupChatChannel();
-            currentRoomId = id;
-            lastRenderedDateLabel = null; oldestMessageTimestamp = null; noMoreMessages = false; isLoadingMore = false; roomGuestStatus = {}; 
-            document.getElementById('chat-title').innerText = n;
-            document.getElementById('chat-messages').innerHTML = '';
-            const copyIcon = document.getElementById('icon-copy-chat'); const checkIcon = document.getElementById('icon-check-chat');
-            if(copyIcon) copyIcon.style.display = 'block'; if(checkIcon) checkIcon.style.display = 'none';
+            
+            if(state.chatChannel) await db.removeChannel(state.chatChannel);
+            
+            state.currentRoomId = id;
+            state.lastRenderedDateLabel = null; 
+            state.oldestMessageTimestamp = null; 
+            state.noMoreMessages = false; 
+            state.isLoadingMore = false; 
+            state.roomGuestStatus = {}; 
+            
+            $('chat-title').innerText = n;
+            $('chat-messages').innerHTML = '';
+            
+            const copyIcon = $('icon-copy-chat'); 
+            const checkIcon = $('icon-check-chat');
+            if(copyIcon) copyIcon.style.display = 'block'; 
+            if(checkIcon) checkIcon.style.display = 'none';
+            
             const keySource = rawPassword ? (rawPassword + id) : id;
-            await window.deriveKey(keySource, roomSalt);
-            const isGuest = user.is_anonymous;
-            const guestInfoBtn = document.getElementById('guest-info-chat');
+            try {
+                await workerPost('deriveKey', { password: keySource, salt: roomSalt });
+            } catch(e) {
+                window.setLoading(false);
+                return window.toast("Key derivation failed");
+            }
+
+            const isGuest = state.user.is_anonymous;
+            const guestInfoBtn = $('guest-info-chat');
             if(guestInfoBtn) guestInfoBtn.style.display = isGuest ? 'flex' : 'none';
-            document.getElementById('chat-input').style.display = isGuest ? 'none' : 'block';
-            document.getElementById('guest-replies').style.display = isGuest ? 'flex' : 'none';
-            document.getElementById('send-btn').style.display = isGuest ? 'none' : 'flex';
+            $('chat-input').style.display = isGuest ? 'none' : 'block';
+            $('guest-replies').style.display = isGuest ? 'flex' : 'none';
+            $('send-btn').style.display = isGuest ? 'none' : 'flex';
+            
             window.nav('scr-chat');
+            
             const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(MESSAGE_FETCH_LIMIT);
             if (data && data.length > 0) {
                 data.reverse();
-                oldestMessageTimestamp = data[0].created_at;
+                state.oldestMessageTimestamp = data[0].created_at;
                 const userIds = [...new Set(data.map(m => m.user_id))];
                 const { data: profiles } = await db.from('profiles').select('id, email').in('id', userIds);
-                if (profiles) profiles.forEach(p => { roomGuestStatus[p.id] = !p.email; });
-                pendingCallbacks['historyDecrypted'] = (res) => { const b = document.getElementById('chat-messages'); res.results.forEach(m => { b.insertAdjacentHTML('beforeend', render(m)); }); b.scrollTop = b.scrollHeight; window.setLoading(false); };
-                cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
-            } else { window.setLoading(false); }
-            chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
-            chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+                if (profiles) profiles.forEach(p => { state.roomGuestStatus[p.id] = !p.email; });
+                
+                try {
+                    const res = await workerPost('decryptHistory', { messages: data });
+                    const b = $('chat-messages');
+                    res.results.forEach(m => { 
+                        if(!m.error) b.insertAdjacentHTML('beforeend', renderMsg(m)); 
+                    });
+                    b.scrollTop = b.scrollHeight;
+                } catch(e) { window.toast("History decryption failed"); }
+            }
+            window.setLoading(false);
+
+            state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
+            state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
                 const m = payload.new;
-                if (m && currentRoomId) {
-                    if (roomGuestStatus[m.user_id] === undefined) { const { data: p } = await db.from('profiles').select('email').eq('id', m.user_id).single(); roomGuestStatus[m.user_id] = p ? !p.email : true; }
-                    pendingCallbacks['singleDecrypted'] = (decRes) => { if(decRes.result) { const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text }; const b = document.getElementById('chat-messages'); b.insertAdjacentHTML('beforeend', render(msgObj)); b.scrollTop = b.scrollHeight; } };
-                    cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
+                if (m && state.currentRoomId) {
+                    if (state.roomGuestStatus[m.user_id] === undefined) { 
+                        const { data: p } = await db.from('profiles').select('email').eq('id', m.user_id).single(); 
+                        state.roomGuestStatus[m.user_id] = p ? !p.email : true; 
+                    }
+                    try {
+                        const decRes = await workerPost('decryptSingle', { content: m.content });
+                        if(decRes.result) {
+                            const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text }; 
+                            const b = $('chat-messages'); 
+                            b.insertAdjacentHTML('beforeend', renderMsg(msgObj)); 
+                            b.scrollTop = b.scrollHeight;
+                        }
+                    } catch(e) { console.error("Decryption failed for new message"); }
                 }
-            }).subscribe((status, err) => { if (status === 'SUBSCRIBED') updateStatusBar('room'); else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') updateStatusBar('connecting'); });
+            }).subscribe((status) => { 
+                if (status === 'SUBSCRIBED') updateStatusBar('room'); 
+                else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') updateStatusBar('connecting'); 
+            });
         };
+
+        const chatMessagesContainer = $('chat-messages');
+        chatMessagesContainer.addEventListener('scroll', () => { 
+            if (chatMessagesContainer.scrollTop < 100) loadMoreMessages(); 
+        });
 
         const loadMoreMessages = async () => {
-            if (isLoadingMore || noMoreMessages || !currentRoomId || !oldestMessageTimestamp) return;
-            const chatBox = document.getElementById('chat-messages');
+            if (state.isLoadingMore || state.noMoreMessages || !state.currentRoomId || !state.oldestMessageTimestamp) return;
+            const chatBox = $('chat-messages');
             const oldScrollHeight = chatBox.scrollHeight;
-            isLoadingMore = true;
+            state.isLoadingMore = true;
             chatBox.insertAdjacentHTML('afterbegin', '<div id="hist-loader" class="history-loader"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div>');
-            const { data } = await db.from('messages').select('*').eq('room_id', currentRoomId).lt('created_at', oldestMessageTimestamp).order('created_at', { ascending: false }).limit(50);
+            
+            const { data } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(50);
+            
             if (data && data.length > 0) {
                 data.reverse();
-                oldestMessageTimestamp = data[0].created_at;
+                state.oldestMessageTimestamp = data[0].created_at;
                 const userIds = [...new Set(data.map(m => m.user_id))];
                 const { data: profiles } = await db.from('profiles').select('id, email').in('id', userIds);
-                if (profiles) profiles.forEach(p => { roomGuestStatus[p.id] = !p.email; });
-                pendingCallbacks['historyDecrypted'] = (res) => {
-                    const loader = document.getElementById('hist-loader'); if(loader) loader.remove();
+                if (profiles) profiles.forEach(p => { state.roomGuestStatus[p.id] = !p.email; });
+                
+                try {
+                    const res = await workerPost('decryptHistory', { messages: data });
+                    const loader = $('hist-loader'); if(loader) loader.remove();
+                    
                     const firstExistingMsg = chatBox.querySelector('.msg');
                     let removeTopDivider = false;
-                    if (firstExistingMsg) { const topExistingDate = getDateLabel(new Date(firstExistingMsg.dataset.time)); const lastNewMsgDate = getDateLabel(new Date(res.results[res.results.length - 1].created_at)); if (topExistingDate === lastNewMsgDate) { const potentialDivider = firstExistingMsg.previousElementSibling; if (potentialDivider && potentialDivider.classList.contains('date-divider')) { removeTopDivider = true; } } }
-                    lastRenderedDateLabel = null;
-                    let html = ""; res.results.forEach(m => { html += render(m); });
+                    if (firstExistingMsg) { 
+                        const topExistingDate = getDateLabel(new Date(firstExistingMsg.dataset.time)); 
+                        const lastNewMsgDate = getDateLabel(new Date(res.results[res.results.length - 1].created_at)); 
+                        if (topExistingDate === lastNewMsgDate) { 
+                            const potentialDivider = firstExistingMsg.previousElementSibling; 
+                            if (potentialDivider && potentialDivider.classList.contains('date-divider')) { removeTopDivider = true; } 
+                        } 
+                    }
+                    
+                    state.lastRenderedDateLabel = null;
+                    let html = ""; 
+                    res.results.forEach(m => { if(!m.error) html += renderMsg(m); });
+                    
                     if (removeTopDivider) { firstExistingMsg.previousElementSibling.remove(); }
                     chatBox.insertAdjacentHTML('afterbegin', html);
+                    
                     const newScrollHeight = chatBox.scrollHeight;
                     chatBox.scrollTop = newScrollHeight - oldScrollHeight;
-                    isLoadingMore = false;
-                };
-                cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
-            } else { noMoreMessages = true; const loader = document.getElementById('hist-loader'); if(loader) loader.remove(); isLoadingMore = false; }
+                } catch(e) {}
+            } else { 
+                state.noMoreMessages = true; 
+                const loader = $('hist-loader'); if(loader) loader.remove(); 
+            }
+            state.isLoadingMore = false;
         };
 
-        const chatMessagesContainer = document.getElementById('chat-messages');
-        chatMessagesContainer.addEventListener('scroll', () => { if (chatMessagesContainer.scrollTop < 100) { loadMoreMessages(); } });
-
         const applyRateLimit = (isGuest) => {
-            if (isGuest) document.getElementById('guest-replies').classList.add('rate-limit-active'); else document.getElementById('send-btn').classList.add('rate-limit-active');
-            setTimeout(() => { if (isGuest) document.getElementById('guest-replies').classList.remove('rate-limit-active'); else document.getElementById('send-btn').classList.remove('rate-limit-active'); }, RATE_LIMIT_MS);
+            if (isGuest) $('guest-replies').classList.add('rate-limit-active'); 
+            else $('send-btn').classList.add('rate-limit-active');
+            setTimeout(() => { 
+                if (isGuest) $('guest-replies').classList.remove('rate-limit-active'); 
+                else $('send-btn').classList.remove('rate-limit-active'); 
+            }, RATE_LIMIT_MS);
         };
 
         window.sendMsg = async () => {
-            if (!user) return;
+            if (!state.user || !state.currentRoomId) return;
+            if (state.processingAction) return;
+            state.processingAction = true;
+            
             const now = Date.now();
-            if (now - lastSendTime < RATE_LIMIT_MS) { window.toast("Please wait before sending another message."); return; }
-            lastSendTime = now;
-            const v = document.getElementById('chat-input').value.trim();
-            if(!v || !currentRoomId) return; 
-            document.getElementById('chat-input').value = '';
+            if (now - state.lastSendTime < RATE_LIMIT_MS) { window.toast("Please wait..."); state.processingAction = false; return; }
+            state.lastSendTime = now;
+            
+            const v = $('chat-input').value.trim();
+            if(!v) { state.processingAction = false; return; }
+            
+            $('chat-input').value = '';
             applyRateLimit(false);
-            try { const enc = await window.encryptMessage(v); await db.from('messages').insert([{ room_id: currentRoomId, user_id: user.id, user_name: user.user_metadata?.full_name, content: enc }]); } catch(e) { window.toast("Encryption error"); }
+            
+            try { 
+                const enc = await workerPost('encrypt', { text: new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) + "|" + v });
+                await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc.result }]); 
+            } catch(e) { window.toast("Failed to send"); }
+            state.processingAction = false;
         };
 
         window.sendGuestReply = async (message) => {
-            if (!user) return;
+            if (!state.user || !state.currentRoomId) return;
+            if (state.processingAction) return;
+            state.processingAction = true;
+
             const now = Date.now();
-            if (now - lastSendTime < RATE_LIMIT_MS) { window.toast("Please wait..."); return; }
-            lastSendTime = now;
-            if(!currentRoomId) return;
+            if (now - state.lastSendTime < RATE_LIMIT_MS) { window.toast("Please wait..."); state.processingAction = false; return; }
+            state.lastSendTime = now;
+            
             applyRateLimit(true);
-            const enc = await window.encryptMessage(message);
-            await db.from('messages').insert([{ room_id: currentRoomId, user_id: user.id, user_name: user.user_metadata?.full_name, content: enc }]);
+            try {
+                const enc = await workerPost('encrypt', { text: new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) + "|" + message });
+                await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc.result }]);
+            } catch(e) {}
+            state.processingAction = false;
         };
 
-        window.leaveChat = async () => { await cleanupChatChannel(); currentRoomId = null; roomGuestStatus = {}; window.nav('scr-lobby'); window.loadRooms(); };
+        window.leaveChat = async () => { 
+            if(state.chatChannel) await db.removeChannel(state.chatChannel);
+            state.chatChannel = null;
+            state.currentRoomId = null; 
+            state.roomGuestStatus = {}; 
+            window.nav('scr-lobby'); 
+            window.loadRooms(); 
+        };
+
+        window.handleLogin = async () => { 
+            if(state.processingAction) return;
+            state.processingAction = true;
+            const e = $('l-email').value, p = $('l-pass').value; 
+            if(!e || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
+            window.setLoading(true, "Verifying..."); 
+            localStorage.removeItem(LOGOUT_FLAG); 
+            const {error} = await db.auth.signInWithPassword({email:e, password:p}); 
+            if(error) window.toast(error.message);
+            state.processingAction = false;
+            window.setLoading(false); 
+        };
+        
+        window.handleRegister = async () => { 
+            if(state.processingAction) return;
+            state.processingAction = true;
+            const n=$('r-name').value, e=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; 
+            if(!n || !e || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } 
+            window.setLoading(true, "Checking..."); 
+            const { data: exists } = await db.from('profiles').select('id').eq('email', e).single(); 
+            if (exists) { window.setLoading(false); window.toast("Email taken"); state.processingAction = false; return; } 
+            
+            const [r, err] = await safeAwait(fetch(MAIL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: e }) }));
+            if(r) {
+                const j = await r.json();
+                if(j.message === "Code sent") { 
+                    sessionStorage.setItem('temp_reg', JSON.stringify({n, e, p})); 
+                    window.nav('scr-verify'); 
+                    startVTimer(); 
+                } else window.toast("Mail error"); 
+            } else window.toast("Network error");
+            
+            state.processingAction = false;
+            window.setLoading(false); 
+        };
+        
+        const startVTimer = () => { let left = 600; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
+        
+        window.handleVerify = async () => {
+            if(state.processingAction) return;
+            state.processingAction = true;
+            const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); 
+            if(!temp) { window.toast("Session expired"); state.processingAction = false; return; }
+            window.setLoading(true, "Verifying..."); 
+            try { 
+                const r = await fetch(MAIL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.e, code: code }) }); 
+                if((await r.json()).message === "Verified") { 
+                    const { error } = await db.auth.signUp({ email: temp.e, password: temp.p, options: { data: { full_name: temp.n } } }); 
+                    if(error) window.toast(error.message); 
+                } else window.toast("Wrong code"); 
+            } catch (e) { window.toast("Auth error"); } 
+            state.processingAction = false;
+            window.setLoading(false); 
+        };
+
+        window.handleGuestLogin = async () => {
+            if(state.processingAction) return;
+            const nameInput = $('g-name');
+            let name = nameInput.value.trim();
+            const lockedName = localStorage.getItem('hrn_guest_name');
+            
+            if (lockedName) name = lockedName;
+            else { if (!name) return window.toast("Please enter a name."); }
+            
+            if (!lockedName) { window.openHub(); window.showOverlayView('guest-warn'); } 
+            else { await performGuestLogin(name); }
+        };
+        
+        window.confirmGuestLoginAction = async () => { 
+            const name = $('g-name').value.trim(); 
+            if(!name) return; 
+            await performGuestLogin(name); 
+        };
+
+        const performGuestLogin = async (name) => {
+            window.closeOverlay();
+            window.setLoading(true, "Initializing...");
+            localStorage.removeItem(LOGOUT_FLAG);
+            
+            const { data: { user: existingUser } } = await db.auth.getUser();
+            if (existingUser) {
+                const currentName = existingUser.user_metadata?.full_name;
+                if (!currentName || currentName !== name) { 
+                    await db.auth.updateUser({ data: { full_name: name } }); 
+                    state.user = existingUser; 
+                    state.user.user_metadata = state.user.user_metadata || {}; 
+                    state.user.user_metadata.full_name = name; 
+                } else { state.user = existingUser; }
+                localStorage.setItem('hrn_guest_id', state.user.id); localStorage.setItem('hrn_guest_name', name);
+                window.nav('scr-lobby'); window.loadRooms(); claimMaster();
+                window.setLoading(false);
+                return;
+            }
+            
+            const { data, error } = await db.auth.signInAnonymously();
+            if (error) { window.toast(error.message); window.setLoading(false); return; }
+            if (data.user) {
+                await db.auth.updateUser({ data: { full_name: name } });
+                state.user = data.user; state.user.user_metadata = state.user.user_metadata || {}; state.user.user_metadata.full_name = name;
+                localStorage.setItem('hrn_guest_id', state.user.id); localStorage.setItem('hrn_guest_name', name);
+                window.nav('scr-lobby'); window.loadRooms(); claimMaster();
+            }
+            window.setLoading(false);
+        };
+        
+        window.handleCreate = async () => { 
+            if(state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
+            if(state.processingAction) return;
+            state.processingAction = true;
+            
+            const n=$('c-name').value, p=$('c-pass').value, isP=$('c-private').checked; 
+            if(!n) { window.toast("Name required"); state.processingAction = false; return; } 
+            window.setLoading(true, "Deploying..."); 
+            
+            const roomSalt = generateSalt();
+            const accessHash = p ? await sha256(p + roomSalt) : null;
+            const {data, error} = await db.from('rooms').insert([{name:n,password_hash:accessHash,salt:roomSalt,is_private:isP,created_by:state.user.id}]).select(); 
+            
+            if(error) window.toast("Error: " + error.message);
+            if(data && data.length > 0) { 
+                state.lastCreated=data[0]; 
+                state.lastCreatedPass = p; 
+                $('s-id').innerText=data[0].id; 
+                window.nav('scr-success'); 
+            }
+            state.processingAction = false;
+            window.setLoading(false);
+        };
+
+        window.submitGate = async () => { 
+            const inputPass = $('gate-pass').value; 
+            const inputHash = await sha256(inputPass + state.pending.salt); 
+            if(inputHash === state.pending.hash) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); 
+            else window.toast("Access Denied"); 
+        };
+        
+        window.handleLogout = async () => { 
+            window.setLoading(true, "Signing out..."); 
+            await cleanupChannels();
+            if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
+            
+            localStorage.setItem(LOGOUT_FLAG, 'true');
+            if (state.user && state.user.is_anonymous) { 
+                window.toast("Session saved."); 
+                window.nav('scr-start'); 
+            } else { 
+                localStorage.removeItem('hrn_guest_id'); 
+                localStorage.removeItem('hrn_guest_name'); 
+                await db.auth.signOut(); 
+                state.lastKnownOnlineCount = null; 
+                updateOnlineDisplay('--', 'disconnected'); 
+                window.nav('scr-start'); 
+            } 
+            state.isMasterTab = false;
+            window.setLoading(false); 
+        };
+        
+        window.copyId = () => { navigator.clipboard.writeText(state.currentRoomId); const copyIcon = $('icon-copy-chat'); const checkIcon = $('icon-check-chat'); copyIcon.style.display = 'none'; checkIcon.style.display = 'block'; setTimeout(() => { copyIcon.style.display = 'block'; checkIcon.style.display = 'none'; }, 2000); };
+        window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
+        window.enterCreated = () => { const pass = state.lastCreatedPass; window.openVault(state.lastCreated.id, state.lastCreated.name, pass, state.lastCreated.salt); state.lastCreatedPass = null; };
+        
+        let touchStartX = 0, touchEndX = 0;
+        document.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
+        document.addEventListener('touchend', e => { 
+            touchEndX = e.changedTouches[0].screenX; 
+            const active = document.querySelector('.screen.active'); 
+            if(!active) return; 
+            const diff = touchEndX - touchStartX; 
+            if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left'); 
+            else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right'); 
+        }, false);
+        
+        window.addEventListener('online', () => { 
+            $('offline-screen').classList.remove('active');
+            window.toast("Back online"); 
+            if(state.user && state.isMasterTab) initPresence(); 
+        });
+        
+        window.addEventListener('offline', () => { 
+            $('offline-screen').classList.add('active');
+            updateOnlineDisplay('--', 'error'); 
+            window.toast("Connection lost"); 
+        });
 
         db.auth.onAuthStateChange(async (ev, ses) => {
-            user = ses?.user;
-            const createBtn = document.getElementById('icon-plus-lobby');
+            state.user = ses?.user;
+            const createBtn = $('icon-plus-lobby');
             const activeScreenId = document.querySelector('.screen.active')?.id;
             
-            if (createBtn) createBtn.style.display = user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
+            if (createBtn) createBtn.style.display = state.user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
             
             if (ev === 'SIGNED_IN') {
-                if(user) {
-                    localStorage.setItem('hrn_guest_id', user.id);
-                    if(user.user_metadata?.full_name) localStorage.setItem('hrn_guest_name', user.user_metadata.full_name);
+                if(state.user) {
+                    localStorage.setItem('hrn_guest_id', state.user.id);
+                    if(state.user.user_metadata?.full_name) localStorage.setItem('hrn_guest_name', state.user.user_metadata.full_name);
                     
                     const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
                     if (authScreens.includes(activeScreenId)) {
@@ -866,11 +1281,9 @@
                 }
             }
             if (ev === 'SIGNED_OUT') { 
-                if (heartbeatInterval) clearInterval(heartbeatInterval); 
-                if (presenceChannel) db.removeChannel(presenceChannel).catch(()=>{}); 
-                presenceChannel = null; 
-                isPresenceInitializing = false; 
-                lastKnownOnlineCount = null; 
+                if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
+                await cleanupChannels();
+                state.lastKnownOnlineCount = null; 
                 updateOnlineDisplay('--', 'disconnected'); 
                 localStorage.removeItem('hrn_guest_id'); 
                 localStorage.removeItem('hrn_guest_name'); 
@@ -879,199 +1292,16 @@
             }
         });
 
-        window.handleGuestLogin = async () => {
-            const nameInput = document.getElementById('g-name');
-            let name = nameInput.value.trim();
-            const lockedName = localStorage.getItem('hrn_guest_name');
-            if (lockedName) name = lockedName;
-            else { if (!name) return window.toast("Please enter a name."); }
-            if (!lockedName) { window.openHub(); window.showOverlayView('guest-warn'); } 
-            else { await performGuestLogin(name); }
-        };
-
-        window.confirmGuestLoginAction = async () => { const name = document.getElementById('g-name').value.trim(); if(!name) return; await performGuestLogin(name); };
-
-        const performGuestLogin = async (name) => {
-            window.closeOverlay();
-            window.setLoading(true, "Initializing...");
-            localStorage.removeItem(LOGOUT_FLAG);
-            const { data: { user: existingUser } } = await db.auth.getUser();
-            if (existingUser) {
-                const currentName = existingUser.user_metadata?.full_name;
-                if (!currentName || currentName !== name) { await db.auth.updateUser({ data: { full_name: name } }); user = existingUser; user.user_metadata = user.user_metadata || {}; user.user_metadata.full_name = name; } else { user = existingUser; }
-                localStorage.setItem('hrn_guest_id', user.id); localStorage.setItem('hrn_guest_name', name);
-                window.nav('scr-lobby'); window.loadRooms(); claimMaster();
-                window.setLoading(false);
-                return;
-            }
-            const { data, error } = await db.auth.signInAnonymously();
-            if (error) { window.toast(error.message); window.setLoading(false); return; }
-            if (data.user) {
-                await db.auth.updateUser({ data: { full_name: name } });
-                user = data.user; user.user_metadata = user.user_metadata || {}; user.user_metadata.full_name = name;
-                localStorage.setItem('hrn_guest_id', user.id); localStorage.setItem('hrn_guest_name', name);
-                window.nav('scr-lobby'); window.loadRooms(); claimMaster();
-            }
-            window.setLoading(false);
-        };
-
-        window.handleLogin = async () => { 
-            const e = document.getElementById('l-email').value, p = document.getElementById('l-pass').value; 
-            if(!e || !p) return window.toast("Input missing"); 
-            window.setLoading(true, "Verifying..."); 
-            localStorage.removeItem(LOGOUT_FLAG); 
-            const {error} = await db.auth.signInWithPassword({email:e, password:p}); 
-            if(error) window.toast(error.message); 
-            window.setLoading(false); 
-        };
-        
-        window.handleRegister = async () => { 
-            const n=document.getElementById('r-name').value, e=document.getElementById('r-email').value.trim().toLowerCase(), p=document.getElementById('r-pass').value; 
-            if(!n || !e || p.length < 8) return window.toast("Check inputs"); 
-            window.setLoading(true, "Checking..."); 
-            const { data: exists } = await db.from('profiles').select('id').eq('email', e).single(); 
-            if (exists) { window.setLoading(false); return window.toast("Email taken"); } 
-            try { 
-                const r = await fetch(MAIL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: e }) }); 
-                if((await r.json()).message === "Code sent") { 
-                    sessionStorage.setItem('temp_reg', JSON.stringify({n, e, p})); 
-                    window.nav('scr-verify'); 
-                    startVTimer(); 
-                } else window.toast("Mail error"); 
-            } catch (e) { window.toast("Failed"); } 
-            window.setLoading(false); 
-        };
-        
-        const startVTimer = () => { let left = 600; if(vTimer) clearInterval(vTimer); vTimer = setInterval(() => { left--; document.getElementById('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(vTimer); window.nav('scr-register'); } }, 1000); };
-        
-        window.handleVerify = async () => { 
-            const code = document.getElementById('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); 
-            window.setLoading(true, "Verifying..."); 
-            try { 
-                const r = await fetch(MAIL_API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.e, code: code }) }); 
-                if((await r.json()).message === "Verified") { 
-                    const { error } = await db.auth.signUp({ email: temp.e, password: temp.p, options: { data: { full_name: temp.n } } }); 
-                    if(error) window.toast(error.message); 
-                } else window.toast("Wrong code"); 
-            } catch (e) { window.toast("Auth error"); } 
-            window.setLoading(false); 
-        };
-        
-        window.loadRooms = async () => { if(!user) return; const {data} = await db.from('rooms').select('*').eq('is_private',false).order('created_at',{ascending:false}); allRooms = data || []; window.filterRooms(); };
-        window.filterRooms = () => { const q = document.getElementById('search-bar').value.toLowerCase(); document.getElementById('room-list').innerHTML = allRooms.filter(r=>r.name.toLowerCase().includes(q)).map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><span style="font-weight:700">${esc(r.name)}</span><span style="display:flex; align-items:center; gap:5px"><i data-lucide="${r.password_hash ? 'lock' : 'chevron-right'}" style="width:18px; height:18px; color:var(--text-mute)"></i></span></div>`).join(''); lucide.createIcons(); };
-        
-        window.joinAttempt = async (id) => {
-            window.setLoading(true);
-            const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
-            window.setLoading(false);
-            if (error || !data) return window.toast("Room not found");
-            if (data.password_hash) { 
-                window.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
-                window.nav('scr-gate'); 
-            } 
-            else { window.openVault(data.id, data.name, null, data.salt); }
-        };
-
-        window.joinPrivate = async () => { 
-            if(!user) return window.toast("Login required"); 
-            const id = document.getElementById('join-id').value.trim(); 
-            if(!id) return; 
-            window.setLoading(true); 
-            const {data} = await db.from('rooms').select('*').eq('id',id).single(); 
-            window.setLoading(false); 
-            if(data) { 
-                if(data.password_hash) { 
-                    window.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
-                    window.nav('scr-gate'); 
-                } else { 
-                    window.openVault(data.id, data.name, null, data.salt); 
-                } 
-            } else window.toast("Not found"); 
-        };
-        
-        window.handleCreate = async () => { 
-            if(user?.is_anonymous) return window.toast("Guests cannot create rooms");
-            const n=document.getElementById('c-name').value, p=document.getElementById('c-pass').value, isP=document.getElementById('c-private').checked; 
-            if(!n) return window.toast("Name required"); 
-            window.setLoading(true, "Deploying..."); 
-            const roomSalt = generateSalt();
-            const accessHash = p ? await sha256(p + roomSalt) : null;
-            const {data, error} = await db.from('rooms').insert([{name:n,password_hash:accessHash,salt:roomSalt,is_private:isP,created_by:user.id}]).select(); 
-            if(error) {
-                window.toast("Error: " + error.message);
-                window.setLoading(false);
-                return;
-            }
-            if(data && data.length > 0) { 
-                window.lastCreated=data[0]; 
-                window.lastCreatedPass = p; 
-                document.getElementById('s-id').innerText=data[0].id; 
-                window.setLoading(false);
-                window.nav('scr-success'); 
-            } else {
-                window.setLoading(false);
-            }
-        };
-
-        window.submitGate = async () => { 
-            const inputPass = document.getElementById('gate-pass').value; 
-            const inputHash = await sha256(inputPass + window.pending.salt); 
-            if(inputHash === window.pending.hash) window.openVault(window.pending.id, window.pending.name, inputPass, window.pending.salt); 
-            else window.toast("Access Denied"); 
-        };
-        
-        window.handleLogout = async () => { 
-            window.setLoading(true, "Signing out..."); 
-            await cleanupChatChannel(); 
-            if (heartbeatInterval) clearInterval(heartbeatInterval); 
-            if (presenceChannel) await db.removeChannel(presenceChannel).catch(()=>{}); 
-            presenceChannel = null; 
-            
-            isMasterTab = false; 
-            
-            localStorage.setItem(LOGOUT_FLAG, 'true');
-            if (user && user.is_anonymous) { 
-                window.toast("Session saved. Come back soon!"); 
-                window.nav('scr-start'); 
-            } else { 
-                localStorage.removeItem('hrn_guest_id'); 
-                localStorage.removeItem('hrn_guest_name'); 
-                await db.auth.signOut(); 
-                lastKnownOnlineCount = null; 
-                updateOnlineDisplay('--', 'disconnected'); 
-                window.nav('scr-start'); 
-            } 
-            window.setLoading(false); 
-        };
-        
-        window.copyId = () => { navigator.clipboard.writeText(currentRoomId); const copyIcon = document.getElementById('icon-copy-chat'); const checkIcon = document.getElementById('icon-check-chat'); copyIcon.style.display = 'none'; checkIcon.style.display = 'block'; setTimeout(() => { copyIcon.style.display = 'block'; checkIcon.style.display = 'none'; }, 2000); };
-        window.copySId = () => { navigator.clipboard.writeText(window.lastCreated.id); window.toast("ID Copied"); };
-        window.enterCreated = () => { const pass = window.lastCreatedPass; window.openVault(window.lastCreated.id, window.lastCreated.name, pass, window.lastCreated.salt); window.lastCreatedPass = null; };
-        document.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
-        document.addEventListener('touchend', e => { touchEndX = e.changedTouches[0].screenX; const active = document.querySelector('.screen.active'); if(!active) return; const diff = touchEndX - touchStartX; if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left'); else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right'); }, false);
-        
-        window.addEventListener('online', () => { 
-            document.getElementById('offline-screen').classList.remove('active');
-            window.toast("Back online"); 
-            if(user && isMasterTab) initPresence(); 
-        });
-        
-        window.addEventListener('offline', () => { 
-            document.getElementById('offline-screen').classList.add('active');
-            updateOnlineDisplay('--', 'error'); 
-            window.toast("Connection lost"); 
-        });
-        
         const init = async () => {
-            if (!navigator.onLine) document.getElementById('offline-screen').classList.add('active');
+            if (!navigator.onLine) $('offline-screen').classList.add('active');
             
             const { data: { session } } = await db.auth.getSession();
             const isLoggedOut = localStorage.getItem(LOGOUT_FLAG) === 'true';
 
             if (session && !isLoggedOut) {
-                user = session.user;
-                localStorage.setItem('hrn_guest_id', user.id);
-                if(user.user_metadata?.full_name) { localStorage.setItem('hrn_guest_name', user.user_metadata.full_name); }
+                state.user = session.user;
+                localStorage.setItem('hrn_guest_id', state.user.id);
+                if(state.user.user_metadata?.full_name) localStorage.setItem('hrn_guest_name', state.user.user_metadata.full_name);
                 
                 const masterExists = await checkMaster();
                 
@@ -1085,14 +1315,11 @@
                     window.loadRooms(); 
                 }
             } else {
-                document.getElementById('guest-swipe-hint').style.display = 'flex';
+                $('guest-swipe-hint').style.display = 'flex';
             }
             lucide.createIcons();
             window.setLoading(false);
         };
-        if (typeof CLEAN_CONSOLE !== 'undefined' && CLEAN_CONSOLE) {
-            setInterval(() => console.clear(), 10000);
-        }
 
         init();
     </script>
