@@ -1,31 +1,16 @@
-# HRN Chat 2026
+# HyperRush Chat App
 
-A high-security, real-time messaging interface built with modern web technologies. This project focuses on privacy, end-to-end encryption, and a seamless user experience.
+A secure real-time chat application built with Supabase, end-to-end encryption, and a custom lightweight client architecture.
 
-## Features
+---
 
-- Secure Verification: OTP-based verification with real-time expiry countdown.
-- Privacy First: E2EE for all chats, per-room unique salt.
-- Real-time Engine: Instant messaging via Supabase Realtime.
-- Single Session per Account: Only one active session allowed; new logins are kicked.
-- Channel Management: Public or private rooms, optional password.
-- Connectivity Monitoring: Detects connection loss and syncs on reconnect.
-- Modern UI: Minimalist design with Plus Jakarta Sans and Lucide icons.
-- Smart Date Labels: Today, Yesterday, Weekday, Full Date dividers.
-- Guests: Anonymous login with limited features.
+## Project Structure
 
-## Tech Stack
+This repository uses a **branch-based version system**.
 
-- Frontend: HTML5, CSS3, JavaScript (ES6+)
-- Database & Auth: Supabase
-- Encryption: Web Crypto API (PBKDF2 300k, AES-GCM, per-room salt)
-- Icons: Lucide
+- `main` → Documentation & project overview  
+- `1.0` → Stable release v1.0  
+- `1.1` → Improvements & feature updates  
+- Future versions → Separate branches  
 
-## Configuration & Capacity
-
-- User Limit: 475 concurrent users
-- Room Security: Optional hashed passwords + room salt
-- Message Storage: Client-side encrypted, base64(IV + ciphertext)
-- Rate Limiting: 1 message per second
-
-*HRN Network – 2026*
+To use the latest stable version, switch to the branch with the highest version.
