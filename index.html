@@ -242,10 +242,11 @@
             </div>
         </div>
         <div id="block-overlay">
-            <i data-lucide="users" style="width:48px; height:48px; margin-bottom:24px; color:var(--danger)"></i>
-            <h1 class="title">Capacity Reached</h1>
-            <p class="subtitle" style="margin-bottom:48px">All nodes are currently occupied.</p>
-            <button class="btn btn-accent" onclick="location.reload()">Retry Connection</button>
+            <i data-lucide="copy" style="width:48px; height:48px; margin-bottom:24px; color:var(--warning)"></i>
+            <h1 class="title">Active Session</h1>
+            <p class="subtitle" style="margin-bottom:48px">HRN Chat is open in another tab.</p>
+            <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
+            <button class="btn" style="margin-top:12px; border:none; background:#f2f2f7" onclick="window.closeTabAttempt()">Close Tab</button>
         </div>
         <div id="offline-screen">
             <i data-lucide="wifi-off" style="width:48px; height:48px; margin-bottom:24px; color:var(--text-main); opacity:0.9"></i>
@@ -382,11 +383,9 @@
 
         lucide.createIcons();
 
-        let mySessionId = sessionStorage.getItem('hrn_session_id');
-        if (!mySessionId) {
-            mySessionId = crypto.randomUUID();
-            sessionStorage.setItem('hrn_session_id', mySessionId);
-        }
+        const tabId = sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id'));
+        let isMasterTab = false;
+        const tabChannel = new BroadcastChannel('hrn_tab_sync');
 
         const workerCode = `
             self.onmessage = async (e) => {
@@ -590,41 +589,107 @@
             document.getElementById('overlay-container').classList.add('active');
         };
 
-        const handleForceLogout = async () => {
+        const showInactiveOverlay = () => {
+            const overlay = document.getElementById('block-overlay');
+            overlay.innerHTML = `
+                <i data-lucide="copy" style="width:48px; height:48px; margin-bottom:24px; color:var(--warning)"></i>
+                <h1 class="title">Active Session</h1>
+                <p class="subtitle" style="margin-bottom:48px">HRN Chat is open in another tab.</p>
+                <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
+                <button class="btn" style="margin-top:12px; border:none; background:#f2f2f7" onclick="window.closeTabAttempt()">Close Tab</button>
+            `;
+            overlay.classList.add('active');
+            lucide.createIcons();
+        };
+
+        const handleTabConflict = () => {
             if (heartbeatInterval) clearInterval(heartbeatInterval);
             heartbeatInterval = null;
-            if (presenceChannel) { try { await db.removeChannel(presenceChannel); } catch(e){} presenceChannel = null; }
             
-            const overlay = document.getElementById('block-overlay');
-            if(overlay) {
-                overlay.innerHTML = `
-                    <i data-lucide="shield-alert" style="width:48px; height:48px; margin-bottom:24px; color:var(--warning)"></i>
-                    <h1 class="title">Session Conflict</h1>
-                    <p class="subtitle" style="margin-bottom:48px">Already logged in elsewhere.</p>
-                    <button class="btn btn-accent" onclick="location.reload()">Re-login</button>
-                `;
-                overlay.classList.add('active');
-                lucide.createIcons();
+            if (presenceChannel) { 
+                try { db.removeChannel(presenceChannel); } catch(e){} 
+                presenceChannel = null; 
+            }
+            if (chatChannel) { 
+                try { db.removeChannel(chatChannel); } catch(e){} 
+                chatChannel = null; 
             }
             
-            await db.auth.signOut();
             isPresenceInitializing = false;
+            isMasterTab = false;
+            updateOnlineDisplay('--', 'disconnected');
+            
+            const overlay = document.getElementById('block-overlay');
+            overlay.innerHTML = `
+                <i data-lucide="log-out" style="width:48px; height:48px; margin-bottom:24px; color:var(--danger)"></i>
+                <h1 class="title">Session Moved</h1>
+                <p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p>
+                <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
+            `;
+            overlay.classList.add('active');
+            lucide.createIcons();
+        };
+
+        const claimMaster = () => {
+            if (!isMasterTab) {
+                isMasterTab = true;
+                tabChannel.postMessage({ type: 'CLAIM_MASTER', id: tabId });
+                const overlay = document.getElementById('block-overlay');
+                if (overlay.classList.contains('active')) {
+                    overlay.classList.remove('active');
+                }
+                if (user) initPresence();
+            }
+        };
+
+        window.forceClaimMaster = () => {
+            claimMaster();
+        };
+
+        window.closeTabAttempt = () => {
+             window.open('', '_self'); window.close(); 
+        };
+
+        tabChannel.onmessage = (ev) => {
+            if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== tabId) {
+                handleTabConflict();
+            }
+            if (ev.data.type === 'PING_MASTER' && isMasterTab) {
+                tabChannel.postMessage({ type: 'PONG_MASTER', id: tabId });
+            }
+        };
+
+        const checkMaster = () => {
+            return new Promise((resolve) => {
+                let masterFound = false;
+                const handler = (ev) => {
+                    if (ev.data.type === 'PONG_MASTER') {
+                        masterFound = true;
+                    }
+                };
+                tabChannel.addEventListener('message', handler);
+                tabChannel.postMessage({ type: 'PING_MASTER' });
+                
+                setTimeout(() => {
+                    tabChannel.removeEventListener('message', handler);
+                    resolve(masterFound);
+                }, 300);
+            });
         };
 
         const initPresence = async () => {
+            if (!isMasterTab) return;
             if (!user) return; 
+            
             const myId = user.id;
             if (isPresenceInitializing || presenceChannel) return;
             isPresenceInitializing = true;
             updateOnlineDisplay('--', 'connecting');
             
-            const presenceKey = myId + '_' + mySessionId;
-            
-            presenceChannel = db.channel('online-users', { config: { presence: { key: presenceKey } } });
+            presenceChannel = db.channel('online-users', { config: { presence: { key: myId } } });
             presenceChannel.on('presence', { event: 'sync' }, async () => {
                 const state = presenceChannel.presenceState();
                 const allPresences = Object.values(state).flat();
-                
                 const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
                 updateOnlineDisplay(uniqueUserIds.size, 'connected');
                 
@@ -635,29 +700,12 @@
                     if (heartbeatInterval) clearInterval(heartbeatInterval);
                     heartbeatInterval = null;
                 }
-
-                const otherMySessions = allPresences.filter(p => p.user_id === myId && p.session_id !== mySessionId);
-                
-                if (otherMySessions.length > 0) {
-                    const myCurrentState = allPresences.find(p => p.session_id === mySessionId);
-                    
-                    if (myCurrentState) {
-                        const allMySessions = [...otherMySessions, myCurrentState];
-                        allMySessions.sort((a, b) => new Date(a.online_at) - new Date(b.online_at));
-                        const winner = allMySessions[0];
-                        
-                        if (winner.session_id !== mySessionId) {
-                            await handleForceLogout();
-                        }
-                    }
-                }
-                
             }).subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
                     isPresenceInitializing = false;
-                    await presenceChannel.track({ user_id: myId, online_at: new Date().toISOString(), session_id: mySessionId });
+                    await presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() });
                     if (heartbeatInterval) clearInterval(heartbeatInterval);
-                    heartbeatInterval = setInterval(async () => { if (presenceChannel) await presenceChannel.track({ user_id: myId, online_at: new Date().toISOString(), session_id: mySessionId }); }, 25000);
+                    heartbeatInterval = setInterval(async () => { if (presenceChannel) await presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, 25000);
                 } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { isPresenceInitializing = false; presenceChannel = null; }
             });
         };
@@ -805,7 +853,7 @@
                     if (authScreens.includes(activeScreenId)) {
                         window.nav('scr-lobby'); 
                         window.loadRooms(); 
-                        initPresence();
+                        claimMaster();
                     }
                 }
             }
@@ -844,7 +892,7 @@
                 const currentName = existingUser.user_metadata?.full_name;
                 if (!currentName || currentName !== name) { await db.auth.updateUser({ data: { full_name: name } }); user = existingUser; user.user_metadata = user.user_metadata || {}; user.user_metadata.full_name = name; } else { user = existingUser; }
                 localStorage.setItem('hrn_guest_id', user.id); localStorage.setItem('hrn_guest_name', name);
-                window.nav('scr-lobby'); window.loadRooms(); initPresence();
+                window.nav('scr-lobby'); window.loadRooms(); claimMaster();
                 window.setLoading(false);
                 return;
             }
@@ -854,7 +902,7 @@
                 await db.auth.updateUser({ data: { full_name: name } });
                 user = data.user; user.user_metadata = user.user_metadata || {}; user.user_metadata.full_name = name;
                 localStorage.setItem('hrn_guest_id', user.id); localStorage.setItem('hrn_guest_name', name);
-                window.nav('scr-lobby'); window.loadRooms(); initPresence();
+                window.nav('scr-lobby'); window.loadRooms(); claimMaster();
             }
             window.setLoading(false);
         };
@@ -909,11 +957,29 @@
             const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
             window.setLoading(false);
             if (error || !data) return window.toast("Room not found");
-            if (data.password_hash) { window.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; window.nav('scr-gate'); } 
+            if (data.password_hash) { 
+                window.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
+                window.nav('scr-gate'); 
+            } 
             else { window.openVault(data.id, data.name, null, data.salt); }
         };
 
-        window.joinPrivate = async () => { if(!user) return window.toast("Login required"); const id = document.getElementById('join-id').value.trim(); if(!id) return; window.setLoading(true); const {data} = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { if(data.password_hash) { window.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; window.nav('scr-gate'); } else { window.openVault(data.id, data.name, null, data.salt); } } else window.toast("Not found"); };
+        window.joinPrivate = async () => { 
+            if(!user) return window.toast("Login required"); 
+            const id = document.getElementById('join-id').value.trim(); 
+            if(!id) return; 
+            window.setLoading(true); 
+            const {data} = await db.from('rooms').select('*').eq('id',id).single(); 
+            window.setLoading(false); 
+            if(data) { 
+                if(data.password_hash) { 
+                    window.pending = { id: data.id, name: data.name, hash: data.password_hash, salt: data.salt }; 
+                    window.nav('scr-gate'); 
+                } else { 
+                    window.openVault(data.id, data.name, null, data.salt); 
+                } 
+            } else window.toast("Not found"); 
+        };
         
         window.handleCreate = async () => { 
             if(user?.is_anonymous) return window.toast("Guests cannot create rooms");
@@ -942,7 +1008,7 @@
         window.submitGate = async () => { 
             const inputPass = document.getElementById('gate-pass').value; 
             const inputHash = await sha256(inputPass + window.pending.salt); 
-            if(inputHash === window.pending.hash) window.openVault(window.pending.id, window.pending.n, inputPass, window.pending.salt); 
+            if(inputHash === window.pending.hash) window.openVault(window.pending.id, window.pending.name, inputPass, window.pending.salt); 
             else window.toast("Access Denied"); 
         };
         
@@ -972,12 +1038,11 @@
         window.enterCreated = () => { const pass = window.lastCreatedPass; window.openVault(window.lastCreated.id, window.lastCreated.name, pass, window.lastCreated.salt); window.lastCreatedPass = null; };
         document.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
         document.addEventListener('touchend', e => { touchEndX = e.changedTouches[0].screenX; const active = document.querySelector('.screen.active'); if(!active) return; const diff = touchEndX - touchStartX; if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left'); else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right'); }, false);
-        document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && user && !presenceChannel) initPresence(); });
         
         window.addEventListener('online', () => { 
             document.getElementById('offline-screen').classList.remove('active');
             window.toast("Back online"); 
-            if(user) initPresence(); 
+            if(user && isMasterTab) initPresence(); 
         });
         
         window.addEventListener('offline', () => { 
@@ -996,7 +1061,18 @@
                 user = session.user;
                 localStorage.setItem('hrn_guest_id', user.id);
                 if(user.user_metadata?.full_name) { localStorage.setItem('hrn_guest_name', user.user_metadata.full_name); }
-                window.nav('scr-lobby'); window.loadRooms(); initPresence();
+                
+                const masterExists = await checkMaster();
+                
+                if (masterExists) {
+                    showInactiveOverlay();
+                    window.nav('scr-lobby'); 
+                    window.loadRooms(); 
+                } else {
+                    claimMaster();
+                    window.nav('scr-lobby'); 
+                    window.loadRooms(); 
+                }
             } else {
                 document.getElementById('guest-swipe-hint').style.display = 'flex';
             }
