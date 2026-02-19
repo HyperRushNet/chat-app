@@ -574,25 +574,14 @@ export function startChatApp(customConfig = {}) {
   window.joinAttempt = async (id) => {
     if(state.serverFull) return window.toast("Network is full");
     window.setLoading(true, "Checking access...");
-    
-    // 1. Check Access via RPC
     const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
     if (!canAccess) {
       window.setLoading(false);
       return window.toast("Access denied — you are not on the allowed list");
     }
-    
-    // 2. Fetch Room Data (This was failing before due to RLS, fixed in SQL)
     const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
-    
-    if (error) {
-        window.setLoading(false);
-        return window.toast("Error fetching room details: " + error.message);
-    }
-    
     window.setLoading(false);
-    if (!data) return window.toast("Room not found");
-    
+    if (error || !data) return window.toast("Room not found");
     state.pending = { id: data.id, name: data.name, salt: data.salt };
     if (data.allowed_users.includes('*')) {
       state.currentRoomAccessType = 'open';
@@ -804,7 +793,6 @@ export function startChatApp(customConfig = {}) {
     const { data: room } = await db.from('rooms').select('*').eq('id', id).single();
     state.currentRoomData = room;
     
-    // Show settings icon only for owner
     const isOwner = room && room.created_by === state.user.id;
     const settingsIcon = $('room-settings-icon');
     if (settingsIcon) settingsIcon.style.display = isOwner ? 'block' : 'none';
@@ -1109,7 +1097,7 @@ export function startChatApp(customConfig = {}) {
   const performGuestLogin = async (name) => {
     window.closeOverlay();
     window.setLoading(true, "Initializing...");
-    localStorage.removeItem(FLAG_LOGOUT);
+    localStorage.removeItem(FLAG_LOGOUT); // Ensure no logout flag blocks us
     const { data: { user: existingUser } } = await db.auth.getUser();
     let finalUser;
     if (existingUser && existingUser.is_anonymous) {
@@ -1233,6 +1221,7 @@ export function startChatApp(customConfig = {}) {
     else window.toast("Access Denied");
   };
 
+  // MODIFIED LOGOUT FOR GUEST PERSISTENCE
   window.handleLogout = async (e) => {
     if (!e || !e.isTrusted) return;
     window.setLoading(true, "Switching Account...");
@@ -1242,15 +1231,20 @@ export function startChatApp(customConfig = {}) {
     state.sessionStartTime = null;
     if (state.presenceChannel) state.presenceChannel.unsubscribe();
     if (state.chatChannel) state.chatChannel.unsubscribe();
+    
     if (state.user && state.user.is_anonymous) {
+      // GUEST: Save ID/Name, DO NOT SIGN OUT, DO NOT SET LOGOUT FLAG
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name);
-      state.user = null;
+      state.user = null; // Clear memory
       state.isMasterTab = false;
-      localStorage.setItem(FLAG_LOGOUT, 'true');
+      // We do NOT set FLAG_LOGOUT. This ensures the session restores on reload.
+      // We do NOT call db.auth.signOut(). This keeps the Supabase session alive in browser storage.
+      
       window.nav('scr-start');
-      window.toast("Guest session saved.");
+      window.toast("Guest session saved. Refresh to restore.");
     } else {
+      // NORMAL USER: Sign out completely
       localStorage.setItem(FLAG_LOGOUT, 'true');
       state.user = null;
       localStorage.removeItem(FLAG_GUEST_ID);
@@ -1309,10 +1303,19 @@ export function startChatApp(customConfig = {}) {
 
   db.auth.onAuthStateChange(async (ev, ses) => {
     const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
-    if (isFlaggedLogout) {
+    const hasGuestId = localStorage.getItem(FLAG_GUEST_ID);
+    
+    // If we have a guest ID stored, we should ignore the logout flag
+    // because we want to restore that specific guest session.
+    if (isFlaggedLogout && hasGuestId) {
+       localStorage.removeItem(FLAG_LOGOUT);
+    }
+    
+    if (localStorage.getItem(FLAG_LOGOUT) === 'true') {
       state.user = null;
       return;
     }
+    
     state.user = ses?.user;
     const createBtn = $('icon-plus-lobby');
     const activeScreenId = document.querySelector('.screen.active')?.id;
@@ -1333,20 +1336,26 @@ export function startChatApp(customConfig = {}) {
       }
     }
     if (ev === 'SIGNED_OUT') {
+      // If signed out, but we have guest ID, try to silent login?
+      // Supabase client handles persistence, but SIGNED_OUT event means session is gone.
+      // The logic in handleLogout prevents signOut for guests, so this should only happen on token expiry.
+      // For now, just clean up.
       if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
       if (state.uptimeInterval) clearInterval(state.uptimeInterval);
       state.uptimeInterval = null;
       state.sessionStartTime = null;
       if (state.presenceChannel) state.presenceChannel.unsubscribe();
       if (state.chatChannel) state.chatChannel.unsubscribe();
-      localStorage.removeItem(FLAG_GUEST_ID);
-      localStorage.removeItem(FLAG_GUEST_NAME);
+      // Only clear storage if forced
+      if (!hasGuestId) {
+        localStorage.removeItem(FLAG_GUEST_ID);
+        localStorage.removeItem(FLAG_GUEST_NAME);
+      }
       localStorage.removeItem(FLAG_LOGOUT);
       window.nav('scr-start');
     }
   });
 
-  // --- FIXED SETTINGS LOGIC ---
   window.openRoomSettings = async () => {
     if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) {
       return window.toast("You are not the owner of this room");
@@ -1359,7 +1368,6 @@ export function startChatApp(customConfig = {}) {
     $('edit-room-allowed').value = room.allowed_users.includes('*') ? '*' : room.allowed_users.join(', ');
     $('edit-room-pass').value = '';
     
-    // THIS WAS MISSING: Actually open the overlay
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
     window.setLoading(false);
@@ -1429,6 +1437,12 @@ export function startChatApp(customConfig = {}) {
       $('offline-screen').classList.add('active');
       return;
     }
+    
+    // MODIFIED: If guest ID exists, force clear logout flag to allow session restore
+    if (localStorage.getItem(FLAG_GUEST_ID)) {
+        localStorage.removeItem(FLAG_LOGOUT);
+    }
+
     if (localStorage.getItem(FLAG_LOGOUT) === 'true') {
       state.user = null;
       window.nav('scr-start');
