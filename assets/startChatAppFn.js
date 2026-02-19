@@ -218,12 +218,12 @@ export function startChatApp(customConfig = {}) {
   });
   const cleanupChannels = async () => {
     if (state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+      state.presenceChannel.unsubscribe();
       state.presenceChannel = null;
       state.isPresenceSubscribed = false;
     }
     if (state.chatChannel) {
-      try { await db.removeChannel(state.chatChannel); } catch(e) {}
+      state.chatChannel.unsubscribe();
       state.chatChannel = null;
     }
   };
@@ -252,7 +252,8 @@ export function startChatApp(customConfig = {}) {
     state.isConnecting = true;
     state.isPresenceSubscribed = false;
     if(state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+      state.presenceChannel.unsubscribe();
+      state.presenceChannel = null;
     }
     updateOnlineDisplay(null);
     const myId = state.user.id;
@@ -677,7 +678,7 @@ export function startChatApp(customConfig = {}) {
   window.openVault = async (id, n, rawPassword, roomSalt) => {
     if (!state.user) return window.toast("Please login first");
     window.setLoading(true, "Deriving Key...");
-    if (state.chatChannel) await db.removeChannel(state.chatChannel);
+    if (state.chatChannel) state.chatChannel.unsubscribe();
     state.currentRoomId = id;
     state.lastRenderedDateLabel = null;
     state.roomGuestStatus = {};
@@ -830,7 +831,7 @@ export function startChatApp(customConfig = {}) {
   };
   window.leaveChat = async () => {
     window.setLoading(true, "Leaving Room...");
-    if(state.chatChannel) await db.removeChannel(state.chatChannel);
+    if(state.chatChannel) state.chatChannel.unsubscribe();
     state.chatChannel = null;
     state.currentRoomId = null;
     state.roomGuestStatus = {};
@@ -854,6 +855,8 @@ export function startChatApp(customConfig = {}) {
     if(error) {
       window.toast(error.message);
       window.setLoading(false);
+    } else {
+      await initPresence(true);
     }
     state.processingAction = false;
   };
@@ -941,6 +944,8 @@ export function startChatApp(customConfig = {}) {
       if(error) {
         window.toast(error.message);
         window.setLoading(false);
+      } else {
+        await initPresence(true);
       }
     } else {
       window.toast(j.message || "Wrong code");
@@ -963,6 +968,7 @@ export function startChatApp(customConfig = {}) {
       window.showOverlayView('guest-warn');
     } else {
       await performGuestLogin(name);
+      await initPresence(true);
     }
   };
   window.confirmGuestLoginAction = async (e) => {
@@ -1016,6 +1022,7 @@ export function startChatApp(customConfig = {}) {
     await new Promise(resolve => setTimeout(resolve, 800));
     window.forceClaimMaster();
     window.setLoading(false);
+    await initPresence(true);
   };
   window.handleCreate = async (e) => {
     if (!e || !e.isTrusted) return;
@@ -1079,11 +1086,12 @@ export function startChatApp(customConfig = {}) {
   window.handleLogout = async (e) => {
     if (!e || !e.isTrusted) return;
     window.setLoading(true, "Switching Account...");
-    await cleanupChannels();
     if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
     if (state.uptimeInterval) clearInterval(state.uptimeInterval);
     state.uptimeInterval = null;
     state.sessionStartTime = null;
+    if (state.presenceChannel) state.presenceChannel.unsubscribe();
+    if (state.chatChannel) state.chatChannel.unsubscribe();
     if (state.user && state.user.is_anonymous) {
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name);
@@ -1172,7 +1180,8 @@ export function startChatApp(customConfig = {}) {
       if (state.uptimeInterval) clearInterval(state.uptimeInterval);
       state.uptimeInterval = null;
       state.sessionStartTime = null;
-      await cleanupChannels();
+      if (state.presenceChannel) state.presenceChannel.unsubscribe();
+      if (state.chatChannel) state.chatChannel.unsubscribe();
       localStorage.removeItem(FLAG_GUEST_ID);
       localStorage.removeItem(FLAG_GUEST_NAME);
       localStorage.removeItem(FLAG_LOGOUT);
@@ -1180,7 +1189,10 @@ export function startChatApp(customConfig = {}) {
     }
   });
   const init = async () => {
-    if (!navigator.onLine) $('offline-screen').classList.add('active');
+    if (!navigator.onLine) {
+      $('offline-screen').classList.add('active');
+      return;
+    }
     if (localStorage.getItem(FLAG_LOGOUT) === 'true') {
       state.user = null;
       window.nav('scr-start');
@@ -1188,7 +1200,16 @@ export function startChatApp(customConfig = {}) {
       monitorConnection();
       return;
     }
-    const { data: { session } } = await db.auth.getSession();
+    const [sessionRes, sessionErr] = await safeAwait(db.auth.getSession());
+    if (sessionErr) {
+      console.error("Failed to get session:", sessionErr);
+      window.toast("Failed to get session");
+      window.nav('scr-start');
+      window.setLoading(false);
+      monitorConnection();
+      return;
+    }
+    const session = sessionRes.data.session;
     if (session) {
       state.user = session.user;
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
@@ -1208,6 +1229,7 @@ export function startChatApp(customConfig = {}) {
       state.sessionStartTime = Date.now();
       if(state.uptimeInterval) clearInterval(state.uptimeInterval);
       state.uptimeInterval = setInterval(updateUptime, 1000);
+      await initPresence(true);
     } else {
       $('guest-swipe-hint').style.display = 'flex';
     }
