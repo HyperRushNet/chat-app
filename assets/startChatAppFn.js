@@ -1,5 +1,4 @@
 // assets/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
-
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function startChatApp(customConfig = {}) {
@@ -73,19 +72,19 @@ export function startChatApp(customConfig = {}) {
     if (typeof count === 'number') state.lastKnownOnlineCount = count;
     const displayCount = (typeof count === 'number') ? count : '--';
     document.querySelectorAll('.live-count').forEach(el => {
-      if(el.innerText !== displayCount) el.innerText = displayCount;
+      if (el.innerText !== displayCount.toString()) el.innerText = displayCount;
     });
     const hubCount = $('hub-online-count');
-    if (hubCount && hubCount.innerText !== displayCount) hubCount.innerText = displayCount;
+    if (hubCount && hubCount.innerText !== displayCount.toString()) hubCount.innerText = displayCount;
   };
 
   const updateUptime = () => {
-    if(!state.sessionStartTime) return;
+    if (!state.sessionStartTime) return;
     const diff = Math.floor((Date.now() - state.sessionStartTime) / 1000);
     const mins = Math.floor(diff / 60).toString().padStart(2, '0');
     const secs = (diff % 60).toString().padStart(2, '0');
     const el = $('hub-uptime');
-    if(el) el.innerText = `${mins}:${secs}`;
+    if (el) el.innerText = `${mins}:${secs}`;
   };
 
   const processToastQueue = () => {
@@ -109,7 +108,7 @@ export function startChatApp(customConfig = {}) {
       if (t.parentNode) {
         t.style.opacity = '0';
         setTimeout(() => {
-          if(t.parentNode) t.remove();
+          if (t.parentNode) t.remove();
           toastVisible = false;
           processToastQueue();
         }, 400);
@@ -125,9 +124,9 @@ export function startChatApp(customConfig = {}) {
   window.setLoading = (s, text = null) => {
     const loader = $('loader-overlay');
     const loaderText = $('loader-text');
-    if(s) loader.classList.add('active');
+    if (s) loader.classList.add('active');
     else loader.classList.remove('active');
-    if(text) loaderText.innerText = text;
+    if (text) loaderText.innerText = text;
     else loaderText.innerText = "Loading...";
   };
 
@@ -224,7 +223,7 @@ export function startChatApp(customConfig = {}) {
 
   const deriveKey = (pass, salt) => new Promise((resolve, reject) => {
     pendingCallbacks['keyDerived'] = (data) => {
-      if(data.success) resolve(true);
+      if (data.success) resolve(true);
       else reject("Key derivation failed");
     };
     cryptoWorker.postMessage({ type: 'deriveKey', payload: { password: pass, salt: salt } });
@@ -232,7 +231,7 @@ export function startChatApp(customConfig = {}) {
 
   const encryptMessage = (text) => new Promise((resolve, reject) => {
     pendingCallbacks['encrypted'] = (data) => {
-      if(data.result) resolve(data.result);
+      if (data.result) resolve(data.result);
       else reject("Encryption failed");
     };
     const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
@@ -241,36 +240,39 @@ export function startChatApp(customConfig = {}) {
 
   const cleanupChannels = async () => {
     if (state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+      try { await db.removeChannel(state.presenceChannel); } catch {}
       state.presenceChannel = null;
       state.isPresenceSubscribed = false;
     }
     if (state.chatChannel) {
-      try { await db.removeChannel(state.chatChannel); } catch(e) {}
+      try { await db.removeChannel(state.chatChannel); } catch {}
       state.chatChannel = null;
     }
   };
 
   const queryOnlineCountImmediately = async () => {
     if (!state.presenceChannel) return;
-    const presState = state.presenceChannel.presenceState();
-    const allPresences = Object.values(presState).flat();
-    const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
-    updateOnlineDisplay(uniqueUserIds.size);
-    if (uniqueUserIds.size > CONFIG.maxUsers) {
-      if(!state.serverFull) {
-        state.serverFull = true;
-        $('capacity-overlay').classList.add('active');
-        cleanupChannels();
+    try {
+      const presState = state.presenceChannel.presenceState();
+      if (!presState) return;
+      const allPresences = Object.values(presState).flat();
+      const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
+      updateOnlineDisplay(uniqueUserIds.size);
+
+      if (uniqueUserIds.size > CONFIG.maxUsers) {
+        if (!state.serverFull) {
+          state.serverFull = true;
+          $('capacity-overlay').classList.add('active');
+          await cleanupChannels();
+        }
+      } else {
+        state.serverFull = false;
       }
-    } else {
-      state.serverFull = false;
-    }
+    } catch {}
   };
 
   const initPresence = async (force = false) => {
     if (!state.isMasterTab || !state.user) return;
-
     const now = Date.now();
     if (!force && state.isConnecting) return;
     if (!force && (now - state.lastReconnectAttempt < CONFIG.reconnectDebounceMs)) return;
@@ -279,8 +281,8 @@ export function startChatApp(customConfig = {}) {
     state.isConnecting = true;
     state.isPresenceSubscribed = false;
 
-    if(state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+    if (state.presenceChannel) {
+      try { await db.removeChannel(state.presenceChannel); } catch {}
     }
 
     updateOnlineDisplay(null);
@@ -300,32 +302,30 @@ export function startChatApp(customConfig = {}) {
           if (!state.presenceChannel) return;
           state.isPresenceSubscribed = true;
           state.isConnecting = false;
-
-          queryOnlineCountImmediately();
-
+          await queryOnlineCountImmediately();
           await state.presenceChannel.track({
             user_id: myId,
             online_at: new Date().toISOString()
           });
-
-          queryOnlineCountImmediately();
+          await queryOnlineCountImmediately();
 
           if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
           state.heartbeatInterval = setInterval(async () => {
             if (state.presenceChannel && state.isMasterTab && !state.serverFull) {
-              await state.presenceChannel.track({
-                user_id: myId,
-                online_at: new Date().toISOString()
-              });
+              try {
+                await state.presenceChannel.track({
+                  user_id: myId,
+                  online_at: new Date().toISOString()
+                });
+              } catch {}
             }
           }, CONFIG.presenceHeartbeatMs);
 
           setTimeout(() => {
-            if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.serverFull) {
+            if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.serverFull && !state.isConnecting) {
               queryOnlineCountImmediately();
             }
-          }, 2000);
-
+          }, 1800);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           state.isPresenceSubscribed = false;
           state.isConnecting = false;
@@ -342,14 +342,30 @@ export function startChatApp(customConfig = {}) {
         updateOnlineDisplay(null);
         return;
       }
+
       $('offline-screen').classList.remove('active');
 
       if (!state.user || !state.isMasterTab) return;
       if (state.currentRoomId) return;
 
       const wsState = db.realtime.connectionState();
+
       if ((wsState === 'disconnected' || wsState === 'stopped') && !state.isConnecting) {
         initPresence(true);
+      }
+
+      if (state.lastKnownOnlineCount === null &&
+          state.isPresenceSubscribed &&
+          !state.isConnecting &&
+          !state.serverFull) {
+        setTimeout(() => {
+          if (state.lastKnownOnlineCount === null &&
+              state.isPresenceSubscribed &&
+              !state.isConnecting &&
+              !state.serverFull) {
+            queryOnlineCountImmediately();
+          }
+        }, 1000);
       }
     }, 5000);
   };
@@ -391,7 +407,6 @@ export function startChatApp(customConfig = {}) {
         state.isPresenceSubscribed = false;
         state.isMasterTab = false;
         updateOnlineDisplay(null);
-
         const overlay = $('block-overlay');
         overlay.innerHTML = `
           <i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i>
@@ -445,17 +460,17 @@ export function startChatApp(customConfig = {}) {
 
   window.showOverlayView = (viewId) => {
     const panel = document.querySelector('.panel-card');
-    if(!panel) return;
+    if (!panel) return;
     panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
     const target = $(`view-${viewId}`);
-    if(target) {
+    if (target) {
       target.classList.add('active');
       lucide.createIcons();
     }
   };
 
   window.prepareMyAccount = () => {
-    if(!state.user) return;
+    if (!state.user) return;
     const isGuest = state.user.is_anonymous;
     $('my-acc-name').innerText = state.user.user_metadata?.full_name || "User";
     $('my-acc-id').innerText = state.user.id;
@@ -492,12 +507,12 @@ export function startChatApp(customConfig = {}) {
       nameInput.value = storedName;
       nameInput.disabled = true;
       nameInput.placeholder = "Identity Locked";
-      if(lockIcon) lockIcon.style.display = 'block';
+      if (lockIcon) lockIcon.style.display = 'block';
     } else {
       nameInput.value = '';
       nameInput.disabled = false;
       nameInput.placeholder = "Enter Name (Permanent)";
-      if(lockIcon) lockIcon.style.display = 'none';
+      if (lockIcon) lockIcon.style.display = 'none';
     }
     lucide.createIcons();
   };
@@ -505,34 +520,29 @@ export function startChatApp(customConfig = {}) {
   window.nav = (id, direction = null) => {
     const current = document.querySelector('.screen.active');
     const next = $(id);
-    if(!next) return;
-
-    if(id === 'scr-guest') prepareGuestScreen();
-
+    if (!next) return;
+    if (id === 'scr-guest') prepareGuestScreen();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
-
-    if(direction === 'left') {
+    if (direction === 'left') {
       current.classList.add('slide-left');
       next.classList.remove('slide-right');
-    } else if(direction === 'right') {
+    } else if (direction === 'right') {
       current.classList.add('slide-right');
       next.classList.remove('slide-left');
     } else {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     }
-
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     next.classList.add('active');
     lucide.createIcons();
-
     const createBtn = $('icon-plus-lobby');
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
   };
 
   window.loadRooms = async () => {
-    if(!state.user) return;
+    if (!state.user) return;
     window.setLoading(true, "Fetching Rooms...");
-    const {data} = await db.from('rooms').select('*').eq('is_private',false).order('created_at',{ascending:false});
+    const { data } = await db.from('rooms').select('*').eq('is_private', false).order('created_at', { ascending: false });
     state.allRooms = data || [];
     window.filterRooms();
     window.setLoading(false);
@@ -541,8 +551,7 @@ export function startChatApp(customConfig = {}) {
   window.filterRooms = () => {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
-    const filtered = state.allRooms.filter(r=>r.name.toLowerCase().includes(q));
-
+    const filtered = state.allRooms.filter(r => r.name.toLowerCase().includes(q));
     if (filtered.length === 0) {
       list.innerHTML = `
         <div class="empty-state">
@@ -565,7 +574,7 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.joinAttempt = async (id) => {
-    if(state.serverFull) return window.toast("Network is full");
+    if (state.serverFull) return window.toast("Network is full");
     window.setLoading(true, "Joining Room...");
     const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
     window.setLoading(false);
@@ -579,15 +588,15 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.joinPrivate = async () => {
-    if(state.serverFull) return window.toast("Network is full");
-    if(!state.user) return window.toast("Login required");
+    if (state.serverFull) return window.toast("Network is full");
+    if (!state.user) return window.toast("Login required");
     const id = $('join-id').value.trim();
-    if(!id) return;
+    if (!id) return;
     window.setLoading(true, "Searching Room...");
-    const {data} = await db.from('rooms').select('*').eq('id',id).single();
+    const { data } = await db.from('rooms').select('*').eq('id', id).single();
     window.setLoading(false);
-    if(data) {
-      if(data.has_password) {
+    if (data) {
+      if (data.has_password) {
         state.pending = { id: data.id, name: data.name, salt: data.salt };
         window.nav('scr-gate');
       } else {
@@ -620,14 +629,13 @@ export function startChatApp(customConfig = {}) {
     const container = $('chat-messages');
     const emptyState = $('chat-empty-state');
     const hasMessages = container.querySelector('.msg');
-    if(emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex';
+    if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex';
   };
 
   const renderMsg = (m, prepend = false) => {
     let html = "";
     const msgDateObj = new Date(m.created_at);
     const currentLabel = getDateLabel(msgDateObj);
-
     if (!prepend && currentLabel !== state.lastRenderedDateLabel) {
       html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`;
       state.lastRenderedDateLabel = currentLabel;
@@ -635,20 +643,16 @@ export function startChatApp(customConfig = {}) {
       html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`;
       state.lastRenderedDateLabel = currentLabel;
     }
-
     const isGuest = state.roomGuestStatus[m.user_id] || false;
     const displayName = isGuest && m.user_name ? m.user_name : m.user_name;
     const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
-
     const processedText = processText(m.text);
-
     html += `
       <div class="msg ${m.user_id===state.user?.id?'me':''}" data-time="${m.created_at}">
         <span class="msg-user" onclick="window.inspectUser('${m.user_id}')">${esc(displayName)} ${guestPill}</span>
         <div>${processedText}</div>
         <span class="msg-time">${esc(m.time)}</span>
       </div>`;
-
     return html;
   };
 
@@ -677,7 +681,6 @@ export function startChatApp(customConfig = {}) {
     const container = $('chat-messages');
     const oldScrollHeight = container.scrollHeight;
     container.insertAdjacentHTML('afterbegin', '<div id="history-loader" class="history-loader">Loading...</div>');
-
     const { data, error } = await db
       .from('messages')
       .select('*')
@@ -685,35 +688,28 @@ export function startChatApp(customConfig = {}) {
       .lt('created_at', state.oldestMessageTimestamp)
       .order('created_at', { ascending: false })
       .limit(CONFIG.historyLoadLimit);
-
     $('history-loader')?.remove();
-
     if (error || !data || data.length === 0) {
       state.hasMoreHistory = false;
       state.isLoadingHistory = false;
       return;
     }
-
     data.reverse();
-
     pendingCallbacks['historyDecrypted'] = async (res) => {
       const validMsgs = res.results.filter(m => !m.error);
       if (validMsgs.length > 0) {
         state.oldestMessageTimestamp = validMsgs[0].created_at;
         const ids = validMsgs.map(m => m.user_id);
         await fetchGuestStatuses(ids);
-
         const lastBatchDate = getDateLabel(new Date(validMsgs[validMsgs.length - 1].created_at));
         const firstMsgEl = container.querySelector('.msg');
         let firstExistingDate = null;
         if (firstMsgEl) {
           const firstTime = firstMsgEl.getAttribute('data-time');
-          if(firstTime) firstExistingDate = getDateLabel(new Date(firstTime));
+          if (firstTime) firstExistingDate = getDateLabel(new Date(firstTime));
         }
-
         let html = "";
         let tempLabel = null;
-
         validMsgs.forEach((m, index) => {
           const msgDate = getDateLabel(new Date(m.created_at));
           if (msgDate !== tempLabel) {
@@ -723,13 +719,10 @@ export function startChatApp(customConfig = {}) {
             }
             tempLabel = msgDate;
           }
-
           const isGuest = state.roomGuestStatus[m.user_id] || false;
           const displayName = isGuest && m.user_name ? m.user_name : m.user_name;
           const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
-
           const processedText = processText(m.text);
-
           html += `
             <div class="msg ${m.user_id===state.user?.id?'me':''}" data-time="${m.created_at}">
               <span class="msg-user" onclick="window.inspectUser('${m.user_id}')">${esc(displayName)} ${guestPill}</span>
@@ -737,104 +730,81 @@ export function startChatApp(customConfig = {}) {
               <span class="msg-time">${esc(m.time)}</span>
             </div>`;
         });
-
         if (lastBatchDate === firstExistingDate) {
           const firstDivider = container.querySelector('.date-divider');
           if (firstDivider) firstDivider.remove();
         }
-
         container.insertAdjacentHTML('afterbegin', html);
-
         const newScrollHeight = container.scrollHeight;
         container.scrollTop = newScrollHeight - oldScrollHeight;
       }
       state.isLoadingHistory = false;
     };
-
     cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
   };
 
   window.openVault = async (id, n, rawPassword, roomSalt) => {
     if (!state.user) return window.toast("Please login first");
     window.setLoading(true, "Deriving Key...");
-
-    if(state.chatChannel) await db.removeChannel(state.chatChannel);
-
+    if (state.chatChannel) await db.removeChannel(state.chatChannel);
     state.currentRoomId = id;
     state.lastRenderedDateLabel = null;
     state.roomGuestStatus = {};
     state.oldestMessageTimestamp = null;
     state.hasMoreHistory = true;
     state.isLoadingHistory = false;
-
     $('chat-title').innerText = n;
     $('chat-messages').innerHTML = '<div id="chat-empty-state" class="empty-state"><i data-lucide="message-circle" class="empty-state-icon"></i><div class="empty-state-title">No messages yet</div><div class="empty-state-sub">Be the first to say something.</div></div>';
     $('chat-messages').onscroll = handleScroll;
-
     const copyIcon = $('icon-copy-chat');
     const checkIcon = $('icon-check-chat');
-    if(copyIcon) copyIcon.style.display = 'block';
-    if(checkIcon) checkIcon.style.display = 'none';
-
+    if (copyIcon) copyIcon.style.display = 'block';
+    if (checkIcon) checkIcon.style.display = 'none';
     const keySource = rawPassword ? (rawPassword + id) : id;
-
     try {
       await deriveKey(keySource, roomSalt);
-    } catch(e) {
+    } catch {
       window.setLoading(false);
       return window.toast("Key derivation failed");
     }
-
     window.setLoading(true, "Fetching History...");
-
     const { data } = await db.from('messages')
       .select('*')
       .eq('room_id', id)
       .order('created_at', { ascending: false })
       .limit(CONFIG.maxMessages);
-
     const isGuest = state.user.is_anonymous;
     const guestInfoBtn = $('guest-info-chat');
-    if(guestInfoBtn) guestInfoBtn.style.display = isGuest ? 'flex' : 'none';
-
+    if (guestInfoBtn) guestInfoBtn.style.display = isGuest ? 'flex' : 'none';
     $('chat-input').style.display = isGuest ? 'none' : 'block';
     $('guest-replies').style.display = isGuest ? 'flex' : 'none';
     $('send-btn').style.display = isGuest ? 'none' : 'flex';
-
     window.nav('scr-chat');
-
     if (data && data.length > 0) {
       data.reverse();
       if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at;
-
       window.setLoading(true, "Decrypting...");
-
       pendingCallbacks['historyDecrypted'] = async (res) => {
         const b = $('chat-messages');
         b.innerHTML = '';
         const ids = res.results.map(m => m.user_id);
         await fetchGuestStatuses(ids);
-
         res.results.forEach(m => {
-          if(!m.error) b.insertAdjacentHTML('beforeend', renderMsg(m));
+          if (!m.error) b.insertAdjacentHTML('beforeend', renderMsg(m));
         });
-
         b.scrollTop = b.scrollHeight;
         checkChatEmpty();
         window.setLoading(false);
       };
-
       cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
     } else {
       state.hasMoreHistory = false;
       checkChatEmpty();
       window.setLoading(false);
     }
-
     state.chatChannel = db.channel(`room_chat_${id}`, {
       config: { broadcast: { self: true } }
     });
-
     state.chatChannel.on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
@@ -844,7 +814,7 @@ export function startChatApp(customConfig = {}) {
       const m = payload.new;
       if (m && state.currentRoomId) {
         pendingCallbacks['singleDecrypted'] = async (decRes) => {
-          if(decRes.result) {
+          if (decRes.result) {
             await fetchGuestStatuses([m.user_id]);
             const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
             const b = $('chat-messages');
@@ -876,16 +846,14 @@ export function startChatApp(customConfig = {}) {
     if (!state.user || !state.currentRoomId) return;
     if (state.processingAction) return;
     if (!applyRateLimit()) return;
-
     state.processingAction = true;
     const v = $('chat-input').value.trim();
-    if(!v) {
+    if (!v) {
       state.processingAction = false;
       return;
     }
     $('chat-input').value = '';
     state.lastMessageTime = Date.now();
-
     try {
       const enc = await encryptMessage(v);
       await db.from('messages').insert([{
@@ -894,7 +862,7 @@ export function startChatApp(customConfig = {}) {
         user_name: state.user.user_metadata?.full_name,
         content: enc
       }]);
-    } catch(e) {
+    } catch {
       window.toast("Failed to send");
     }
     state.processingAction = false;
@@ -905,10 +873,8 @@ export function startChatApp(customConfig = {}) {
     if (!state.user || !state.currentRoomId) return;
     if (state.processingAction) return;
     if (!applyRateLimit()) return;
-
     state.processingAction = true;
     state.lastMessageTime = Date.now();
-
     try {
       const enc = await encryptMessage(message);
       await db.from('messages').insert([{
@@ -917,13 +883,13 @@ export function startChatApp(customConfig = {}) {
         user_name: state.user.user_metadata?.full_name,
         content: enc
       }]);
-    } catch(err) {}
+    } catch {}
     state.processingAction = false;
   };
 
   window.leaveChat = async () => {
     window.setLoading(true, "Leaving Room...");
-    if(state.chatChannel) await db.removeChannel(state.chatChannel);
+    if (state.chatChannel) await db.removeChannel(state.chatChannel);
     state.chatChannel = null;
     state.currentRoomId = null;
     state.roomGuestStatus = {};
@@ -934,21 +900,18 @@ export function startChatApp(customConfig = {}) {
 
   window.handleLogin = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     state.processingAction = true;
-
     const em = $('l-email').value, p = $('l-pass').value;
-    if(!em || !p) {
+    if (!em || !p) {
       window.toast("Input missing");
       state.processingAction = false;
       return;
     }
-
     window.setLoading(true, "Signing In...");
     localStorage.removeItem(FLAG_LOGOUT);
-
-    const {error} = await db.auth.signInWithPassword({email:em, password:p});
-    if(error) {
+    const { error } = await db.auth.signInWithPassword({ email: em, password: p });
+    if (error) {
       window.toast(error.message);
       window.setLoading(false);
     }
@@ -957,33 +920,30 @@ export function startChatApp(customConfig = {}) {
 
   window.handleRegister = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     state.processingAction = true;
-
-    const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value;
-    if(!n || !em || p.length < 8) {
+    const n = $('r-name').value, em = $('r-email').value.trim().toLowerCase(), p = $('r-pass').value;
+    if (!n || !em || p.length < 8) {
       window.toast("Check inputs");
       state.processingAction = false;
       return;
     }
-
     window.setLoading(true, "Sending Code...");
     const [r, err] = await safeAwait(fetch(CONFIG.mailApi, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send", email: em })
     }));
-
-    if(r) {
-      if(r.status === 429) {
+    if (r) {
+      if (r.status === 429) {
         window.toast("Too many attempts. Wait a minute.");
         state.processingAction = false;
         window.setLoading(false);
         return;
       }
       const j = await r.json();
-      if(j.message === "Code sent") {
-        sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p}));
+      if (j.message === "Code sent") {
+        sessionStorage.setItem('temp_reg', JSON.stringify({ n, em, p }));
         window.nav('scr-verify');
         startVTimer();
         window.setLoading(false);
@@ -1000,11 +960,11 @@ export function startChatApp(customConfig = {}) {
 
   const startVTimer = () => {
     let left = CONFIG.verificationCodeExpiry;
-    if(state.vTimer) clearInterval(state.vTimer);
+    if (state.vTimer) clearInterval(state.vTimer);
     state.vTimer = setInterval(() => {
       left--;
       $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`;
-      if(left<=0) {
+      if (left <= 0) {
         clearInterval(state.vTimer);
         window.nav('scr-register');
       }
@@ -1013,39 +973,35 @@ export function startChatApp(customConfig = {}) {
 
   window.handleVerify = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     state.processingAction = true;
-
     const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg'));
-    if(!temp) {
+    if (!temp) {
       window.toast("Session expired");
       state.processingAction = false;
       return;
     }
-
     window.setLoading(true, "Verifying Code...");
     const r = await fetch(CONFIG.mailApi, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "verify", email: temp.em, code: code })
     });
-
-    if(r.status === 429) {
+    if (r.status === 429) {
       window.toast("Too many attempts.");
       state.processingAction = false;
       window.setLoading(false);
       return;
     }
-
     const j = await r.json();
-    if(j.message === "Verified") {
+    if (j.message === "Verified") {
       localStorage.removeItem(FLAG_LOGOUT);
       const { error } = await db.auth.signUp({
         email: temp.em,
         password: temp.p,
         options: { data: { full_name: temp.n } }
       });
-      if(error) {
+      if (error) {
         window.toast(error.message);
         window.setLoading(false);
       }
@@ -1058,17 +1014,14 @@ export function startChatApp(customConfig = {}) {
 
   window.handleGuestLogin = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
-
+    if (state.processingAction) return;
     const nameInput = $('g-name');
     let name = nameInput.value.trim();
     const lockedName = localStorage.getItem(FLAG_GUEST_NAME);
-
     if (lockedName) name = lockedName;
     else {
       if (!name) return window.toast("Please enter a name.");
     }
-
     if (!lockedName) {
       window.openHub();
       window.showOverlayView('guest-warn');
@@ -1080,7 +1033,7 @@ export function startChatApp(customConfig = {}) {
   window.confirmGuestLoginAction = async (e) => {
     if (!e || !e.isTrusted) return;
     const name = $('g-name').value.trim();
-    if(!name) return;
+    if (!name) return;
     await performGuestLogin(name);
   };
 
@@ -1088,7 +1041,6 @@ export function startChatApp(customConfig = {}) {
     window.closeOverlay();
     window.setLoading(true, "Initializing...");
     localStorage.removeItem(FLAG_LOGOUT);
-
     const { data: { user: existingUser } } = await db.auth.getUser();
     if (existingUser && existingUser.is_anonymous) {
       const currentName = existingUser.user_metadata?.full_name;
@@ -1109,14 +1061,12 @@ export function startChatApp(customConfig = {}) {
       window.setLoading(false);
       return;
     }
-
     const { data, error } = await db.auth.signInAnonymously();
     if (error) {
       window.toast(error.message);
       window.setLoading(false);
       return;
     }
-
     if (data.user) {
       await db.auth.updateUser({ data: { full_name: name } });
       await db.from('profiles').upsert({ id: data.user.id, full_name: name, is_guest: true });
@@ -1134,44 +1084,39 @@ export function startChatApp(customConfig = {}) {
 
   window.handleCreate = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.serverFull) return window.toast("Network full");
-    if(state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
-    if(state.processingAction) return;
+    if (state.serverFull) return window.toast("Network full");
+    if (state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
+    if (state.processingAction) return;
     state.processingAction = true;
-
-    const n=$('c-name').value, p=$('c-pass').value, isP=$('c-private').checked;
-    if(isP && !p) {
+    const n = $('c-name').value, p = $('c-pass').value, isP = $('c-private').checked;
+    if (isP && !p) {
       window.toast("Private rooms require a password");
       state.processingAction = false;
       return;
     }
-    if(!n) {
+    if (!n) {
       window.toast("Name required");
       state.processingAction = false;
       return;
     }
-
     window.setLoading(true, "Deploying Room...");
     const roomSalt = generateSalt();
-
-    const {data, error} = await db.from('rooms').insert([{
-      name:n,
-      has_password:!!p,
-      is_private:isP,
-      salt:roomSalt,
-      created_by:state.user.id
+    const { data, error } = await db.from('rooms').insert([{
+      name: n,
+      has_password: !!p,
+      is_private: isP,
+      salt: roomSalt,
+      created_by: state.user.id
     }]).select();
-
-    if(error) {
+    if (error) {
       window.toast("Error: " + error.message);
       state.processingAction = false;
       window.setLoading(false);
       return;
     }
-
-    if(data && data.length > 0) {
+    if (data && data.length > 0) {
       const newRoom = data[0];
-      if(p) {
+      if (p) {
         const accessHash = await sha256(p + roomSalt);
         await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
       }
@@ -1180,7 +1125,6 @@ export function startChatApp(customConfig = {}) {
       $('s-id').innerText = newRoom.id;
       window.nav('scr-success');
     }
-
     state.processingAction = false;
     window.setLoading(false);
   };
@@ -1189,28 +1133,24 @@ export function startChatApp(customConfig = {}) {
     if (!e || !e.isTrusted) return;
     const inputPass = $('gate-pass').value;
     const inputHash = await sha256(inputPass + state.pending.salt);
-
     window.setLoading(true, "Verifying Access...");
     const { data, error } = await db.rpc('verify_room_password', {
       p_room_id: state.pending.id,
       p_hash: inputHash
     });
     window.setLoading(false);
-
-    if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
+    if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
     else window.toast("Access Denied");
   };
 
   window.handleLogout = async (e) => {
     if (!e || !e.isTrusted) return;
     window.setLoading(true, "Switching Account...");
-
     await cleanupChannels();
     if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
     if (state.uptimeInterval) clearInterval(state.uptimeInterval);
     state.uptimeInterval = null;
     state.sessionStartTime = null;
-
     if (state.user && state.user.is_anonymous) {
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name);
@@ -1227,7 +1167,6 @@ export function startChatApp(customConfig = {}) {
       await db.auth.signOut();
       window.nav('scr-start');
     }
-
     window.setLoading(false);
   };
 
@@ -1259,16 +1198,16 @@ export function startChatApp(customConfig = {}) {
   document.addEventListener('touchend', e => {
     touchEndX = e.changedTouches[0].screenX;
     const active = document.querySelector('.screen.active');
-    if(!active) return;
+    if (!active) return;
     const diff = touchEndX - touchStartX;
-    if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left');
-    else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right');
+    if (active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left');
+    else if (active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right');
   }, false);
 
   window.addEventListener('online', () => {
     $('offline-screen').classList.remove('active');
     window.toast("Back online");
-    if(state.user && state.isMasterTab) initPresence(true);
+    if (state.user && state.isMasterTab) initPresence(true);
   });
 
   window.addEventListener('offline', () => {
@@ -1283,22 +1222,17 @@ export function startChatApp(customConfig = {}) {
       state.user = null;
       return;
     }
-
     state.user = ses?.user;
-
     const createBtn = $('icon-plus-lobby');
     const activeScreenId = document.querySelector('.screen.active')?.id;
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
-
     if (ev === 'SIGNED_IN') {
-      if(state.user) {
+      if (state.user) {
         localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-        if(state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
-
+        if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
         state.sessionStartTime = Date.now();
-        if(state.uptimeInterval) clearInterval(state.uptimeInterval);
+        if (state.uptimeInterval) clearInterval(state.uptimeInterval);
         state.uptimeInterval = setInterval(updateUptime, 1000);
-
         const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
         if (authScreens.includes(activeScreenId)) {
           window.nav('scr-lobby');
@@ -1307,7 +1241,6 @@ export function startChatApp(customConfig = {}) {
         }
       }
     }
-
     if (ev === 'SIGNED_OUT') {
       if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
       if (state.uptimeInterval) clearInterval(state.uptimeInterval);
@@ -1323,7 +1256,6 @@ export function startChatApp(customConfig = {}) {
 
   const init = async () => {
     if (!navigator.onLine) $('offline-screen').classList.add('active');
-
     if (localStorage.getItem(FLAG_LOGOUT) === 'true') {
       state.user = null;
       window.nav('scr-start');
@@ -1331,13 +1263,11 @@ export function startChatApp(customConfig = {}) {
       monitorConnection();
       return;
     }
-
     const { data: { session } } = await db.auth.getSession();
     if (session) {
       state.user = session.user;
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-      if(state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
-
+      if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
       const masterExists = await checkMaster();
       if (masterExists) {
         const overlay = $('block-overlay');
@@ -1350,14 +1280,12 @@ export function startChatApp(customConfig = {}) {
         window.nav('scr-lobby');
         window.loadRooms();
       }
-
       state.sessionStartTime = Date.now();
-      if(state.uptimeInterval) clearInterval(state.uptimeInterval);
+      if (state.uptimeInterval) clearInterval(state.uptimeInterval);
       state.uptimeInterval = setInterval(updateUptime, 1000);
     } else {
       $('guest-swipe-hint').style.display = 'flex';
     }
-
     lucide.createIcons();
     window.setLoading(false);
     monitorConnection();
