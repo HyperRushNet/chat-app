@@ -1133,5 +1133,3 @@ export function startChatApp(customConfig = {}) {
 
             init();
         }
-
-window.startChatApp = startChatApp;
