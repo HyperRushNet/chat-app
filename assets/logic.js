@@ -49,7 +49,8 @@ export function startChatApp(customConfig = {}) {
     currentRoomData: null,
     selectedAllowedUsers: [], 
     currentPickerContext: null,
-    lastLobbyRefresh: 0
+    lastLobbyRefresh: 0,
+    removePasswordFlag: false
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -1481,6 +1482,21 @@ export function startChatApp(customConfig = {}) {
     $('edit-room-private').checked = room.is_private;
     $('edit-room-pass').value = '';
     
+    const passStatusLabel = $('pass-status-label');
+    const removePassBtn = $('btn-remove-pass');
+    if (room.has_password) {
+        passStatusLabel.innerText = "Active";
+        passStatusLabel.style.color = "var(--success)";
+        $('edit-room-pass').placeholder = "Enter new to overwrite";
+        removePassBtn.style.display = 'block';
+    } else {
+        passStatusLabel.innerText = "Not Set";
+        passStatusLabel.style.color = "var(--text-mute)";
+        $('edit-room-pass').placeholder = "Set new password";
+        removePassBtn.style.display = 'none';
+    }
+    state.removePasswordFlag = false;
+    
     state.selectedAllowedUsers = [];
     
     const isEveryone = room.allowed_users.includes('*');
@@ -1500,6 +1516,25 @@ export function startChatApp(customConfig = {}) {
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
     window.setLoading(false);
+  };
+
+  window.prepareRemovePassword = () => {
+    state.removePasswordFlag = true;
+    $('pass-status-label').innerText = "Will be removed";
+    $('pass-status-label').style.color = "var(--danger)";
+    $('edit-room-pass').value = '';
+    $('edit-room-pass').disabled = true;
+    $('btn-remove-pass').innerText = "Undo Remove";
+    $('btn-remove-pass').onclick = window.undoRemovePassword;
+  };
+
+  window.undoRemovePassword = () => {
+    state.removePasswordFlag = false;
+    $('pass-status-label').innerText = "Active";
+    $('pass-status-label').style.color = "var(--success)";
+    $('edit-room-pass').disabled = false;
+    $('btn-remove-pass').innerText = "Remove Current Password";
+    $('btn-remove-pass').onclick = window.prepareRemovePassword;
   };
 
   window.saveRoomSettings = async (e) => {
@@ -1528,9 +1563,28 @@ export function startChatApp(customConfig = {}) {
       return;
     }
 
+    const room = state.currentRoomData;
+    const isChangingPass = newPass.length > 0;
+    const isRemovingPass = state.removePasswordFlag;
+    
+    if ((room.has_password && isRemovingPass) || (room.has_password && isChangingPass) || (!room.has_password && isChangingPass)) {
+        const confirmChange = confirm("Warning: Changing or removing the password will change the encryption key. Old messages will become unreadable. Continue?");
+        if (!confirmChange) {
+            state.processingAction = false;
+            return;
+        }
+    }
+
     window.setLoading(true, "Saving changes...");
     
     const updates = { name, is_private: isPrivate, allowed_users: allowedUsers };
+    
+    if (isRemovingPass) {
+        updates.has_password = false;
+    } else if (isChangingPass) {
+        updates.has_password = true;
+    }
+
     const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId);
 
     if (updateError) {
@@ -1540,14 +1594,16 @@ export function startChatApp(customConfig = {}) {
       return;
     }
 
-    if (newPass) {
+    if (isRemovingPass) {
+        await db.rpc('set_room_password', { p_room_id: state.currentRoomId, p_hash: null });
+        state.currentRoomData.has_password = false;
+    } else if (isChangingPass) {
       const roomSalt = state.currentRoomData.salt;
       const accessHash = await sha256(newPass + roomSalt);
       const { error: passError } = await db.rpc('set_room_password', { p_room_id: state.currentRoomId, p_hash: accessHash });
       if (passError) {
         window.toast("Failed to update password");
       } else {
-        await db.from('rooms').update({ has_password: true }).eq('id', state.currentRoomId);
         state.currentRoomData.has_password = true;
       }
     }
@@ -1559,6 +1615,37 @@ export function startChatApp(customConfig = {}) {
     window.toast("Room settings saved");
     window.closeOverlay();
     state.processingAction = false;
+    window.setLoading(false);
+  };
+
+  window.deleteRoom = async (e) => {
+    if (!e || !e.isTrusted) return;
+    if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) {
+        return window.toast("Unauthorized");
+    }
+
+    const confirm1 = confirm("Are you sure you want to delete this room? This cannot be undone.");
+    if (!confirm1) return;
+
+    const confirm2 = confirm("ALL MESSAGES WILL BE LOST PERMANENTLY. Proceed?");
+    if (!confirm2) return;
+
+    window.setLoading(true, "Deleting room...");
+    
+    const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId);
+    
+    if (error) {
+        window.toast("Failed to delete: " + error.message);
+        window.setLoading(false);
+        return;
+    }
+
+    window.toast("Room deleted");
+    state.currentRoomId = null;
+    state.currentRoomData = null;
+    window.closeOverlay();
+    window.nav('scr-lobby');
+    window.loadRooms();
     window.setLoading(false);
   };
 
