@@ -575,7 +575,7 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.inspectUser = async (uid) => {
-    if (!uid) return; // FIX: Prevent errors on undefined ID
+    if (!uid) return; 
     if (uid === state.user?.id) return window.prepareMyAccount();
     window.setLoading(true, "Fetching info...");
     const { data, error } = await db.from('profiles').select('id, full_name, updated_at, is_guest').eq('id', uid).single();
@@ -645,6 +645,7 @@ export function startChatApp(customConfig = {}) {
     await window.loadRooms();
   };
 
+  // OPTIMIZED: No longer loops through RPC calls. RLS handles visibility.
   window.loadRooms = async () => {
     if(!state.user) return;
     window.setLoading(true, "Fetching rooms...");
@@ -667,10 +668,9 @@ export function startChatApp(customConfig = {}) {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
     
+    // Simple string filter. Access control is done by SQL.
     const filtered = state.allRooms.filter(r => {
-        const matchSearch = r.name.toLowerCase().includes(q);
-        const isVisible = !r.is_private || r.created_by === state.user.id;
-        return matchSearch && isVisible;
+        return r.name.toLowerCase().includes(q);
     });
 
     if (filtered.length === 0) {
@@ -803,7 +803,7 @@ export function startChatApp(customConfig = {}) {
     }
   };
 
-  // FIX: Added filter to prevent undefined IDs
+  // FIX: Filter undefined IDs
   const fetchGuestStatuses = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     const uniqueIds = [...new Set(userIds)].filter(id => id); 
