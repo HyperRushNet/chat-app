@@ -1,6 +1,6 @@
 // scripts/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
 
-function startChatApp(customConfig = {}) {
+export function startChatApp(customConfig = {}) {
             const CONFIG = {
                 supabaseUrl: customConfig.supabaseUrl || "https://fahbqdajxnhswevdagdn.supabase.co",
                 supabaseKey: customConfig.supabaseKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhaGJxZGFqeG5oc3dldmRhZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NTEyODEsImV4cCI6MjA4NjEyNzI4MX0.UPgPxyaWBULjH4jL8UaSr6bJXTsFWWJRIYodHmXeVTI",
@@ -1131,3 +1131,5 @@ function startChatApp(customConfig = {}) {
 
             init();
         }
+
+window.startChatApp = startChatApp;
