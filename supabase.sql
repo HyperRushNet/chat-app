@@ -7,14 +7,12 @@ DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.room_passwords CASCADE;
 DROP TABLE IF EXISTS public.rooms CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
-
 CREATE TABLE public.profiles (
     id          uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name   text NOT NULL DEFAULT 'User',
     is_guest    boolean NOT NULL DEFAULT false,
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE TABLE public.rooms (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name          text NOT NULL,
@@ -25,12 +23,10 @@ CREATE TABLE public.rooms (
     allowed_users text[] NOT NULL DEFAULT '{*}',
     created_at    timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE TABLE public.room_passwords (
     room_id       uuid PRIMARY KEY REFERENCES public.rooms(id) ON DELETE CASCADE,
     password_hash text NOT NULL
 );
-
 CREATE TABLE public.messages (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id     uuid NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
@@ -39,31 +35,25 @@ CREATE TABLE public.messages (
     content     text NOT NULL,      
     created_at  timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE INDEX idx_messages_room_id_created_at ON public.messages(room_id, created_at DESC);
 CREATE INDEX idx_rooms_created_by ON public.rooms(created_by);
 CREATE INDEX idx_profiles_id ON public.profiles(id);
-
+CREATE INDEX idx_rooms_allowed_users ON public.rooms USING GIN (allowed_users);
 ALTER TABLE public.profiles        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rooms           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.room_passwords  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages        ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "profiles_insert_self" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "profiles_update_self" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
 CREATE POLICY "rooms_select_visible" ON public.rooms FOR SELECT USING (
-    NOT is_private 
-    OR auth.uid() = created_by 
-    OR (allowed_users @> ARRAY['*'])
+    auth.uid() = created_by 
+    OR (allowed_users @> ARRAY['*'] AND NOT is_private)
     OR (allowed_users @> ARRAY[auth.uid()::text])
 );
-
 CREATE POLICY "rooms_insert_non_guest" ON public.rooms FOR INSERT WITH CHECK (
     auth.role() = 'authenticated' AND (auth.jwt() ->> 'is_anonymous')::boolean IS NOT TRUE AND auth.uid() = created_by
 );
-
 CREATE POLICY "rooms_update_creator" ON public.rooms FOR UPDATE USING (auth.uid() = created_by);
 CREATE POLICY "rooms_delete_creator" ON public.rooms FOR DELETE USING (auth.uid() = created_by);
 
@@ -72,7 +62,6 @@ CREATE POLICY "messages_select_room" ON public.messages FOR SELECT USING (true);
 CREATE POLICY "messages_insert_authenticated" ON public.messages FOR INSERT WITH CHECK (
     auth.role() = 'authenticated' AND auth.uid() = user_id
 );
-
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN
     INSERT INTO public.profiles (id, full_name, is_guest, updated_at)
@@ -89,11 +78,9 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
     RETURN NEW;
 END;
  $$;
-
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT OR UPDATE OF raw_user_meta_data ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
 CREATE OR REPLACE FUNCTION public.set_room_password(p_room_id uuid, p_hash text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.rooms WHERE id = p_room_id AND created_by = auth.uid()) THEN
@@ -103,13 +90,11 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BE
     ON CONFLICT (room_id) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 END;
  $$;
-
 CREATE OR REPLACE FUNCTION public.verify_room_password(p_room_id uuid, p_hash text)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = public AS $$ BEGIN
     RETURN EXISTS (SELECT 1 FROM public.room_passwords WHERE room_id = p_room_id AND password_hash = p_hash);
 END;
  $$;
-
 CREATE OR REPLACE FUNCTION public.can_access_room(p_room_id uuid)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = public AS $$ DECLARE
     r_allowed text[];
@@ -122,5 +107,4 @@ BEGIN
     RETURN false;
 END;
  $$;
-
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
