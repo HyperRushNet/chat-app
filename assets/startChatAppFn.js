@@ -47,6 +47,8 @@ export function startChatApp(customConfig = {}) {
     isChatChannelReady: false,
     currentRoomAccessType: null,
     currentRoomData: null,
+    // New state for UI management
+    selectedAllowedUsers: [], 
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -367,6 +369,19 @@ export function startChatApp(customConfig = {}) {
     passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
   };
 
+  // --- NEW: Access Toggle Logic ---
+  window.handleAccessToggle = (isCreateScreen = true) => {
+    const prefix = isCreateScreen ? 'c' : 'edit-room';
+    const restrictedView = $(`${prefix}-restricted-view`);
+    const radioEveryone = $(`${prefix}-access-everyone`);
+    
+    if (radioEveryone.checked) {
+      restrictedView.style.display = 'none';
+    } else {
+      restrictedView.style.display = 'block';
+    }
+  };
+
   window.forceClaimMaster = () => {
     if (!state.isMasterTab) {
       state.isMasterTab = true;
@@ -583,11 +598,6 @@ export function startChatApp(customConfig = {}) {
     window.setLoading(false);
     if (error || !data) return window.toast("Room not found");
     state.pending = { id: data.id, name: data.name, salt: data.salt };
-    if (data.allowed_users.includes('*')) {
-      state.currentRoomAccessType = 'open';
-    } else {
-      state.currentRoomAccessType = 'restricted';
-    }
     state.currentRoomData = data;
     if (data.has_password) {
       window.nav('scr-gate');
@@ -611,11 +621,6 @@ export function startChatApp(customConfig = {}) {
     window.setLoading(false);
     if(data) {
       state.pending = { id: data.id, name: data.name, salt: data.salt };
-      if (data.allowed_users.includes('*')) {
-        state.currentRoomAccessType = 'open';
-      } else {
-        state.currentRoomAccessType = 'restricted';
-      }
       state.currentRoomData = data;
       if(data.has_password) {
         window.nav('scr-gate');
@@ -1097,7 +1102,7 @@ export function startChatApp(customConfig = {}) {
   const performGuestLogin = async (name) => {
     window.closeOverlay();
     window.setLoading(true, "Initializing...");
-    localStorage.removeItem(FLAG_LOGOUT); // Ensure no logout flag blocks us
+    localStorage.removeItem(FLAG_LOGOUT); 
     const { data: { user: existingUser } } = await db.auth.getUser();
     let finalUser;
     if (existingUser && existingUser.is_anonymous) {
@@ -1142,6 +1147,87 @@ export function startChatApp(customConfig = {}) {
     await initPresence(true);
   };
 
+  // --- NEW: User Search & Selection Logic ---
+  
+  // Renders the grid of selected users
+  const renderAllowedUsersGrid = (containerId) => {
+    const container = $(containerId);
+    if (!container) return;
+    
+    // Filter out current user from display
+    const displayUsers = state.selectedAllowedUsers.filter(u => u.id !== state.user.id);
+    
+    if (displayUsers.length === 0) {
+      container.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-state-sub">No users added yet.</div></div>`;
+      return;
+    }
+    
+    container.innerHTML = displayUsers.map(u => `
+      <div class="user-chip">
+        <div class="user-chip-info">
+            <span class="user-chip-name">${esc(u.name)}</span>
+            <span class="user-chip-id">${u.id.substring(0,8)}...</span>
+        </div>
+        <button class="user-chip-remove" onclick="window.removeAllowedUser('${u.id}', '${containerId}')">
+            <i data-lucide="x" class="w-14 h-14"></i>
+        </button>
+      </div>
+    `).join('');
+    lucide.createIcons();
+  };
+
+  window.removeAllowedUser = (id, containerId) => {
+    state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id);
+    renderAllowedUsersGrid(containerId);
+  };
+
+  // Search function used by both Create and Settings
+  window.searchUsersToAdd = async (inputId, resultsId, gridId) => {
+    const query = $(inputId).value.trim();
+    const resultsBox = $(resultsId);
+    resultsBox.innerHTML = '';
+    
+    if (query.length < 2) return;
+
+    const { data, error } = await db
+      .from('profiles')
+      .select('id, full_name')
+      .or(`full_name.ilike.%${query}%,id.eq.${query}`) // Search name or ID
+      .limit(5);
+
+    if (error || !data) return;
+
+    // Filter out already selected users and current user
+    const existingIds = state.selectedAllowedUsers.map(u => u.id);
+    const filtered = data.filter(u => !existingIds.includes(u.id) && u.id !== state.user.id);
+
+    if(filtered.length === 0) {
+        resultsBox.innerHTML = `<div class="search-result-item" style="opacity:0.5">No users found</div>`;
+        return;
+    }
+
+    resultsBox.innerHTML = filtered.map(u => `
+      <div class="search-result-item" onclick="window.addAllowedUser('${u.id}', '${esc(u.full_name)}', '${resultsId}', '${gridId}')">
+        <i data-lucide="user" class="w-14 h-14"></i>
+        <div class="search-result-info">
+            <span class="search-result-name">${esc(u.full_name)}</span>
+            <span class="search-result-id">${u.id.substring(0,12)}...</span>
+        </div>
+        <i data-lucide="plus" class="w-14 h-14"></i>
+      </div>
+    `).join('');
+    lucide.createIcons();
+  };
+
+  window.addAllowedUser = (id, name, resultsId, gridId) => {
+    // Check duplicate
+    if (state.selectedAllowedUsers.find(u => u.id === id)) return;
+    
+    state.selectedAllowedUsers.push({ id, name });
+    $(resultsId).innerHTML = ''; // Clear search results
+    renderAllowedUsersGrid(gridId);
+  };
+
   window.handleCreate = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.serverFull) return window.toast("Network full");
@@ -1151,7 +1237,23 @@ export function startChatApp(customConfig = {}) {
     const n = $('c-name').value.trim();
     const p = $('c-pass').value;
     const isP = $('c-private').checked;
-    const allowedStr = $('c-allowed').value.trim();
+    
+    // Determine access type
+    const isEveryone = $('c-access-everyone').checked;
+    let allowedUsers = ['*'];
+    
+    if (!isEveryone) {
+        // Extract IDs from state
+        allowedUsers = state.selectedAllowedUsers.map(u => u.id);
+        // Add creator
+        if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
+        if (allowedUsers.length === 0) {
+            window.toast("Please select at least one user");
+            state.processingAction = false;
+            return;
+        }
+    }
+
     if(isP && !p) {
       window.toast("Private rooms require a password");
       state.processingAction = false;
@@ -1162,20 +1264,7 @@ export function startChatApp(customConfig = {}) {
       state.processingAction = false;
       return;
     }
-    let allowedUsers = ['*'];
-    if (allowedStr) {
-      if (allowedStr.trim() === '*') {
-        allowedUsers = ['*'];
-      } else {
-        allowedUsers = allowedStr
-          .split(',')
-          .map(s => s.trim())
-          .filter(s => s.length > 0);
-        if (!allowedUsers.includes(state.user.id)) {
-          allowedUsers.push(state.user.id);
-        }
-      }
-    }
+
     window.setLoading(true, "Deploying Room...");
     const roomSalt = generateSalt();
     const {data, error} = await db.from('rooms').insert([{
@@ -1221,7 +1310,6 @@ export function startChatApp(customConfig = {}) {
     else window.toast("Access Denied");
   };
 
-  // MODIFIED LOGOUT FOR GUEST PERSISTENCE
   window.handleLogout = async (e) => {
     if (!e || !e.isTrusted) return;
     window.setLoading(true, "Switching Account...");
@@ -1233,18 +1321,13 @@ export function startChatApp(customConfig = {}) {
     if (state.chatChannel) state.chatChannel.unsubscribe();
     
     if (state.user && state.user.is_anonymous) {
-      // GUEST: Save ID/Name, DO NOT SIGN OUT, DO NOT SET LOGOUT FLAG
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name);
-      state.user = null; // Clear memory
+      state.user = null; 
       state.isMasterTab = false;
-      // We do NOT set FLAG_LOGOUT. This ensures the session restores on reload.
-      // We do NOT call db.auth.signOut(). This keeps the Supabase session alive in browser storage.
-      
       window.nav('scr-start');
       window.toast("Guest session saved. Refresh to restore.");
     } else {
-      // NORMAL USER: Sign out completely
       localStorage.setItem(FLAG_LOGOUT, 'true');
       state.user = null;
       localStorage.removeItem(FLAG_GUEST_ID);
@@ -1305,8 +1388,6 @@ export function startChatApp(customConfig = {}) {
     const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
     const hasGuestId = localStorage.getItem(FLAG_GUEST_ID);
     
-    // If we have a guest ID stored, we should ignore the logout flag
-    // because we want to restore that specific guest session.
     if (isFlaggedLogout && hasGuestId) {
        localStorage.removeItem(FLAG_LOGOUT);
     }
@@ -1336,17 +1417,12 @@ export function startChatApp(customConfig = {}) {
       }
     }
     if (ev === 'SIGNED_OUT') {
-      // If signed out, but we have guest ID, try to silent login?
-      // Supabase client handles persistence, but SIGNED_OUT event means session is gone.
-      // The logic in handleLogout prevents signOut for guests, so this should only happen on token expiry.
-      // For now, just clean up.
       if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
       if (state.uptimeInterval) clearInterval(state.uptimeInterval);
       state.uptimeInterval = null;
       state.sessionStartTime = null;
       if (state.presenceChannel) state.presenceChannel.unsubscribe();
       if (state.chatChannel) state.chatChannel.unsubscribe();
-      // Only clear storage if forced
       if (!hasGuestId) {
         localStorage.removeItem(FLAG_GUEST_ID);
         localStorage.removeItem(FLAG_GUEST_NAME);
@@ -1365,8 +1441,28 @@ export function startChatApp(customConfig = {}) {
     
     $('edit-room-name').value = room.name;
     $('edit-room-private').checked = room.is_private;
-    $('edit-room-allowed').value = room.allowed_users.includes('*') ? '*' : room.allowed_users.join(', ');
     $('edit-room-pass').value = '';
+    
+    // Handle Access UI
+    const isEveryone = room.allowed_users.includes('*');
+    if (isEveryone) {
+        $('edit-room-access-everyone').checked = true;
+        $('edit-room-restricted-view').style.display = 'none';
+        state.selectedAllowedUsers = [];
+    } else {
+        $('edit-room-access-selected').checked = true;
+        $('edit-room-restricted-view').style.display = 'block';
+        
+        // Fetch names for IDs
+        const ids = room.allowed_users;
+        const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
+        state.selectedAllowedUsers = ids.map(id => {
+            const p = profiles?.find(pro => pro.id === id);
+            return { id: id, name: p?.full_name || 'Unknown' };
+        });
+    }
+    
+    renderAllowedUsersGrid('edit-room-users-grid');
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
@@ -1379,8 +1475,8 @@ export function startChatApp(customConfig = {}) {
     state.processingAction = true;
     const name = $('edit-room-name').value.trim();
     const isPrivate = $('edit-room-private').checked;
-    const allowedStr = $('edit-room-allowed').value.trim();
     const newPass = $('edit-room-pass').value;
+    const isEveryone = $('edit-room-access-everyone').checked;
 
     if (!name) {
       window.toast("Room name is required");
@@ -1389,13 +1485,14 @@ export function startChatApp(customConfig = {}) {
     }
 
     let allowedUsers = ['*'];
-    if (allowedStr) {
-      if (allowedStr === '*') {
-        allowedUsers = ['*'];
-      } else {
-        allowedUsers = allowedStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (!isEveryone) {
+        allowedUsers = state.selectedAllowedUsers.map(u => u.id);
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
-      }
+        if (allowedUsers.length === 0) {
+             window.toast("Select at least one user");
+             state.processingAction = false;
+             return;
+        }
     }
 
     window.setLoading(true, "Saving changes...");
@@ -1438,7 +1535,6 @@ export function startChatApp(customConfig = {}) {
       return;
     }
     
-    // MODIFIED: If guest ID exists, force clear logout flag to allow session restore
     if (localStorage.getItem(FLAG_GUEST_ID)) {
         localStorage.removeItem(FLAG_LOGOUT);
     }
