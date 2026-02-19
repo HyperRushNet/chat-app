@@ -47,8 +47,8 @@ export function startChatApp(customConfig = {}) {
     isChatChannelReady: false,
     currentRoomAccessType: null,
     currentRoomData: null,
-    selectedAllowedUsers: [], // Stores {id, name}
-    currentPickerContext: null, // 'c' or 'edit-room'
+    selectedAllowedUsers: [], 
+    currentPickerContext: null,
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -356,9 +356,8 @@ export function startChatApp(customConfig = {}) {
     passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
   };
 
-  // --- NEW: Access Toggle & Manager Logic ---
+  // --- Access Logic ---
   
-  // Toggles between Everyone and Specific
   window.handleAccessToggle = (prefix, type) => {
     const btnEveryone = $(`${prefix}-access-everyone`);
     const btnSpecific = $(`${prefix}-access-specific`);
@@ -367,31 +366,31 @@ export function startChatApp(customConfig = {}) {
     if (type === 'everyone') {
       btnEveryone.classList.add('active');
       btnSpecific.classList.remove('active');
-      summaryEl.innerHTML = `<span class="c-main">Everyone can join</span>`;
+      summaryEl.innerHTML = `<span class="c-main">Everyone can join</span><i data-lucide="globe" class="w-16 h-16"></i>`;
       state.selectedAllowedUsers = []; // Clear selection
     } else {
       btnEveryone.classList.remove('active');
       btnSpecific.classList.add('active');
       updateAccessSummary(prefix);
     }
+    lucide.createIcons();
   };
 
-  // Updates the text showing how many users are selected
   const updateAccessSummary = (prefix) => {
     const summaryEl = $(`${prefix}-access-summary`);
     const count = state.selectedAllowedUsers.length;
     if (count === 0) {
-      summaryEl.innerHTML = `<span class="c-danger">No users selected</span>`;
+      summaryEl.innerHTML = `<span class="c-danger">No users selected</span><i data-lucide="users" class="w-16 h-16"></i>`;
     } else {
-      summaryEl.innerHTML = `<span class="c-accent">${count} user${count > 1 ? 's' : ''} selected</span>`;
+      summaryEl.innerHTML = `<span class="c-accent">${count} user${count > 1 ? 's' : ''} selected</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
     }
+    lucide.createIcons();
   };
 
-  // Opens the User Picker Modal
   window.openAccessManager = async (prefix) => {
     state.currentPickerContext = prefix;
     
-    // If editing, we might need to load names for existing IDs if not already loaded
+    // Load logic (same as before)
     if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) {
         const ids = state.currentRoomData.allowed_users;
         if (!ids.includes('*')) {
@@ -408,35 +407,34 @@ export function startChatApp(customConfig = {}) {
     $('overlay-container').classList.add('active');
     window.showOverlayView('access-manager');
     
-    // Clear search
-    $('picker-search-input').value = '';
-    $('picker-search-results').innerHTML = '';
-    $('picker-search-input').focus();
+    $('picker-id-input').value = '';
+    $('picker-id-input').focus();
   };
 
   window.closeAccessManager = () => {
-    window.showOverlayView(state.currentPickerContext === 'c' ? 'hub' : 'room-settings'); // fallback, though usually close is enough
     window.closeOverlay();
     updateAccessSummary(state.currentPickerContext);
   };
 
-  // Renders the list inside the picker
   const renderPickerSelectedUsers = () => {
     const container = $('picker-selected-list');
-    // Filter out current user for display, but keep in state
-    const displayUsers = state.selectedAllowedUsers.filter(u => u.id !== state.user.id);
+    // Show ALL users including self
+    const displayUsers = state.selectedAllowedUsers;
     
     if (displayUsers.length === 0) {
       container.innerHTML = `<div class="picker-empty">No users added yet.</div>`;
+      $('picker-count').innerText = '0';
       return;
     }
+    
+    $('picker-count').innerText = displayUsers.length;
     
     container.innerHTML = displayUsers.map(u => `
       <div class="picker-user-card">
         <div class="picker-user-info">
             <div class="picker-user-avatar">${u.name.charAt(0)}</div>
             <div class="picker-user-text">
-                <span class="picker-user-name">${esc(u.name)}</span>
+                <span class="picker-user-name">${esc(u.name)} ${u.id === state.user.id ? '<span class="c-mute">(You)</span>' : ''}</span>
                 <span class="picker-user-id">${u.id}</span>
             </div>
         </div>
@@ -453,54 +451,27 @@ export function startChatApp(customConfig = {}) {
     renderPickerSelectedUsers();
   };
 
-  // Search logic
-  window.searchPickerUsers = async (query) => {
-    const resultsBox = $('picker-search-results');
-    if (query.length < 2) {
-        resultsBox.innerHTML = '';
-        return;
+  // NEW: Add by ID button logic
+  window.addUserById = async () => {
+    const input = $('picker-id-input');
+    const id = input.value.trim();
+    if (!id) return window.toast("Please enter an ID");
+
+    if (state.selectedAllowedUsers.find(u => u.id === id)) {
+        return window.toast("User already added");
     }
 
-    // Search STRICTLY by ID (ilike allows partial match)
-    const { data, error } = await db
-      .from('profiles')
-      .select('id, full_name')
-      .ilike('id', `%${query}%`)
-      .limit(5);
+    window.setLoading(true, "Fetching user...");
+    const { data, error } = await db.from('profiles').select('id, full_name').eq('id', id).single();
+    window.setLoading(false);
 
-    if (error || !data) return;
+    if (error || !data) return window.toast("User ID not found");
 
-    const existingIds = state.selectedAllowedUsers.map(u => u.id);
-    const filtered = data.filter(u => !existingIds.includes(u.id) && u.id !== state.user.id);
-
-    if(filtered.length === 0) {
-        resultsBox.innerHTML = `<div class="picker-search-empty">No users found by that ID</div>`;
-        return;
-    }
-
-    resultsBox.innerHTML = filtered.map(u => `
-      <div class="picker-result-card" onclick="window.addPickerUser('${u.id}', '${esc(u.full_name)}')">
-        <div class="picker-user-info">
-            <div class="picker-user-avatar">${u.full_name.charAt(0)}</div>
-            <div class="picker-user-text">
-                <span class="picker-user-name">${esc(u.full_name)}</span>
-                <span class="picker-user-id">${u.id}</span>
-            </div>
-        </div>
-        <button class="picker-add-btn"><i data-lucide="plus" class="w-16 h-16"></i></button>
-      </div>
-    `).join('');
-    lucide.createIcons();
-  };
-
-  window.addPickerUser = (id, name) => {
-    if (state.selectedAllowedUsers.find(u => u.id === id)) return;
-    state.selectedAllowedUsers.push({ id, name });
-    $('picker-search-results').innerHTML = '';
-    $('picker-search-input').value = '';
+    state.selectedAllowedUsers.push({ id: data.id, name: data.full_name });
     renderPickerSelectedUsers();
+    input.value = '';
+    window.toast("User added");
   };
-
 
   window.forceClaimMaster = () => {
     if (!state.isMasterTab) {
@@ -1282,6 +1253,7 @@ export function startChatApp(customConfig = {}) {
     
     if (!isEveryone) {
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
+        // Ensure creator is in the list
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
         if (allowedUsers.length === 0) {
              window.toast("Select at least one user");
@@ -1327,7 +1299,6 @@ export function startChatApp(customConfig = {}) {
       state.lastCreatedPass = p;
       $('s-id').innerText = newRoom.id;
       window.nav('scr-success');
-      // Reset state for next create
       state.selectedAllowedUsers = [];
     }
     state.processingAction = false;
@@ -1481,7 +1452,6 @@ export function startChatApp(customConfig = {}) {
     $('edit-room-private').checked = room.is_private;
     $('edit-room-pass').value = '';
     
-    // Reset selection first
     state.selectedAllowedUsers = [];
     
     const isEveryone = room.allowed_users.includes('*');
@@ -1489,7 +1459,6 @@ export function startChatApp(customConfig = {}) {
         window.handleAccessToggle('edit-room', 'everyone');
     } else {
         window.handleAccessToggle('edit-room', 'specific');
-        // Load users
         const ids = room.allowed_users;
         const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
         state.selectedAllowedUsers = ids.map(id => {
