@@ -556,7 +556,8 @@ export function startChatApp(customConfig = {}) {
     let t = esc(text);
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     t = t.replace(urlRegex, (url) => {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${url}</a>`;
+      const safeUrl = url.replace(/[<>"']/g, '');
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${safeUrl}</a>`;
     });
     return t;
   };
@@ -1000,10 +1001,10 @@ export function startChatApp(customConfig = {}) {
       finalUser = refreshed.data.session?.user || finalUser;
     }
     await db.auth.updateUser({ data: { full_name: name } });
-    await db.from('profiles').upsert({ 
-      id: finalUser.id, 
-      full_name: name, 
-      is_guest: true 
+    await db.from('profiles').upsert({
+      id: finalUser.id,
+      full_name: name,
+      is_guest: true
     });
     state.user = finalUser;
     state.user.user_metadata = state.user.user_metadata || {};
