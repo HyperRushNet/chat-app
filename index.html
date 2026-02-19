@@ -44,9 +44,10 @@
         }
         .picker-user-card:last-child { border-bottom: none; }
         .picker-user-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+        /* FIX: Added colon for correct CSS syntax */
         .picker-user-avatar {
             width: 36px; height: 36px; border-radius: 50%; background: var(--accent);
-            color: #fff; display: flex; align-items: center; justify-content center;
+            color: #fff; display: flex; align-items: center; justify-content: center;
             font-weight: 800; font-size: 14px; flex-shrink: 0;
         }
         .picker-user-text { display: flex; flex-direction: column; min-width: 0; }
@@ -267,7 +268,6 @@
         <div id="scr-lobby" class="screen">
             <div class="header">
                 <div class="flex-aic-gap10-min0-flex1">
-                    <!-- ADDED REFRESH LOGIC TO TITLE -->
                     <h1 class="title fs-22 m-0" style="cursor:pointer" onclick="window.refreshLobby()">Rooms</h1>
                     <span class="online-indicator p-2-8 fs-10"><div class="dot"></div><span class="live-count">--</span></span>
                 </div>
