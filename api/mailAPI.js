@@ -1,12 +1,9 @@
+// Vercel mailAPI // GH: HyperRushNet | MIT License | 2026
 /*
- * HyperRush Network - GH: HyperRushNet
- * MIT License - 2026
- * api/mailAPI.js
- * 
- * Environment Variables needed in Vercel:
+ *___Environment Variables needed in Vercel___
  * - FRONTEND_URL: Your site domain (e.g. https://hrn.chat). Leave empty for '*' (public).
  * - GAS_URL: (Optional) Google Apps Script Web App URL.
- */
+*/
 
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
