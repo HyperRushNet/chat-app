@@ -1,3 +1,4 @@
+-- Supabase SQL -- GH: HyperRushNet | MIT License | 2026
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user CASCADE;
 DROP FUNCTION IF EXISTS public.verify_room_password CASCADE;
