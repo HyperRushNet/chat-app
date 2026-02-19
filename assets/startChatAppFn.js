@@ -667,10 +667,21 @@ export function startChatApp(customConfig = {}) {
   window.filterRooms = () => {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
-    
-    // Simple string filter. Access control is done by SQL.
+    const uid = state.user?.id;
+
     const filtered = state.allRooms.filter(r => {
-        return r.name.toLowerCase().includes(q);
+        // 1. Match search query
+        const matchSearch = r.name.toLowerCase().includes(q);
+        if (!matchSearch) return false;
+
+        // 2. Visibility Logic for Lobby List
+        // If private, only show to owner in the list.
+        // Others (who might have access via allowed_users due to RLS) must use Direct ID.
+        if (r.is_private && r.created_by !== uid) {
+            return false;
+        }
+
+        return true;
     });
 
     if (filtered.length === 0) {
