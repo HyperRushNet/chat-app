@@ -1,3 +1,4 @@
+// Google Apps Script code // GH: HyperRushNet | MIT License | 2026
 const CACHE_EXPIRATION = 10 * 60;
 const RATE_LIMIT_SECONDS = 60; 
 
