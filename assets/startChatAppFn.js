@@ -1,4 +1,4 @@
-// scripts/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
+// assets/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
