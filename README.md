@@ -76,7 +76,7 @@ This project is not positioned as a replacement for enterprise-grade audited sys
 
 ---
 
-## Screenshots
+## Screenshots (v1.0.1)
 
 <p align="left">
   <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp">
