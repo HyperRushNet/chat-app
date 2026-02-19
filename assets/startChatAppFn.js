@@ -357,7 +357,6 @@ export function startChatApp(customConfig = {}) {
     passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
   };
 
-   --- Access Logic ---
   
   window.handleAccessToggle = (prefix, type) => {
     const btnEveryone = $(`${prefix}-access-everyone`);
@@ -671,6 +670,7 @@ export function startChatApp(customConfig = {}) {
     const filtered = state.allRooms.filter(r => {
         const matchSearch = r.name.toLowerCase().includes(q);
         if (!matchSearch) return false;
+
 
         if (r.is_private && r.created_by !== uid) {
             return false;
