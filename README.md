@@ -1,4 +1,4 @@
-# HRN Chat 2026 - v1.0.1 - Security Update
+# HRN Chat 2026 - v1.0.2 - Security & UI Update
 
 A high-security, real-time messaging interface built with modern web technologies. This project focuses on privacy, end-to-end encryption, and a seamless user experience.
 
