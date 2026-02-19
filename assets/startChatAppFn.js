@@ -975,43 +975,45 @@ export function startChatApp(customConfig = {}) {
     window.setLoading(true, "Initializing...");
     localStorage.removeItem(FLAG_LOGOUT);
     const { data: { user: existingUser } } = await db.auth.getUser();
+    let finalUser;
     if (existingUser && existingUser.is_anonymous) {
       const currentName = existingUser.user_metadata?.full_name;
       if (!currentName || currentName !== name) {
         await db.auth.updateUser({ data: { full_name: name } });
-        state.user = existingUser;
-        state.user.user_metadata = state.user.user_metadata || {};
-        state.user.user_metadata.full_name = name;
+        finalUser = existingUser;
+        finalUser.user_metadata = finalUser.user_metadata || {};
+        finalUser.user_metadata.full_name = name;
       } else {
-        state.user = existingUser;
+        finalUser = existingUser;
       }
-      await db.from('profiles').upsert({ id: state.user.id, full_name: name, is_guest: true });
-      localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-      localStorage.setItem(FLAG_GUEST_NAME, name);
-      window.nav('scr-lobby');
-      window.loadRooms();
-      window.forceClaimMaster();
-      window.setLoading(false);
-      return;
+    } else {
+      const { data, error } = await db.auth.signInAnonymously();
+      if (error) {
+        window.toast(error.message || "Anonymous login failed");
+        window.setLoading(false);
+        return;
+      }
+      finalUser = data.user;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await db.auth.refreshSession();
+      const refreshed = await db.auth.getSession();
+      finalUser = refreshed.data.session?.user || finalUser;
     }
-    const { data, error } = await db.auth.signInAnonymously();
-    if (error) {
-      window.toast(error.message);
-      window.setLoading(false);
-      return;
-    }
-    if (data.user) {
-      await db.auth.updateUser({ data: { full_name: name } });
-      await db.from('profiles').upsert({ id: data.user.id, full_name: name, is_guest: true });
-      state.user = data.user;
-      state.user.user_metadata = state.user.user_metadata || {};
-      state.user.user_metadata.full_name = name;
-      localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-      localStorage.setItem(FLAG_GUEST_NAME, name);
-      window.nav('scr-lobby');
-      window.loadRooms();
-      window.forceClaimMaster();
-    }
+    await db.auth.updateUser({ data: { full_name: name } });
+    await db.from('profiles').upsert({ 
+      id: finalUser.id, 
+      full_name: name, 
+      is_guest: true 
+    });
+    state.user = finalUser;
+    state.user.user_metadata = state.user.user_metadata || {};
+    state.user.user_metadata.full_name = name;
+    localStorage.setItem(FLAG_GUEST_ID, state.user.id);
+    localStorage.setItem(FLAG_GUEST_NAME, name);
+    window.nav('scr-lobby');
+    window.loadRooms();
+    await new Promise(resolve => setTimeout(resolve, 800));
+    window.forceClaimMaster();
     window.setLoading(false);
   };
   window.handleCreate = async (e) => {
