@@ -80,12 +80,12 @@ export function startChatApp(customConfig = {}) {
   };
 
   const updateUptime = () => {
-    if(!state.sessionStartTime) return;
+    if (!state.sessionStartTime) return;
     const diff = Math.floor((Date.now() - state.sessionStartTime) / 1000);
     const mins = Math.floor(diff / 60).toString().padStart(2, '0');
     const secs = (diff % 60).toString().padStart(2, '0');
     const el = $('hub-uptime');
-    if(el) el.innerText = `${mins}:${secs}`;
+    if (el) el.innerText = `${mins}:${secs}`;
   };
 
   const processToastQueue = () => {
@@ -109,7 +109,7 @@ export function startChatApp(customConfig = {}) {
       if (t.parentNode) {
         t.style.opacity = '0';
         setTimeout(() => {
-          if(t.parentNode) t.remove();
+          if (t.parentNode) t.remove();
           toastVisible = false;
           processToastQueue();
         }, 400);
@@ -125,9 +125,9 @@ export function startChatApp(customConfig = {}) {
   window.setLoading = (s, text = null) => {
     const loader = $('loader-overlay');
     const loaderText = $('loader-text');
-    if(s) loader.classList.add('active');
+    if (s) loader.classList.add('active');
     else loader.classList.remove('active');
-    if(text) loaderText.innerText = text;
+    if (text) loaderText.innerText = text;
     else loaderText.innerText = "Loading...";
   };
 
@@ -224,7 +224,7 @@ export function startChatApp(customConfig = {}) {
 
   const deriveKey = (pass, salt) => new Promise((resolve, reject) => {
     pendingCallbacks['keyDerived'] = (data) => {
-      if(data.success) resolve(true);
+      if (data.success) resolve(true);
       else reject("Key derivation failed");
     };
     cryptoWorker.postMessage({ type: 'deriveKey', payload: { password: pass, salt: salt } });
@@ -232,7 +232,7 @@ export function startChatApp(customConfig = {}) {
 
   const encryptMessage = (text) => new Promise((resolve, reject) => {
     pendingCallbacks['encrypted'] = (data) => {
-      if(data.result) resolve(data.result);
+      if (data.result) resolve(data.result);
       else reject("Encryption failed");
     };
     const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
@@ -241,12 +241,12 @@ export function startChatApp(customConfig = {}) {
 
   const cleanupChannels = async () => {
     if (state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+      try { await db.removeChannel(state.presenceChannel); } catch {}
       state.presenceChannel = null;
       state.isPresenceSubscribed = false;
     }
     if (state.chatChannel) {
-      try { await db.removeChannel(state.chatChannel); } catch(e) {}
+      try { await db.removeChannel(state.chatChannel); } catch {}
       state.chatChannel = null;
     }
     state.isChatChannelReady = false;
@@ -262,7 +262,7 @@ export function startChatApp(customConfig = {}) {
       updateOnlineDisplay(uniqueUserIds.size);
 
       if (uniqueUserIds.size > CONFIG.maxUsers) {
-        if(!state.serverFull) {
+        if (!state.serverFull) {
           state.serverFull = true;
           $('capacity-overlay').classList.add('active');
           await cleanupChannels();
@@ -278,17 +278,22 @@ export function startChatApp(customConfig = {}) {
     const now = Date.now();
     if (!force && state.isConnecting) return;
     if (!force && (now - state.lastReconnectAttempt < CONFIG.reconnectDebounceMs)) return;
+
     state.lastReconnectAttempt = now;
     state.isConnecting = true;
     state.isPresenceSubscribed = false;
-    if(state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch(e) {}
+
+    if (state.presenceChannel) {
+      try { await db.removeChannel(state.presenceChannel); } catch {}
     }
+
     updateOnlineDisplay(null);
+
     const myId = state.user.id;
     state.presenceChannel = db.channel('online-users', {
       config: { presence: { key: myId } }
     });
+
     state.presenceChannel
       .on('presence', { event: 'sync' }, () => {
         if (!state.presenceChannel) return;
@@ -299,26 +304,30 @@ export function startChatApp(customConfig = {}) {
           if (!state.presenceChannel) return;
           state.isPresenceSubscribed = true;
           state.isConnecting = false;
-          queryOnlineCountImmediately();
+          await queryOnlineCountImmediately();
           await state.presenceChannel.track({
             user_id: myId,
             online_at: new Date().toISOString()
           });
-          queryOnlineCountImmediately();
+          await queryOnlineCountImmediately();
+
           if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
           state.heartbeatInterval = setInterval(async () => {
             if (state.presenceChannel && state.isMasterTab && !state.serverFull) {
-              await state.presenceChannel.track({
-                user_id: myId,
-                online_at: new Date().toISOString()
-              });
+              try {
+                await state.presenceChannel.track({
+                  user_id: myId,
+                  online_at: new Date().toISOString()
+                });
+              } catch {}
             }
           }, CONFIG.presenceHeartbeatMs);
+
           setTimeout(() => {
-            if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.serverFull) {
+            if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.serverFull && !state.isConnecting) {
               queryOnlineCountImmediately();
             }
-          }, 2000);
+          }, 1800);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           state.isPresenceSubscribed = false;
           state.isConnecting = false;
@@ -335,13 +344,17 @@ export function startChatApp(customConfig = {}) {
         updateOnlineDisplay(null);
         return;
       }
+
       $('offline-screen').classList.remove('active');
+
       if (!state.user || !state.isMasterTab) return;
-      if (state.currentRoomId) return;
+
       const wsState = db.realtime.connectionState();
+
       if ((wsState === 'disconnected' || wsState === 'stopped') && !state.isConnecting) {
         initPresence(true);
       }
+
       if (state.lastKnownOnlineCount === null &&
           state.isPresenceSubscribed &&
           !state.isConnecting &&
@@ -448,17 +461,17 @@ export function startChatApp(customConfig = {}) {
 
   window.showOverlayView = (viewId) => {
     const panel = document.querySelector('.panel-card');
-    if(!panel) return;
+    if (!panel) return;
     panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
     const target = $(`view-${viewId}`);
-    if(target) {
+    if (target) {
       target.classList.add('active');
       lucide.createIcons();
     }
   };
 
   window.prepareMyAccount = () => {
-    if(!state.user) return;
+    if (!state.user) return;
     const isGuest = state.user.is_anonymous;
     $('my-acc-name').innerText = state.user.user_metadata?.full_name || "User";
     $('my-acc-id').innerText = state.user.id;
@@ -495,12 +508,12 @@ export function startChatApp(customConfig = {}) {
       nameInput.value = storedName;
       nameInput.disabled = true;
       nameInput.placeholder = "Identity Locked";
-      if(lockIcon) lockIcon.style.display = 'block';
+      if (lockIcon) lockIcon.style.display = 'block';
     } else {
       nameInput.value = '';
       nameInput.disabled = false;
       nameInput.placeholder = "Enter Name (Permanent)";
-      if(lockIcon) lockIcon.style.display = 'none';
+      if (lockIcon) lockIcon.style.display = 'none';
     }
     lucide.createIcons();
   };
@@ -508,13 +521,13 @@ export function startChatApp(customConfig = {}) {
   window.nav = (id, direction = null) => {
     const current = document.querySelector('.screen.active');
     const next = $(id);
-    if(!next) return;
-    if(id === 'scr-guest') prepareGuestScreen();
+    if (!next) return;
+    if (id === 'scr-guest') prepareGuestScreen();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
-    if(direction === 'left') {
+    if (direction === 'left') {
       current.classList.add('slide-left');
       next.classList.remove('slide-right');
-    } else if(direction === 'right') {
+    } else if (direction === 'right') {
       current.classList.add('slide-right');
       next.classList.remove('slide-left');
     } else {
@@ -528,9 +541,9 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.loadRooms = async () => {
-    if(!state.user) return;
+    if (!state.user) return;
     window.setLoading(true, "Fetching Rooms...");
-    const {data} = await db.from('rooms').select('*').eq('is_private',false).order('created_at',{ascending:false});
+    const { data } = await db.from('rooms').select('*').eq('is_private', false).order('created_at', { ascending: false });
     state.allRooms = data || [];
     window.filterRooms();
     window.setLoading(false);
@@ -539,7 +552,7 @@ export function startChatApp(customConfig = {}) {
   window.filterRooms = () => {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
-    const filtered = state.allRooms.filter(r=>r.name.toLowerCase().includes(q));
+    const filtered = state.allRooms.filter(r => r.name.toLowerCase().includes(q));
     if (filtered.length === 0) {
       list.innerHTML = `
         <div class="empty-state">
@@ -562,7 +575,7 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.joinAttempt = async (id) => {
-    if(state.serverFull) return window.toast("Network is full");
+    if (state.serverFull) return window.toast("Network is full");
     window.setLoading(true, "Joining Room...");
     const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
     window.setLoading(false);
@@ -576,15 +589,15 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.joinPrivate = async () => {
-    if(state.serverFull) return window.toast("Network is full");
-    if(!state.user) return window.toast("Login required");
+    if (state.serverFull) return window.toast("Network is full");
+    if (!state.user) return window.toast("Login required");
     const id = $('join-id').value.trim();
-    if(!id) return;
+    if (!id) return;
     window.setLoading(true, "Searching Room...");
-    const {data} = await db.from('rooms').select('*').eq('id',id).single();
+    const { data } = await db.from('rooms').select('*').eq('id', id).single();
     window.setLoading(false);
-    if(data) {
-      if(data.has_password) {
+    if (data) {
+      if (data.has_password) {
         state.pending = { id: data.id, name: data.name, salt: data.salt };
         window.nav('scr-gate');
       } else {
@@ -617,7 +630,7 @@ export function startChatApp(customConfig = {}) {
     const container = $('chat-messages');
     const emptyState = $('chat-empty-state');
     const hasMessages = container.querySelector('.msg');
-    if(emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex';
+    if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex';
   };
 
   const renderMsg = (m, prepend = false) => {
@@ -694,7 +707,7 @@ export function startChatApp(customConfig = {}) {
         let firstExistingDate = null;
         if (firstMsgEl) {
           const firstTime = firstMsgEl.getAttribute('data-time');
-          if(firstTime) firstExistingDate = getDateLabel(new Date(firstTime));
+          if (firstTime) firstExistingDate = getDateLabel(new Date(firstTime));
         }
         let html = "";
         let tempLabel = null;
@@ -734,7 +747,7 @@ export function startChatApp(customConfig = {}) {
   window.openVault = async (id, n, rawPassword, roomSalt) => {
     if (!state.user) return window.toast("Please login first");
     window.setLoading(true, "Deriving Key...");
-    if(state.chatChannel) await db.removeChannel(state.chatChannel);
+    if (state.chatChannel) await db.removeChannel(state.chatChannel);
     state.currentRoomId = id;
     state.lastRenderedDateLabel = null;
     state.roomGuestStatus = {};
@@ -747,12 +760,12 @@ export function startChatApp(customConfig = {}) {
     $('chat-messages').onscroll = handleScroll;
     const copyIcon = $('icon-copy-chat');
     const checkIcon = $('icon-check-chat');
-    if(copyIcon) copyIcon.style.display = 'block';
-    if(checkIcon) checkIcon.style.display = 'none';
+    if (copyIcon) copyIcon.style.display = 'block';
+    if (checkIcon) checkIcon.style.display = 'none';
     const keySource = rawPassword ? (rawPassword + id) : id;
     try {
       await deriveKey(keySource, roomSalt);
-    } catch(e) {
+    } catch {
       window.setLoading(false);
       return window.toast("Key derivation failed");
     }
@@ -764,7 +777,7 @@ export function startChatApp(customConfig = {}) {
       .limit(CONFIG.maxMessages);
     const isGuest = state.user.is_anonymous;
     const guestInfoBtn = $('guest-info-chat');
-    if(guestInfoBtn) guestInfoBtn.style.display = isGuest ? 'flex' : 'none';
+    if (guestInfoBtn) guestInfoBtn.style.display = isGuest ? 'flex' : 'none';
     $('chat-input').style.display = isGuest ? 'none' : 'block';
     $('guest-replies').style.display = isGuest ? 'flex' : 'none';
     $('send-btn').style.display = isGuest ? 'none' : 'flex';
@@ -779,7 +792,7 @@ export function startChatApp(customConfig = {}) {
         const ids = res.results.map(m => m.user_id);
         await fetchGuestStatuses(ids);
         res.results.forEach(m => {
-          if(!m.error) b.insertAdjacentHTML('beforeend', renderMsg(m));
+          if (!m.error) b.insertAdjacentHTML('beforeend', renderMsg(m));
         });
         b.scrollTop = b.scrollHeight;
         checkChatEmpty();
@@ -803,7 +816,7 @@ export function startChatApp(customConfig = {}) {
       const m = payload.new;
       if (m && state.currentRoomId) {
         pendingCallbacks['singleDecrypted'] = async (decRes) => {
-          if(decRes.result) {
+          if (decRes.result) {
             await fetchGuestStatuses([m.user_id]);
             const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
             const b = $('chat-messages');
@@ -848,7 +861,7 @@ export function startChatApp(customConfig = {}) {
     if (!applyRateLimit()) return;
     state.processingAction = true;
     const v = $('chat-input').value.trim();
-    if(!v) {
+    if (!v) {
       state.processingAction = false;
       return;
     }
@@ -862,7 +875,7 @@ export function startChatApp(customConfig = {}) {
         user_name: state.user.user_metadata?.full_name,
         content: enc
       }]);
-    } catch(e) {
+    } catch {
       window.toast("Failed to send");
     }
     state.processingAction = false;
@@ -887,13 +900,13 @@ export function startChatApp(customConfig = {}) {
         user_name: state.user.user_metadata?.full_name,
         content: enc
       }]);
-    } catch(err) {}
+    } catch {}
     state.processingAction = false;
   };
 
   window.leaveChat = async () => {
     window.setLoading(true, "Leaving Room...");
-    if(state.chatChannel) await db.removeChannel(state.chatChannel);
+    if (state.chatChannel) await db.removeChannel(state.chatChannel);
     state.chatChannel = null;
     state.currentRoomId = null;
     state.roomGuestStatus = {};
@@ -905,18 +918,18 @@ export function startChatApp(customConfig = {}) {
 
   window.handleLogin = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     state.processingAction = true;
     const em = $('l-email').value, p = $('l-pass').value;
-    if(!em || !p) {
+    if (!em || !p) {
       window.toast("Input missing");
       state.processingAction = false;
       return;
     }
     window.setLoading(true, "Signing In...");
     localStorage.removeItem(FLAG_LOGOUT);
-    const {error} = await db.auth.signInWithPassword({email:em, password:p});
-    if(error) {
+    const { error } = await db.auth.signInWithPassword({ email: em, password: p });
+    if (error) {
       window.toast(error.message);
       window.setLoading(false);
     }
@@ -925,10 +938,10 @@ export function startChatApp(customConfig = {}) {
 
   window.handleRegister = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     state.processingAction = true;
-    const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value;
-    if(!n || !em || p.length < 8) {
+    const n = $('r-name').value, em = $('r-email').value.trim().toLowerCase(), p = $('r-pass').value;
+    if (!n || !em || p.length < 8) {
       window.toast("Check inputs");
       state.processingAction = false;
       return;
@@ -939,16 +952,16 @@ export function startChatApp(customConfig = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send", email: em })
     }));
-    if(r) {
-      if(r.status === 429) {
+    if (r) {
+      if (r.status === 429) {
         window.toast("Too many attempts. Wait a minute.");
         state.processingAction = false;
         window.setLoading(false);
         return;
       }
       const j = await r.json();
-      if(j.message === "Code sent") {
-        sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p}));
+      if (j.message === "Code sent") {
+        sessionStorage.setItem('temp_reg', JSON.stringify({ n, em, p }));
         window.nav('scr-verify');
         startVTimer();
         window.setLoading(false);
@@ -965,11 +978,11 @@ export function startChatApp(customConfig = {}) {
 
   const startVTimer = () => {
     let left = CONFIG.verificationCodeExpiry;
-    if(state.vTimer) clearInterval(state.vTimer);
+    if (state.vTimer) clearInterval(state.vTimer);
     state.vTimer = setInterval(() => {
       left--;
       $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`;
-      if(left<=0) {
+      if (left <= 0) {
         clearInterval(state.vTimer);
         window.nav('scr-register');
       }
@@ -978,10 +991,10 @@ export function startChatApp(customConfig = {}) {
 
   window.handleVerify = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     state.processingAction = true;
     const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg'));
-    if(!temp) {
+    if (!temp) {
       window.toast("Session expired");
       state.processingAction = false;
       return;
@@ -999,14 +1012,14 @@ export function startChatApp(customConfig = {}) {
       return;
     }
     const j = await r.json();
-    if(j.message === "Verified") {
+    if (j.message === "Verified") {
       localStorage.removeItem(FLAG_LOGOUT);
       const { error } = await db.auth.signUp({
         email: temp.em,
         password: temp.p,
         options: { data: { full_name: temp.n } }
       });
-      if(error) {
+      if (error) {
         window.toast(error.message);
         window.setLoading(false);
       }
@@ -1019,7 +1032,7 @@ export function startChatApp(customConfig = {}) {
 
   window.handleGuestLogin = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.processingAction) return;
+    if (state.processingAction) return;
     const nameInput = $('g-name');
     let name = nameInput.value.trim();
     const lockedName = localStorage.getItem(FLAG_GUEST_NAME);
@@ -1038,7 +1051,7 @@ export function startChatApp(customConfig = {}) {
   window.confirmGuestLoginAction = async (e) => {
     if (!e || !e.isTrusted) return;
     const name = $('g-name').value.trim();
-    if(!name) return;
+    if (!name) return;
     await performGuestLogin(name);
   };
 
@@ -1089,39 +1102,39 @@ export function startChatApp(customConfig = {}) {
 
   window.handleCreate = async (e) => {
     if (!e || !e.isTrusted) return;
-    if(state.serverFull) return window.toast("Network full");
-    if(state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
-    if(state.processingAction) return;
+    if (state.serverFull) return window.toast("Network full");
+    if (state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
+    if (state.processingAction) return;
     state.processingAction = true;
-    const n=$('c-name').value, p=$('c-pass').value, isP=$('c-private').checked;
-    if(isP && !p) {
+    const n = $('c-name').value, p = $('c-pass').value, isP = $('c-private').checked;
+    if (isP && !p) {
       window.toast("Private rooms require a password");
       state.processingAction = false;
       return;
     }
-    if(!n) {
+    if (!n) {
       window.toast("Name required");
       state.processingAction = false;
       return;
     }
     window.setLoading(true, "Deploying Room...");
     const roomSalt = generateSalt();
-    const {data, error} = await db.from('rooms').insert([{
-      name:n,
-      has_password:!!p,
-      is_private:isP,
-      salt:roomSalt,
-      created_by:state.user.id
+    const { data, error } = await db.from('rooms').insert([{
+      name: n,
+      has_password: !!p,
+      is_private: isP,
+      salt: roomSalt,
+      created_by: state.user.id
     }]).select();
-    if(error) {
+    if (error) {
       window.toast("Error: " + error.message);
       state.processingAction = false;
       window.setLoading(false);
       return;
     }
-    if(data && data.length > 0) {
+    if (data && data.length > 0) {
       const newRoom = data[0];
-      if(p) {
+      if (p) {
         const accessHash = await sha256(p + roomSalt);
         await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
       }
@@ -1144,7 +1157,7 @@ export function startChatApp(customConfig = {}) {
       p_hash: inputHash
     });
     window.setLoading(false);
-    if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
+    if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
     else window.toast("Access Denied");
   };
 
@@ -1205,16 +1218,16 @@ export function startChatApp(customConfig = {}) {
   document.addEventListener('touchend', e => {
     touchEndX = e.changedTouches[0].screenX;
     const active = document.querySelector('.screen.active');
-    if(!active) return;
+    if (!active) return;
     const diff = touchEndX - touchStartX;
-    if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left');
-    else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right');
+    if (active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left');
+    else if (active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right');
   }, false);
 
   window.addEventListener('online', () => {
     $('offline-screen').classList.remove('active');
     window.toast("Back online");
-    if(state.user && state.isMasterTab) initPresence(true);
+    if (state.user && state.isMasterTab) initPresence(true);
   });
 
   window.addEventListener('offline', () => {
@@ -1234,18 +1247,19 @@ export function startChatApp(customConfig = {}) {
     const activeScreenId = document.querySelector('.screen.active')?.id;
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
     if (ev === 'SIGNED_IN') {
-      if(state.user) {
+      if (state.user) {
         localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-        if(state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
+        if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
         state.sessionStartTime = Date.now();
-        if(state.uptimeInterval) clearInterval(state.uptimeInterval);
+        if (state.uptimeInterval) clearInterval(state.uptimeInterval);
         state.uptimeInterval = setInterval(updateUptime, 1000);
         const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
         if (authScreens.includes(activeScreenId)) {
           window.nav('scr-lobby');
           window.loadRooms();
-          window.forceClaimMaster();
         }
+        await new Promise(r => setTimeout(r, 300));
+        window.forceClaimMaster();
       }
     }
     if (ev === 'SIGNED_OUT') {
@@ -1288,8 +1302,10 @@ export function startChatApp(customConfig = {}) {
         window.loadRooms();
       }
       state.sessionStartTime = Date.now();
-      if(state.uptimeInterval) clearInterval(state.uptimeInterval);
+      if (state.uptimeInterval) clearInterval(state.uptimeInterval);
       state.uptimeInterval = setInterval(updateUptime, 1000);
+      await new Promise(r => setTimeout(r, 400));
+      initPresence(true);
     } else {
       $('guest-swipe-hint').style.display = 'flex';
     }
