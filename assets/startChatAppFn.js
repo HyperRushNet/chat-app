@@ -1,5 +1,4 @@
 // assets/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
-// Modified: on every presence subscription (login / reconnect), immediately query and update online user count
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -294,7 +293,6 @@ export function startChatApp(customConfig = {}) {
     state.presenceChannel
       .on('presence', { event: 'sync' }, () => {
         if (!state.presenceChannel) return;
-        // Immediately update count on every sync (including initial)
         queryOnlineCountImmediately();
       })
       .subscribe(async (status, err) => {
@@ -303,14 +301,14 @@ export function startChatApp(customConfig = {}) {
           state.isPresenceSubscribed = true;
           state.isConnecting = false;
 
-          // ── IMPORTANT CHANGE ──
-          // Right after subscription succeeds → immediately fetch & display count
           queryOnlineCountImmediately();
 
           await state.presenceChannel.track({
             user_id: myId,
             online_at: new Date().toISOString()
           });
+
+          queryOnlineCountImmediately();
 
           if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
           state.heartbeatInterval = setInterval(async () => {
@@ -321,6 +319,12 @@ export function startChatApp(customConfig = {}) {
               });
             }
           }, CONFIG.presenceHeartbeatMs);
+
+          setTimeout(() => {
+            if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.serverFull) {
+              queryOnlineCountImmediately();
+            }
+          }, 2000);
 
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           state.isPresenceSubscribed = false;
@@ -397,6 +401,11 @@ export function startChatApp(customConfig = {}) {
         `;
         overlay.classList.add('active');
         lucide.createIcons();
+      }
+    }
+    if (ev.data.type === 'PING_MASTER') {
+      if (state.isMasterTab) {
+        tabChannel.postMessage({ type: 'PONG_MASTER' });
       }
     }
   };
@@ -708,7 +717,6 @@ export function startChatApp(customConfig = {}) {
           const msgDate = getDateLabel(new Date(m.created_at));
           if (msgDate !== tempLabel) {
             if (index === validMsgs.length - 1 && msgDate === firstExistingDate) {
-              // skip duplicate label
             } else {
               html += `<div class="date-divider"><span class="date-label">${msgDate}</span></div>`;
             }
