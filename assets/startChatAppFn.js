@@ -48,7 +48,8 @@ export function startChatApp(customConfig = {}) {
     currentRoomAccessType: null,
     currentRoomData: null,
     selectedAllowedUsers: [], 
-    currentPickerContext: null, // 'c' or 'edit-room'
+    currentPickerContext: null,
+    lastLobbyRefresh: 0
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -366,11 +367,12 @@ export function startChatApp(customConfig = {}) {
     if (type === 'everyone') {
       btnEveryone.classList.add('active');
       btnSpecific.classList.remove('active');
-      summaryEl.innerHTML = `<span class="c-main">Everyone can join</span><i data-lucide="globe" class="w-16 h-16"></i>`;
+      summaryEl.classList.add('dn'); // Hide summary if everyone
       state.selectedAllowedUsers = [];
     } else {
       btnEveryone.classList.remove('active');
       btnSpecific.classList.add('active');
+      summaryEl.classList.remove('dn'); // Show summary
       updateAccessSummary(prefix);
     }
     lucide.createIcons();
@@ -392,7 +394,7 @@ export function startChatApp(customConfig = {}) {
     
     if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) {
         const ids = state.currentRoomData.allowed_users;
-        if (!ids.includes('*')) {
+        if (ids && !ids.includes('*')) {
             const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
             state.selectedAllowedUsers = ids.map(id => {
                 const p = profiles?.find(pro => pro.id === id);
@@ -410,11 +412,12 @@ export function startChatApp(customConfig = {}) {
     $('picker-id-input').focus();
   };
 
-  // FIX: Navigate back to settings instead of closing if coming from settings
+  // Logic: Navigate back to settings instead of closing if coming from settings
   window.closeAccessManager = () => {
     if (state.currentPickerContext === 'edit-room') {
         window.showOverlayView('room-settings');
     } else {
+        // Context 'c' (Create screen is a main screen, not overlay)
         window.closeOverlay();
     }
     updateAccessSummary(state.currentPickerContext);
@@ -632,9 +635,20 @@ export function startChatApp(customConfig = {}) {
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
   };
 
+  window.refreshLobby = async () => {
+    const now = Date.now();
+    if (now - state.lastLobbyRefresh < 10000) {
+        const remaining = Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000);
+        return window.toast(`Wait ${remaining}s before refreshing`);
+    }
+    state.lastLobbyRefresh = now;
+    window.toast("Refreshing rooms...");
+    await window.loadRooms();
+  };
+
   window.loadRooms = async () => {
     if(!state.user) return;
-    window.setLoading(true, "Fetching accessible rooms...");
+    window.setLoading(true, "Fetching rooms...");
     const { data: rooms, error } = await db
       .from('rooms')
       .select('*')
@@ -644,12 +658,8 @@ export function startChatApp(customConfig = {}) {
       window.setLoading(false);
       return;
     }
-    const accessible = [];
-    for (const room of rooms || []) {
-      const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: room.id });
-      if (canAccess) accessible.push(room);
-    }
-    state.allRooms = accessible;
+    
+    state.allRooms = rooms || [];
     window.filterRooms();
     window.setLoading(false);
   };
@@ -657,7 +667,15 @@ export function startChatApp(customConfig = {}) {
   window.filterRooms = () => {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
-    const filtered = state.allRooms.filter(r => r.name.toLowerCase().includes(q));
+    
+    // Filter: Match search query.
+    // Visibility: If private, only show to creator.
+    const filtered = state.allRooms.filter(r => {
+        const matchSearch = r.name.toLowerCase().includes(q);
+        const isVisible = !r.is_private || r.created_by === state.user.id;
+        return matchSearch && isVisible;
+    });
+
     if (filtered.length === 0) {
       list.innerHTML = `
         <div class="empty-state">
@@ -682,11 +700,14 @@ export function startChatApp(customConfig = {}) {
   window.joinAttempt = async (id) => {
     if(state.serverFull) return window.toast("Network is full");
     window.setLoading(true, "Checking access...");
+    
     const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
+    
     if (!canAccess) {
       window.setLoading(false);
-      return window.toast("Access denied — you are not on the allowed list");
+      return window.toast("Access denied");
     }
+
     const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
     window.setLoading(false);
     if (error || !data) return window.toast("Room not found");
@@ -705,11 +726,13 @@ export function startChatApp(customConfig = {}) {
     const id = $('join-id').value.trim();
     if(!id) return;
     window.setLoading(true, "Checking access...");
+    
     const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
     if (!canAccess) {
       window.setLoading(false);
-      return window.toast("Access denied — not allowed");
+      return window.toast("Access denied or room not found");
     }
+
     const { data } = await db.from('rooms').select('*').eq('id',id).single();
     window.setLoading(false);
     if(data) {
@@ -1466,9 +1489,8 @@ export function startChatApp(customConfig = {}) {
             const p = profiles?.find(pro => pro.id === id);
             return { id: id, name: p?.full_name || 'Unknown' };
         });
+        updateAccessSummary('edit-room');
     }
-    
-    updateAccessSummary('edit-room');
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
