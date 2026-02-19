@@ -574,14 +574,25 @@ export function startChatApp(customConfig = {}) {
   window.joinAttempt = async (id) => {
     if(state.serverFull) return window.toast("Network is full");
     window.setLoading(true, "Checking access...");
+    
+    // 1. Check Access via RPC
     const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
     if (!canAccess) {
       window.setLoading(false);
       return window.toast("Access denied — you are not on the allowed list");
     }
+    
+    // 2. Fetch Room Data (This was failing before due to RLS, fixed in SQL)
     const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
+    
+    if (error) {
+        window.setLoading(false);
+        return window.toast("Error fetching room details: " + error.message);
+    }
+    
     window.setLoading(false);
-    if (error || !data) return window.toast("Room not found");
+    if (!data) return window.toast("Room not found");
+    
     state.pending = { id: data.id, name: data.name, salt: data.salt };
     if (data.allowed_users.includes('*')) {
       state.currentRoomAccessType = 'open';
@@ -793,7 +804,7 @@ export function startChatApp(customConfig = {}) {
     const { data: room } = await db.from('rooms').select('*').eq('id', id).single();
     state.currentRoomData = room;
     
-    // Room Settings Logic
+    // Show settings icon only for owner
     const isOwner = room && room.created_by === state.user.id;
     const settingsIcon = $('room-settings-icon');
     if (settingsIcon) settingsIcon.style.display = isOwner ? 'block' : 'none';
@@ -943,7 +954,6 @@ export function startChatApp(customConfig = {}) {
     state.currentRoomAccessType = null;
     state.currentRoomData = null;
     
-    // Hide settings icon
     const settingsIcon = $('room-settings-icon');
     if (settingsIcon) settingsIcon.style.display = 'none';
     
@@ -1336,17 +1346,21 @@ export function startChatApp(customConfig = {}) {
     }
   });
 
-  // --- NEW SETTINGS LOGIC ---
+  // --- FIXED SETTINGS LOGIC ---
   window.openRoomSettings = async () => {
     if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) {
       return window.toast("You are not the owner of this room");
     }
     window.setLoading(true, "Loading room settings...");
     const room = state.currentRoomData;
+    
     $('edit-room-name').value = room.name;
     $('edit-room-private').checked = room.is_private;
     $('edit-room-allowed').value = room.allowed_users.includes('*') ? '*' : room.allowed_users.join(', ');
     $('edit-room-pass').value = '';
+    
+    // THIS WAS MISSING: Actually open the overlay
+    $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
     window.setLoading(false);
   };
@@ -1396,10 +1410,9 @@ export function startChatApp(customConfig = {}) {
         window.toast("Failed to update password");
       } else {
         await db.from('rooms').update({ has_password: true }).eq('id', state.currentRoomId);
-        state.currentRoomData.has_password = true; // Update local state
+        state.currentRoomData.has_password = true;
       }
     }
-    // Note: Removing password functionality omitted for security/simplicity in this iteration
 
     const { data: updatedRoom } = await db.from('rooms').select('*').eq('id', state.currentRoomId).single();
     state.currentRoomData = updatedRoom;
