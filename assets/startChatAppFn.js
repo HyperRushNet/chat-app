@@ -367,12 +367,12 @@ export function startChatApp(customConfig = {}) {
     if (type === 'everyone') {
       btnEveryone.classList.add('active');
       btnSpecific.classList.remove('active');
-      summaryEl.classList.add('dn'); // Hide summary if everyone
+      summaryEl.classList.add('dn');
       state.selectedAllowedUsers = [];
     } else {
       btnEveryone.classList.remove('active');
       btnSpecific.classList.add('active');
-      summaryEl.classList.remove('dn'); // Show summary
+      summaryEl.classList.remove('dn');
       updateAccessSummary(prefix);
     }
     lucide.createIcons();
@@ -412,12 +412,10 @@ export function startChatApp(customConfig = {}) {
     $('picker-id-input').focus();
   };
 
-  // Logic: Navigate back to settings instead of closing if coming from settings
   window.closeAccessManager = () => {
     if (state.currentPickerContext === 'edit-room') {
         window.showOverlayView('room-settings');
     } else {
-        // Context 'c' (Create screen is a main screen, not overlay)
         window.closeOverlay();
     }
     updateAccessSummary(state.currentPickerContext);
@@ -577,6 +575,7 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.inspectUser = async (uid) => {
+    if (!uid) return; // FIX: Prevent errors on undefined ID
     if (uid === state.user?.id) return window.prepareMyAccount();
     window.setLoading(true, "Fetching info...");
     const { data, error } = await db.from('profiles').select('id, full_name, updated_at, is_guest').eq('id', uid).single();
@@ -668,8 +667,6 @@ export function startChatApp(customConfig = {}) {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
     
-    // Filter: Match search query.
-    // Visibility: If private, only show to creator.
     const filtered = state.allRooms.filter(r => {
         const matchSearch = r.name.toLowerCase().includes(q);
         const isVisible = !r.is_private || r.created_by === state.user.id;
@@ -806,9 +803,12 @@ export function startChatApp(customConfig = {}) {
     }
   };
 
+  // FIX: Added filter to prevent undefined IDs
   const fetchGuestStatuses = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
-    const uniqueIds = [...new Set(userIds)];
+    const uniqueIds = [...new Set(userIds)].filter(id => id); 
+    if (uniqueIds.length === 0) return;
+    
     const { data, error } = await db.from('profiles').select('id, full_name, is_guest').in('id', uniqueIds);
     if (data) {
       data.forEach(p => {
