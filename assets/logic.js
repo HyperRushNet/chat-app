@@ -54,6 +54,7 @@ export function startChatApp(customConfig = {}) {
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
+  const FLAG_SOFT_LOGOUT = 'hrn_flag_soft_logout';
   const FLAG_GUEST_NAME = 'hrn_flag_guest_name';
   const FLAG_GUEST_ID = 'hrn_flag_guest_id';
 
@@ -63,7 +64,7 @@ export function startChatApp(customConfig = {}) {
   const tabChannel = new BroadcastChannel('hrn_tab_sync');
 
   const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
-    auth: { persistSession: true, autoRefreshToken: false },
+    auth: { persistSession: true, autoRefreshToken: true },
     realtime: { params: { eventsPerSecond: 10 } }
   });
 
@@ -481,7 +482,7 @@ export function startChatApp(customConfig = {}) {
       state.isMasterTab = true;
       tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
       $('block-overlay').classList.remove('active');
-      if (localStorage.getItem(FLAG_LOGOUT) !== 'true' && state.user) {
+      if (localStorage.getItem(FLAG_LOGOUT) !== 'true' && localStorage.getItem(FLAG_SOFT_LOGOUT) !== 'true' && state.user) {
         initPresence(true);
       }
     }
@@ -1089,6 +1090,7 @@ export function startChatApp(customConfig = {}) {
     }
     window.setLoading(true, "Signing In...");
     localStorage.removeItem(FLAG_LOGOUT);
+    localStorage.removeItem(FLAG_SOFT_LOGOUT);
     const {error} = await db.auth.signInWithPassword({email:em, password:p});
     if(error) {
       window.toast(error.message);
@@ -1177,6 +1179,7 @@ export function startChatApp(customConfig = {}) {
     const j = await r.json();
     if(j.message === "Verified") {
       localStorage.removeItem(FLAG_LOGOUT);
+      localStorage.removeItem(FLAG_SOFT_LOGOUT);
       const { error } = await db.auth.signUp({
         email: temp.em,
         password: temp.p,
@@ -1205,6 +1208,9 @@ export function startChatApp(customConfig = {}) {
     else {
       if (!name) return window.toast("Please enter a name.");
     }
+    localStorage.removeItem(FLAG_SOFT_LOGOUT);
+    localStorage.removeItem(FLAG_LOGOUT);
+    
     if (!lockedName) {
       window.openHub();
       window.showOverlayView('guest-warn');
@@ -1225,6 +1231,7 @@ export function startChatApp(customConfig = {}) {
     window.closeOverlay();
     window.setLoading(true, "Initializing...");
     localStorage.removeItem(FLAG_LOGOUT);
+    localStorage.removeItem(FLAG_SOFT_LOGOUT);
     const { data: { user: existingUser } } = await db.auth.getUser();
     let finalUser;
     if (existingUser && existingUser.is_anonymous) {
@@ -1362,12 +1369,14 @@ export function startChatApp(customConfig = {}) {
     if (state.user && state.user.is_anonymous) {
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name);
+      localStorage.setItem(FLAG_SOFT_LOGOUT, 'true');
       state.user = null; 
       state.isMasterTab = false;
       window.nav('scr-start');
       window.toast("Guest session saved. Refresh to restore.");
     } else {
       localStorage.setItem(FLAG_LOGOUT, 'true');
+      localStorage.removeItem(FLAG_SOFT_LOGOUT);
       state.user = null;
       localStorage.removeItem(FLAG_GUEST_ID);
       localStorage.removeItem(FLAG_GUEST_NAME);
@@ -1425,13 +1434,14 @@ export function startChatApp(customConfig = {}) {
 
   db.auth.onAuthStateChange(async (ev, ses) => {
     const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
+    const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
     const hasGuestId = localStorage.getItem(FLAG_GUEST_ID);
     
     if (isFlaggedLogout && hasGuestId) {
        localStorage.removeItem(FLAG_LOGOUT);
     }
     
-    if (localStorage.getItem(FLAG_LOGOUT) === 'true') {
+    if (isFlaggedLogout || isSoftLoggedOut) {
       state.user = null;
       return;
     }
@@ -1655,29 +1665,38 @@ export function startChatApp(customConfig = {}) {
       return;
     }
     
-    if (localStorage.getItem(FLAG_GUEST_ID)) {
-        localStorage.removeItem(FLAG_LOGOUT);
-    }
+    const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
+    const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
 
-    if (localStorage.getItem(FLAG_LOGOUT) === 'true') {
+    if (isHardLoggedOut) {
       state.user = null;
       window.nav('scr-start');
       window.setLoading(false);
       monitorConnection();
       return;
     }
-    const [sessionRes, sessionErr] = await safeAwait(db.auth.getSession());
-    if (sessionErr) {
-      console.error("Failed to get session:", sessionErr);
-      window.toast("Failed to get session");
+    
+    if (isSoftLoggedOut) {
       window.nav('scr-start');
       window.setLoading(false);
       monitorConnection();
       return;
     }
-    const session = sessionRes.data.session;
-    if (session) {
-      state.user = session.user;
+
+    const [userRes, userErr] = await safeAwait(db.auth.getUser());
+    
+    if (userErr) {
+      console.error("Session validation failed:", userErr);
+      window.nav('scr-start');
+      window.setLoading(false);
+      monitorConnection();
+      return;
+    }
+    
+    const user = userRes?.data?.user;
+
+    if (user) {
+      state.user = user;
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
       const masterExists = await checkMaster();
