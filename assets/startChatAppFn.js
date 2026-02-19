@@ -357,7 +357,7 @@ export function startChatApp(customConfig = {}) {
     passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
   };
 
-  // --- Access Logic ---
+   --- Access Logic ---
   
   window.handleAccessToggle = (prefix, type) => {
     const btnEveryone = $(`${prefix}-access-everyone`);
@@ -645,7 +645,6 @@ export function startChatApp(customConfig = {}) {
     await window.loadRooms();
   };
 
-  // OPTIMIZED: No longer loops through RPC calls. RLS handles visibility.
   window.loadRooms = async () => {
     if(!state.user) return;
     window.setLoading(true, "Fetching rooms...");
@@ -670,13 +669,9 @@ export function startChatApp(customConfig = {}) {
     const uid = state.user?.id;
 
     const filtered = state.allRooms.filter(r => {
-        // 1. Match search query
         const matchSearch = r.name.toLowerCase().includes(q);
         if (!matchSearch) return false;
 
-        // 2. Visibility Logic for Lobby List
-        // If private, only show to owner in the list.
-        // Others (who might have access via allowed_users due to RLS) must use Direct ID.
         if (r.is_private && r.created_by !== uid) {
             return false;
         }
@@ -814,7 +809,6 @@ export function startChatApp(customConfig = {}) {
     }
   };
 
-  // FIX: Filter undefined IDs
   const fetchGuestStatuses = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     const uniqueIds = [...new Set(userIds)].filter(id => id); 
