@@ -56,6 +56,7 @@ CREATE POLICY "profiles_update_self" ON public.profiles FOR UPDATE USING (auth.u
 CREATE POLICY "rooms_select_visible" ON public.rooms FOR SELECT USING (
     NOT is_private 
     OR auth.uid() = created_by 
+    OR (allowed_users @> ARRAY['*'])
     OR (allowed_users @> ARRAY[auth.uid()::text])
 );
 
