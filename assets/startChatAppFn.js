@@ -1151,6 +1151,9 @@ export function startChatApp(customConfig = {}) {
     if (state.uptimeInterval) clearInterval(state.uptimeInterval);
     state.uptimeInterval = null;
     state.sessionStartTime = null;
+    try {
+      await db.auth.signOut({ scope: 'local' });
+    } catch {}
     if (state.user && state.user.is_anonymous) {
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name);
@@ -1158,13 +1161,12 @@ export function startChatApp(customConfig = {}) {
       state.isMasterTab = false;
       localStorage.setItem(FLAG_LOGOUT, 'true');
       window.nav('scr-start');
-      window.toast("Session saved.");
+      window.toast("Guest session saved.");
     } else {
       localStorage.setItem(FLAG_LOGOUT, 'true');
       state.user = null;
       localStorage.removeItem(FLAG_GUEST_ID);
       localStorage.removeItem(FLAG_GUEST_NAME);
-      await db.auth.signOut();
       window.nav('scr-start');
     }
     window.setLoading(false);
