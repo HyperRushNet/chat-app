@@ -47,8 +47,8 @@ export function startChatApp(customConfig = {}) {
     isChatChannelReady: false,
     currentRoomAccessType: null,
     currentRoomData: null,
-    // New state for UI management
-    selectedAllowedUsers: [], 
+    selectedAllowedUsers: [], // Stores {id, name}
+    currentPickerContext: null, // 'c' or 'edit-room'
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -341,19 +341,6 @@ export function startChatApp(customConfig = {}) {
       if ((wsState === 'disconnected' || wsState === 'stopped') && !state.isConnecting) {
         initPresence(true);
       }
-      if (state.lastKnownOnlineCount === null &&
-          state.isPresenceSubscribed &&
-          !state.isConnecting &&
-          !state.serverFull) {
-        setTimeout(() => {
-          if (state.lastKnownOnlineCount === null &&
-              state.isPresenceSubscribed &&
-              !state.isConnecting &&
-              !state.serverFull) {
-            queryOnlineCountImmediately();
-          }
-        }, 1000);
-      }
     }, 5000);
   };
 
@@ -369,18 +356,151 @@ export function startChatApp(customConfig = {}) {
     passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
   };
 
-  // --- NEW: Access Toggle Logic ---
-  window.handleAccessToggle = (isCreateScreen = true) => {
-    const prefix = isCreateScreen ? 'c' : 'edit-room';
-    const restrictedView = $(`${prefix}-restricted-view`);
-    const radioEveryone = $(`${prefix}-access-everyone`);
+  // --- NEW: Access Toggle & Manager Logic ---
+  
+  // Toggles between Everyone and Specific
+  window.handleAccessToggle = (prefix, type) => {
+    const btnEveryone = $(`${prefix}-access-everyone`);
+    const btnSpecific = $(`${prefix}-access-specific`);
+    const summaryEl = $(`${prefix}-access-summary`);
     
-    if (radioEveryone.checked) {
-      restrictedView.style.display = 'none';
+    if (type === 'everyone') {
+      btnEveryone.classList.add('active');
+      btnSpecific.classList.remove('active');
+      summaryEl.innerHTML = `<span class="c-main">Everyone can join</span>`;
+      state.selectedAllowedUsers = []; // Clear selection
     } else {
-      restrictedView.style.display = 'block';
+      btnEveryone.classList.remove('active');
+      btnSpecific.classList.add('active');
+      updateAccessSummary(prefix);
     }
   };
+
+  // Updates the text showing how many users are selected
+  const updateAccessSummary = (prefix) => {
+    const summaryEl = $(`${prefix}-access-summary`);
+    const count = state.selectedAllowedUsers.length;
+    if (count === 0) {
+      summaryEl.innerHTML = `<span class="c-danger">No users selected</span>`;
+    } else {
+      summaryEl.innerHTML = `<span class="c-accent">${count} user${count > 1 ? 's' : ''} selected</span>`;
+    }
+  };
+
+  // Opens the User Picker Modal
+  window.openAccessManager = async (prefix) => {
+    state.currentPickerContext = prefix;
+    
+    // If editing, we might need to load names for existing IDs if not already loaded
+    if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) {
+        const ids = state.currentRoomData.allowed_users;
+        if (!ids.includes('*')) {
+            const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
+            state.selectedAllowedUsers = ids.map(id => {
+                const p = profiles?.find(pro => pro.id === id);
+                return { id: id, name: p?.full_name || 'Unknown' };
+            });
+        }
+    }
+    
+    renderPickerSelectedUsers();
+    
+    $('overlay-container').classList.add('active');
+    window.showOverlayView('access-manager');
+    
+    // Clear search
+    $('picker-search-input').value = '';
+    $('picker-search-results').innerHTML = '';
+    $('picker-search-input').focus();
+  };
+
+  window.closeAccessManager = () => {
+    window.showOverlayView(state.currentPickerContext === 'c' ? 'hub' : 'room-settings'); // fallback, though usually close is enough
+    window.closeOverlay();
+    updateAccessSummary(state.currentPickerContext);
+  };
+
+  // Renders the list inside the picker
+  const renderPickerSelectedUsers = () => {
+    const container = $('picker-selected-list');
+    // Filter out current user for display, but keep in state
+    const displayUsers = state.selectedAllowedUsers.filter(u => u.id !== state.user.id);
+    
+    if (displayUsers.length === 0) {
+      container.innerHTML = `<div class="picker-empty">No users added yet.</div>`;
+      return;
+    }
+    
+    container.innerHTML = displayUsers.map(u => `
+      <div class="picker-user-card">
+        <div class="picker-user-info">
+            <div class="picker-user-avatar">${u.name.charAt(0)}</div>
+            <div class="picker-user-text">
+                <span class="picker-user-name">${esc(u.name)}</span>
+                <span class="picker-user-id">${u.id}</span>
+            </div>
+        </div>
+        <button class="picker-remove-btn" onclick="window.removePickerUser('${u.id}')">
+            <i data-lucide="x" class="w-16 h-16"></i>
+        </button>
+      </div>
+    `).join('');
+    lucide.createIcons();
+  };
+
+  window.removePickerUser = (id) => {
+    state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id);
+    renderPickerSelectedUsers();
+  };
+
+  // Search logic
+  window.searchPickerUsers = async (query) => {
+    const resultsBox = $('picker-search-results');
+    if (query.length < 2) {
+        resultsBox.innerHTML = '';
+        return;
+    }
+
+    // Search STRICTLY by ID (ilike allows partial match)
+    const { data, error } = await db
+      .from('profiles')
+      .select('id, full_name')
+      .ilike('id', `%${query}%`)
+      .limit(5);
+
+    if (error || !data) return;
+
+    const existingIds = state.selectedAllowedUsers.map(u => u.id);
+    const filtered = data.filter(u => !existingIds.includes(u.id) && u.id !== state.user.id);
+
+    if(filtered.length === 0) {
+        resultsBox.innerHTML = `<div class="picker-search-empty">No users found by that ID</div>`;
+        return;
+    }
+
+    resultsBox.innerHTML = filtered.map(u => `
+      <div class="picker-result-card" onclick="window.addPickerUser('${u.id}', '${esc(u.full_name)}')">
+        <div class="picker-user-info">
+            <div class="picker-user-avatar">${u.full_name.charAt(0)}</div>
+            <div class="picker-user-text">
+                <span class="picker-user-name">${esc(u.full_name)}</span>
+                <span class="picker-user-id">${u.id}</span>
+            </div>
+        </div>
+        <button class="picker-add-btn"><i data-lucide="plus" class="w-16 h-16"></i></button>
+      </div>
+    `).join('');
+    lucide.createIcons();
+  };
+
+  window.addPickerUser = (id, name) => {
+    if (state.selectedAllowedUsers.find(u => u.id === id)) return;
+    state.selectedAllowedUsers.push({ id, name });
+    $('picker-search-results').innerHTML = '';
+    $('picker-search-input').value = '';
+    renderPickerSelectedUsers();
+  };
+
 
   window.forceClaimMaster = () => {
     if (!state.isMasterTab) {
@@ -1102,7 +1222,7 @@ export function startChatApp(customConfig = {}) {
   const performGuestLogin = async (name) => {
     window.closeOverlay();
     window.setLoading(true, "Initializing...");
-    localStorage.removeItem(FLAG_LOGOUT); 
+    localStorage.removeItem(FLAG_LOGOUT);
     const { data: { user: existingUser } } = await db.auth.getUser();
     let finalUser;
     if (existingUser && existingUser.is_anonymous) {
@@ -1147,87 +1267,6 @@ export function startChatApp(customConfig = {}) {
     await initPresence(true);
   };
 
-  // --- NEW: User Search & Selection Logic ---
-  
-  // Renders the grid of selected users
-  const renderAllowedUsersGrid = (containerId) => {
-    const container = $(containerId);
-    if (!container) return;
-    
-    // Filter out current user from display
-    const displayUsers = state.selectedAllowedUsers.filter(u => u.id !== state.user.id);
-    
-    if (displayUsers.length === 0) {
-      container.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-state-sub">No users added yet.</div></div>`;
-      return;
-    }
-    
-    container.innerHTML = displayUsers.map(u => `
-      <div class="user-chip">
-        <div class="user-chip-info">
-            <span class="user-chip-name">${esc(u.name)}</span>
-            <span class="user-chip-id">${u.id.substring(0,8)}...</span>
-        </div>
-        <button class="user-chip-remove" onclick="window.removeAllowedUser('${u.id}', '${containerId}')">
-            <i data-lucide="x" class="w-14 h-14"></i>
-        </button>
-      </div>
-    `).join('');
-    lucide.createIcons();
-  };
-
-  window.removeAllowedUser = (id, containerId) => {
-    state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id);
-    renderAllowedUsersGrid(containerId);
-  };
-
-  // Search function used by both Create and Settings
-  window.searchUsersToAdd = async (inputId, resultsId, gridId) => {
-    const query = $(inputId).value.trim();
-    const resultsBox = $(resultsId);
-    resultsBox.innerHTML = '';
-    
-    if (query.length < 2) return;
-
-    const { data, error } = await db
-      .from('profiles')
-      .select('id, full_name')
-      .or(`full_name.ilike.%${query}%,id.eq.${query}`) // Search name or ID
-      .limit(5);
-
-    if (error || !data) return;
-
-    // Filter out already selected users and current user
-    const existingIds = state.selectedAllowedUsers.map(u => u.id);
-    const filtered = data.filter(u => !existingIds.includes(u.id) && u.id !== state.user.id);
-
-    if(filtered.length === 0) {
-        resultsBox.innerHTML = `<div class="search-result-item" style="opacity:0.5">No users found</div>`;
-        return;
-    }
-
-    resultsBox.innerHTML = filtered.map(u => `
-      <div class="search-result-item" onclick="window.addAllowedUser('${u.id}', '${esc(u.full_name)}', '${resultsId}', '${gridId}')">
-        <i data-lucide="user" class="w-14 h-14"></i>
-        <div class="search-result-info">
-            <span class="search-result-name">${esc(u.full_name)}</span>
-            <span class="search-result-id">${u.id.substring(0,12)}...</span>
-        </div>
-        <i data-lucide="plus" class="w-14 h-14"></i>
-      </div>
-    `).join('');
-    lucide.createIcons();
-  };
-
-  window.addAllowedUser = (id, name, resultsId, gridId) => {
-    // Check duplicate
-    if (state.selectedAllowedUsers.find(u => u.id === id)) return;
-    
-    state.selectedAllowedUsers.push({ id, name });
-    $(resultsId).innerHTML = ''; // Clear search results
-    renderAllowedUsersGrid(gridId);
-  };
-
   window.handleCreate = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.serverFull) return window.toast("Network full");
@@ -1238,19 +1277,16 @@ export function startChatApp(customConfig = {}) {
     const p = $('c-pass').value;
     const isP = $('c-private').checked;
     
-    // Determine access type
-    const isEveryone = $('c-access-everyone').checked;
+    const isEveryone = $('c-access-everyone').classList.contains('active');
     let allowedUsers = ['*'];
     
     if (!isEveryone) {
-        // Extract IDs from state
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
-        // Add creator
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
         if (allowedUsers.length === 0) {
-            window.toast("Please select at least one user");
-            state.processingAction = false;
-            return;
+             window.toast("Select at least one user");
+             state.processingAction = false;
+             return;
         }
     }
 
@@ -1291,6 +1327,8 @@ export function startChatApp(customConfig = {}) {
       state.lastCreatedPass = p;
       $('s-id').innerText = newRoom.id;
       window.nav('scr-success');
+      // Reset state for next create
+      state.selectedAllowedUsers = [];
     }
     state.processingAction = false;
     window.setLoading(false);
@@ -1443,17 +1481,15 @@ export function startChatApp(customConfig = {}) {
     $('edit-room-private').checked = room.is_private;
     $('edit-room-pass').value = '';
     
-    // Handle Access UI
+    // Reset selection first
+    state.selectedAllowedUsers = [];
+    
     const isEveryone = room.allowed_users.includes('*');
     if (isEveryone) {
-        $('edit-room-access-everyone').checked = true;
-        $('edit-room-restricted-view').style.display = 'none';
-        state.selectedAllowedUsers = [];
+        window.handleAccessToggle('edit-room', 'everyone');
     } else {
-        $('edit-room-access-selected').checked = true;
-        $('edit-room-restricted-view').style.display = 'block';
-        
-        // Fetch names for IDs
+        window.handleAccessToggle('edit-room', 'specific');
+        // Load users
         const ids = room.allowed_users;
         const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
         state.selectedAllowedUsers = ids.map(id => {
@@ -1462,7 +1498,7 @@ export function startChatApp(customConfig = {}) {
         });
     }
     
-    renderAllowedUsersGrid('edit-room-users-grid');
+    updateAccessSummary('edit-room');
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
@@ -1476,14 +1512,8 @@ export function startChatApp(customConfig = {}) {
     const name = $('edit-room-name').value.trim();
     const isPrivate = $('edit-room-private').checked;
     const newPass = $('edit-room-pass').value;
-    const isEveryone = $('edit-room-access-everyone').checked;
-
-    if (!name) {
-      window.toast("Room name is required");
-      state.processingAction = false;
-      return;
-    }
-
+    
+    const isEveryone = $('edit-room-access-everyone').classList.contains('active');
     let allowedUsers = ['*'];
     if (!isEveryone) {
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
@@ -1493,6 +1523,12 @@ export function startChatApp(customConfig = {}) {
              state.processingAction = false;
              return;
         }
+    }
+
+    if (!name) {
+      window.toast("Room name is required");
+      state.processingAction = false;
+      return;
     }
 
     window.setLoading(true, "Saving changes...");
