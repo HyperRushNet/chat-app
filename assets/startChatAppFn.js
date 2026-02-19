@@ -239,12 +239,19 @@ export function startChatApp(customConfig = {}) {
     cryptoWorker.postMessage({ type: 'encrypt', payload: { text: time + "|" + text } });
   });
 
-  const cleanupChannels = async () => {
+  const cleanupPresence = async () => {
     if (state.presenceChannel) {
       try { await db.removeChannel(state.presenceChannel); } catch {}
       state.presenceChannel = null;
-      state.isPresenceSubscribed = false;
     }
+    state.isPresenceSubscribed = false;
+    state.isConnecting = false;
+    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+    state.heartbeatInterval = null;
+    updateOnlineDisplay(null);
+  };
+
+  const cleanupChatChannel = async () => {
     if (state.chatChannel) {
       try { await db.removeChannel(state.chatChannel); } catch {}
       state.chatChannel = null;
@@ -252,11 +259,14 @@ export function startChatApp(customConfig = {}) {
     state.isChatChannelReady = false;
   };
 
+  const cleanupChannels = async () => {
+    await cleanupChatChannel();
+  };
+
   const queryOnlineCountImmediately = async () => {
     if (!state.presenceChannel) return;
     try {
       const presState = state.presenceChannel.presenceState();
-      if (!presState) return;
       const allPresences = Object.values(presState).flat();
       const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
       updateOnlineDisplay(uniqueUserIds.size);
@@ -274,20 +284,16 @@ export function startChatApp(customConfig = {}) {
   };
 
   const initPresence = async (force = false) => {
-    if (!state.isMasterTab || !state.user) return;
+    if (!state.user || !state.isMasterTab) return;
+
     const now = Date.now();
     if (!force && state.isConnecting) return;
     if (!force && (now - state.lastReconnectAttempt < CONFIG.reconnectDebounceMs)) return;
 
     state.lastReconnectAttempt = now;
     state.isConnecting = true;
-    state.isPresenceSubscribed = false;
 
-    if (state.presenceChannel) {
-      try { await db.removeChannel(state.presenceChannel); } catch {}
-    }
-
-    updateOnlineDisplay(null);
+    await cleanupPresence();
 
     const myId = state.user.id;
     state.presenceChannel = db.channel('online-users', {
@@ -299,16 +305,17 @@ export function startChatApp(customConfig = {}) {
         if (!state.presenceChannel) return;
         queryOnlineCountImmediately();
       })
-      .subscribe(async (status, err) => {
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          if (!state.presenceChannel) return;
           state.isPresenceSubscribed = true;
           state.isConnecting = false;
-          await queryOnlineCountImmediately();
+
           await state.presenceChannel.track({
             user_id: myId,
-            online_at: new Date().toISOString()
+            online_at: new Date().toISOString(),
+            tab_id: state.tabId
           });
+
           await queryOnlineCountImmediately();
 
           if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
@@ -317,17 +324,14 @@ export function startChatApp(customConfig = {}) {
               try {
                 await state.presenceChannel.track({
                   user_id: myId,
-                  online_at: new Date().toISOString()
+                  online_at: new Date().toISOString(),
+                  tab_id: state.tabId
                 });
               } catch {}
             }
           }, CONFIG.presenceHeartbeatMs);
 
-          setTimeout(() => {
-            if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.serverFull && !state.isConnecting) {
-              queryOnlineCountImmediately();
-            }
-          }, 1800);
+          setTimeout(queryOnlineCountImmediately, 800);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           state.isPresenceSubscribed = false;
           state.isConnecting = false;
@@ -355,20 +359,18 @@ export function startChatApp(customConfig = {}) {
         initPresence(true);
       }
 
-      if (state.lastKnownOnlineCount === null &&
-          state.isPresenceSubscribed &&
-          !state.isConnecting &&
-          !state.serverFull) {
+      if (!state.isPresenceSubscribed && !state.isConnecting && !state.serverFull) {
         setTimeout(() => {
-          if (state.lastKnownOnlineCount === null &&
-              state.isPresenceSubscribed &&
-              !state.isConnecting &&
-              !state.serverFull) {
-            queryOnlineCountImmediately();
+          if (!state.isPresenceSubscribed && !state.isConnecting && !state.serverFull) {
+            initPresence(true);
           }
-        }, 1000);
+        }, 1200);
       }
-    }, 5000);
+
+      if (state.lastKnownOnlineCount === null && state.isPresenceSubscribed && !state.isConnecting && !state.serverFull) {
+        setTimeout(queryOnlineCountImmediately, 1000);
+      }
+    }, 4000);
   };
 
   window.retryConnection = () => {
@@ -389,7 +391,7 @@ export function startChatApp(customConfig = {}) {
       tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
       $('block-overlay').classList.remove('active');
       if (localStorage.getItem(FLAG_LOGOUT) !== 'true' && state.user) {
-        initPresence(true);
+        setTimeout(() => initPresence(true), 400);
       }
     }
   };
@@ -402,10 +404,8 @@ export function startChatApp(customConfig = {}) {
   tabChannel.onmessage = (ev) => {
     if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) {
       if (state.isMasterTab) {
-        cleanupChannels();
-        if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-        state.heartbeatInterval = null;
-        state.isPresenceSubscribed = false;
+        cleanupPresence();
+        cleanupChatChannel();
         state.isMasterTab = false;
         updateOnlineDisplay(null);
         const overlay = $('block-overlay');
@@ -747,7 +747,7 @@ export function startChatApp(customConfig = {}) {
   window.openVault = async (id, n, rawPassword, roomSalt) => {
     if (!state.user) return window.toast("Please login first");
     window.setLoading(true, "Deriving Key...");
-    if (state.chatChannel) await db.removeChannel(state.chatChannel);
+    await cleanupChatChannel();
     state.currentRoomId = id;
     state.lastRenderedDateLabel = null;
     state.roomGuestStatus = {};
@@ -906,11 +906,9 @@ export function startChatApp(customConfig = {}) {
 
   window.leaveChat = async () => {
     window.setLoading(true, "Leaving Room...");
-    if (state.chatChannel) await db.removeChannel(state.chatChannel);
-    state.chatChannel = null;
+    await cleanupChatChannel();
     state.currentRoomId = null;
     state.roomGuestStatus = {};
-    state.isChatChannelReady = false;
     window.nav('scr-lobby');
     window.loadRooms();
     window.setLoading(false);
@@ -1164,10 +1162,10 @@ export function startChatApp(customConfig = {}) {
   window.handleLogout = async (e) => {
     if (!e || !e.isTrusted) return;
     window.setLoading(true, "Switching Account...");
-    await cleanupChannels();
-    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-    if (state.uptimeInterval) clearInterval(state.uptimeInterval);
-    state.uptimeInterval = null;
+    await cleanupPresence();
+    await cleanupChatChannel();
+    state.currentRoomId = null;
+    state.roomGuestStatus = {};
     state.sessionStartTime = null;
     try {
       await db.auth.signOut({ scope: 'local' });
@@ -1263,11 +1261,12 @@ export function startChatApp(customConfig = {}) {
       }
     }
     if (ev === 'SIGNED_OUT') {
-      if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-      if (state.uptimeInterval) clearInterval(state.uptimeInterval);
+      await cleanupPresence();
+      await cleanupChatChannel();
+      state.currentRoomId = null;
+      state.roomGuestStatus = {};
       state.uptimeInterval = null;
       state.sessionStartTime = null;
-      await cleanupChannels();
       localStorage.removeItem(FLAG_GUEST_ID);
       localStorage.removeItem(FLAG_GUEST_NAME);
       localStorage.removeItem(FLAG_LOGOUT);
