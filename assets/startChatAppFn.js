@@ -636,9 +636,10 @@ export function startChatApp(customConfig = {}) {
       state.lastRenderedDateLabel = currentLabel;
     }
 
-    const isUserGuest = state.roomGuestStatus[m.user_id] || false;
-    const displayName = isUserGuest ? "Guest" : m.user_name;
-    const guestPill = isUserGuest ? '<span class="guest-pill">Guest</span>' : '';
+    const isGuest = state.roomGuestStatus[m.user_id] || false;
+    const displayName = isGuest && m.user_name ? m.user_name : m.user_name;
+    const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
+
     const processedText = processText(m.text);
 
     html += `
@@ -662,7 +663,7 @@ export function startChatApp(customConfig = {}) {
   const fetchGuestStatuses = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     const uniqueIds = [...new Set(userIds)];
-    const { data, error } = await db.from('profiles').select('id, is_guest').in('id', uniqueIds);
+    const { data, error } = await db.from('profiles').select('id, full_name, is_guest').in('id', uniqueIds);
     if (data) {
       data.forEach(p => {
         state.roomGuestStatus[p.id] = p.is_guest;
@@ -723,9 +724,10 @@ export function startChatApp(customConfig = {}) {
             tempLabel = msgDate;
           }
 
-          const isUserGuest = state.roomGuestStatus[m.user_id] || false;
-          const displayName = isUserGuest ? "Guest" : m.user_name;
-          const guestPill = isUserGuest ? '<span class="guest-pill">Guest</span>' : '';
+          const isGuest = state.roomGuestStatus[m.user_id] || false;
+          const displayName = isGuest && m.user_name ? m.user_name : m.user_name;
+          const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
+
           const processedText = processText(m.text);
 
           html += `
