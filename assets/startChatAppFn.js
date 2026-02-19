@@ -1,4 +1,4 @@
-// assets/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
+// assets/startChatAppFn.js | HyperRushNet | 2026 | MIT License
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function startChatApp(customConfig = {}) {
@@ -14,7 +14,9 @@ export function startChatApp(customConfig = {}) {
     reconnectDebounceMs: customConfig.reconnectDebounceMs || 3000,
     verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
   };
+
   lucide.createIcons();
+
   const state = {
     user: null,
     currentRoomId: null,
@@ -42,24 +44,32 @@ export function startChatApp(customConfig = {}) {
     hasMoreHistory: true,
     lastMessageTime: 0,
     isConnecting: false,
-    isChatChannelReady: false
+    isChatChannelReady: false,
+    currentRoomAccessType: null, // 'open' | 'restricted' | null
   };
+
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
   const FLAG_GUEST_NAME = 'hrn_flag_guest_name';
   const FLAG_GUEST_ID = 'hrn_flag_guest_id';
+
   let toastQueue = [];
   let toastVisible = false;
+
   const tabChannel = new BroadcastChannel('hrn_tab_sync');
+
   const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: false },
     realtime: { params: { eventsPerSecond: 10 } }
   });
+
   const esc = t => {
     const p = document.createElement('p');
     p.textContent = t;
     return p.innerHTML;
   };
+
   const $ = id => document.getElementById(id);
+
   const updateOnlineDisplay = (count) => {
     if (typeof count === 'number') state.lastKnownOnlineCount = count;
     const displayCount = (typeof count === 'number') ? count : '--';
@@ -69,6 +79,7 @@ export function startChatApp(customConfig = {}) {
     const hubCount = $('hub-online-count');
     if (hubCount && hubCount.innerText !== displayCount.toString()) hubCount.innerText = displayCount;
   };
+
   const updateUptime = () => {
     if (!state.sessionStartTime) return;
     const diff = Math.floor((Date.now() - state.sessionStartTime) / 1000);
@@ -77,6 +88,7 @@ export function startChatApp(customConfig = {}) {
     const el = $('hub-uptime');
     if (el) el.innerText = `${mins}:${secs}`;
   };
+
   const processToastQueue = () => {
     if (toastVisible || toastQueue.length === 0) return;
     toastVisible = true;
@@ -105,10 +117,12 @@ export function startChatApp(customConfig = {}) {
       }
     }, 3000);
   };
+
   window.toast = m => {
     toastQueue.push(m);
     processToastQueue();
   };
+
   window.setLoading = (s, text = null) => {
     const loader = $('loader-overlay');
     const loaderText = $('loader-text');
@@ -117,10 +131,12 @@ export function startChatApp(customConfig = {}) {
     if (text) loaderText.innerText = text;
     else loaderText.innerText = "Loading...";
   };
+
   const safeAwait = async (promise) => {
     try { return [await promise, null]; }
     catch (error) { return [null, error]; }
   };
+
   const workerCode = `self.onmessage = async (e) => {
     const { type, payload } = e.data;
     const encoder = new TextEncoder();
@@ -180,8 +196,10 @@ export function startChatApp(customConfig = {}) {
       self.postMessage({ type: 'error', message: error.message });
     }
   };`;
+
   const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
   const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
+
   const pendingCallbacks = {};
   cryptoWorker.onmessage = (e) => {
     const { type } = e.data;
@@ -190,17 +208,20 @@ export function startChatApp(customConfig = {}) {
       delete pendingCallbacks[type];
     }
   };
+
   const generateSalt = () => {
     const arr = new Uint8Array(16);
     crypto.getRandomValues(arr);
     return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
   };
+
   const sha256 = async (text) => {
     const buffer = new TextEncoder().encode(text);
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   };
+
   const deriveKey = (pass, salt) => new Promise((resolve, reject) => {
     pendingCallbacks['keyDerived'] = (data) => {
       if (data.success) resolve(true);
@@ -208,6 +229,7 @@ export function startChatApp(customConfig = {}) {
     };
     cryptoWorker.postMessage({ type: 'deriveKey', payload: { password: pass, salt: salt } });
   });
+
   const encryptMessage = (text) => new Promise((resolve, reject) => {
     pendingCallbacks['encrypted'] = (data) => {
       if (data.result) resolve(data.result);
@@ -216,6 +238,7 @@ export function startChatApp(customConfig = {}) {
     const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
     cryptoWorker.postMessage({ type: 'encrypt', payload: { text: time + "|" + text } });
   });
+
   const cleanupChannels = async () => {
     if (state.presenceChannel) {
       state.presenceChannel.unsubscribe();
@@ -227,6 +250,7 @@ export function startChatApp(customConfig = {}) {
       state.chatChannel = null;
     }
   };
+
   const queryOnlineCountImmediately = async () => {
     if (!state.presenceChannel) return;
     const presState = state.presenceChannel.presenceState();
@@ -243,6 +267,7 @@ export function startChatApp(customConfig = {}) {
       state.serverFull = false;
     }
   };
+
   const initPresence = async (force = false) => {
     if (!state.isMasterTab || !state.user) return;
     const now = Date.now();
@@ -297,6 +322,7 @@ export function startChatApp(customConfig = {}) {
         }
       });
   };
+
   const monitorConnection = () => {
     setInterval(() => {
       if (!navigator.onLine) {
@@ -327,16 +353,19 @@ export function startChatApp(customConfig = {}) {
       }
     }, 5000);
   };
+
   window.retryConnection = () => {
     $('capacity-overlay').classList.remove('active');
     state.serverFull = false;
     initPresence(true);
   };
+
   window.handlePrivateToggle = () => {
     const isPrivate = $('c-private').checked;
     const passInput = $('c-pass');
     passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
   };
+
   window.forceClaimMaster = () => {
     if (!state.isMasterTab) {
       state.isMasterTab = true;
@@ -347,10 +376,12 @@ export function startChatApp(customConfig = {}) {
       }
     }
   };
+
   window.closeTabAttempt = () => {
     window.open('', '_self');
     window.close();
   };
+
   tabChannel.onmessage = (ev) => {
     if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) {
       if (state.isMasterTab) {
@@ -377,9 +408,11 @@ export function startChatApp(customConfig = {}) {
       }
     }
   };
+
   window.addEventListener('beforeunload', () => {
     tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
   });
+
   const checkMaster = () => {
     return new Promise((resolve) => {
       let masterFound = false;
@@ -394,17 +427,21 @@ export function startChatApp(customConfig = {}) {
       }, 300);
     });
   };
+
   window.showGuestInfo = () => {
     $('overlay-container').classList.add('active');
     window.showOverlayView('guest-info');
     lucide.createIcons();
   };
+
   window.openHub = () => {
     $('overlay-container').classList.add('active');
     window.showOverlayView('hub');
     lucide.createIcons();
   };
+
   window.closeOverlay = () => $('overlay-container').classList.remove('active');
+
   window.showOverlayView = (viewId) => {
     const panel = document.querySelector('.panel-card');
     if(!panel) return;
@@ -415,6 +452,7 @@ export function startChatApp(customConfig = {}) {
       lucide.createIcons();
     }
   };
+
   window.prepareMyAccount = () => {
     if(!state.user) return;
     const isGuest = state.user.is_anonymous;
@@ -425,6 +463,7 @@ export function startChatApp(customConfig = {}) {
     $('my-acc-type').style.color = isGuest ? "var(--warning)" : "var(--success)";
     window.showOverlayView('my-account');
   };
+
   window.inspectUser = async (uid) => {
     if (uid === state.user?.id) return window.prepareMyAccount();
     window.setLoading(true, "Fetching info...");
@@ -443,6 +482,7 @@ export function startChatApp(customConfig = {}) {
     window.showOverlayView('quick-view-user');
     $('overlay-container').classList.add('active');
   };
+
   const prepareGuestScreen = () => {
     const storedName = localStorage.getItem(FLAG_GUEST_NAME);
     const nameInput = $('g-name');
@@ -460,6 +500,7 @@ export function startChatApp(customConfig = {}) {
     }
     lucide.createIcons();
   };
+
   window.nav = (id, direction = null) => {
     const current = document.querySelector('.screen.active');
     const next = $(id);
@@ -481,24 +522,39 @@ export function startChatApp(customConfig = {}) {
     const createBtn = $('icon-plus-lobby');
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
   };
+
   window.loadRooms = async () => {
     if(!state.user) return;
-    window.setLoading(true, "Fetching Rooms...");
-    const {data} = await db.from('rooms').select('*').eq('is_private',false).order('created_at',{ascending:false});
-    state.allRooms = data || [];
+    window.setLoading(true, "Fetching accessible rooms...");
+    const { data: rooms, error } = await db
+      .from('rooms')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      window.toast("Failed to load rooms");
+      window.setLoading(false);
+      return;
+    }
+    const accessible = [];
+    for (const room of rooms || []) {
+      const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: room.id });
+      if (canAccess) accessible.push(room);
+    }
+    state.allRooms = accessible;
     window.filterRooms();
     window.setLoading(false);
   };
+
   window.filterRooms = () => {
     const q = $('search-bar').value.toLowerCase();
     const list = $('room-list');
-    const filtered = state.allRooms.filter(r=>r.name.toLowerCase().includes(q));
+    const filtered = state.allRooms.filter(r => r.name.toLowerCase().includes(q));
     if (filtered.length === 0) {
       list.innerHTML = `
         <div class="empty-state">
           <i data-lucide="folder" class="empty-state-icon"></i>
           <div class="empty-state-title">No groups yet</div>
-          <div class="empty-state-sub">Create one to start chatting.</div>
+          <div class="empty-state-sub">Create one or get invited.</div>
         </div>
       `;
     } else {
@@ -513,36 +569,59 @@ export function startChatApp(customConfig = {}) {
     }
     lucide.createIcons();
   };
+
   window.joinAttempt = async (id) => {
     if(state.serverFull) return window.toast("Network is full");
-    window.setLoading(true, "Joining Room...");
+    window.setLoading(true, "Checking access...");
+    const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
+    if (!canAccess) {
+      window.setLoading(false);
+      return window.toast("Access denied — you are not on the allowed list");
+    }
     const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
     window.setLoading(false);
     if (error || !data) return window.toast("Room not found");
+    state.pending = { id: data.id, name: data.name, salt: data.salt };
+    if (data.allowed_users.includes('*')) {
+      state.currentRoomAccessType = 'open';
+    } else {
+      state.currentRoomAccessType = 'restricted';
+    }
     if (data.has_password) {
-      state.pending = { id: data.id, name: data.name, salt: data.salt };
       window.nav('scr-gate');
     } else {
       window.openVault(data.id, data.name, null, data.salt);
     }
   };
+
   window.joinPrivate = async () => {
     if(state.serverFull) return window.toast("Network is full");
     if(!state.user) return window.toast("Login required");
     const id = $('join-id').value.trim();
     if(!id) return;
-    window.setLoading(true, "Searching Room...");
-    const {data} = await db.from('rooms').select('*').eq('id',id).single();
+    window.setLoading(true, "Checking access...");
+    const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
+    if (!canAccess) {
+      window.setLoading(false);
+      return window.toast("Access denied — not allowed");
+    }
+    const { data } = await db.from('rooms').select('*').eq('id',id).single();
     window.setLoading(false);
     if(data) {
+      state.pending = { id: data.id, name: data.name, salt: data.salt };
+      if (data.allowed_users.includes('*')) {
+        state.currentRoomAccessType = 'open';
+      } else {
+        state.currentRoomAccessType = 'restricted';
+      }
       if(data.has_password) {
-        state.pending = { id: data.id, name: data.name, salt: data.salt };
         window.nav('scr-gate');
       } else {
         window.openVault(data.id, data.name, null, data.salt);
       }
     } else window.toast("Not found");
   };
+
   const getDateLabel = (d) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -553,6 +632,7 @@ export function startChatApp(customConfig = {}) {
     if (diff < 7) return d.toLocaleDateString('en-GB', { weekday: 'long' });
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
   };
+
   const processText = (text) => {
     let t = esc(text);
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -562,12 +642,14 @@ export function startChatApp(customConfig = {}) {
     });
     return t;
   };
+
   const checkChatEmpty = () => {
     const container = $('chat-messages');
     const emptyState = $('chat-empty-state');
     const hasMessages = container.querySelector('.msg');
     if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex';
   };
+
   const renderMsg = (m, prepend = false) => {
     let html = "";
     const msgDateObj = new Date(m.created_at);
@@ -591,6 +673,7 @@ export function startChatApp(customConfig = {}) {
       </div>`;
     return html;
   };
+
   const handleScroll = () => {
     const container = $('chat-messages');
     if (!container) return;
@@ -598,6 +681,7 @@ export function startChatApp(customConfig = {}) {
       loadMoreHistory();
     }
   };
+
   const fetchGuestStatuses = async (userIds) => {
     if (!userIds || userIds.length === 0) return;
     const uniqueIds = [...new Set(userIds)];
@@ -608,6 +692,7 @@ export function startChatApp(customConfig = {}) {
       });
     }
   };
+
   const loadMoreHistory = async () => {
     if (!state.oldestMessageTimestamp || !state.currentRoomId) return;
     state.isLoadingHistory = true;
@@ -675,6 +760,7 @@ export function startChatApp(customConfig = {}) {
     };
     cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
   };
+
   window.openVault = async (id, n, rawPassword, roomSalt) => {
     if (!state.user) return window.toast("Please login first");
     window.setLoading(true, "Deriving Key...");
@@ -765,6 +851,7 @@ export function startChatApp(customConfig = {}) {
       }
     });
   };
+
   const applyRateLimit = () => {
     const now = Date.now();
     if (now - state.lastMessageTime < CONFIG.rateLimitMs) {
@@ -777,6 +864,7 @@ export function startChatApp(customConfig = {}) {
     }
     return true;
   };
+
   window.sendMsg = async (e) => {
     if (!e || !e.isTrusted) return;
     if (!state.user || !state.currentRoomId) return;
@@ -807,6 +895,7 @@ export function startChatApp(customConfig = {}) {
     }
     state.processingAction = false;
   };
+
   window.sendGuestReply = async (e, message) => {
     if (!e || !e.isTrusted) return;
     if (!state.user || !state.currentRoomId) return;
@@ -829,16 +918,19 @@ export function startChatApp(customConfig = {}) {
     } catch(err) {}
     state.processingAction = false;
   };
+
   window.leaveChat = async () => {
     window.setLoading(true, "Leaving Room...");
     if(state.chatChannel) state.chatChannel.unsubscribe();
     state.chatChannel = null;
     state.currentRoomId = null;
     state.roomGuestStatus = {};
+    state.currentRoomAccessType = null;
     window.nav('scr-lobby');
     window.loadRooms();
     window.setLoading(false);
   };
+
   window.handleLogin = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.processingAction) return;
@@ -860,6 +952,7 @@ export function startChatApp(customConfig = {}) {
     }
     state.processingAction = false;
   };
+
   window.handleRegister = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.processingAction) return;
@@ -899,6 +992,7 @@ export function startChatApp(customConfig = {}) {
     }
     state.processingAction = false;
   };
+
   const startVTimer = () => {
     let left = CONFIG.verificationCodeExpiry;
     if(state.vTimer) clearInterval(state.vTimer);
@@ -911,6 +1005,7 @@ export function startChatApp(customConfig = {}) {
       }
     }, 1000);
   };
+
   window.handleVerify = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.processingAction) return;
@@ -953,6 +1048,7 @@ export function startChatApp(customConfig = {}) {
     }
     state.processingAction = false;
   };
+
   window.handleGuestLogin = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.processingAction) return;
@@ -971,12 +1067,14 @@ export function startChatApp(customConfig = {}) {
       await initPresence(true);
     }
   };
+
   window.confirmGuestLoginAction = async (e) => {
     if (!e || !e.isTrusted) return;
     const name = $('g-name').value.trim();
     if(!name) return;
     await performGuestLogin(name);
   };
+
   const performGuestLogin = async (name) => {
     window.closeOverlay();
     window.setLoading(true, "Initializing...");
@@ -1024,13 +1122,17 @@ export function startChatApp(customConfig = {}) {
     window.setLoading(false);
     await initPresence(true);
   };
+
   window.handleCreate = async (e) => {
     if (!e || !e.isTrusted) return;
     if(state.serverFull) return window.toast("Network full");
     if(state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
     if(state.processingAction) return;
     state.processingAction = true;
-    const n=$('c-name').value, p=$('c-pass').value, isP=$('c-private').checked;
+    const n = $('c-name').value.trim();
+    const p = $('c-pass').value;
+    const isP = $('c-private').checked;
+    const allowedStr = $('c-allowed').value.trim();
     if(isP && !p) {
       window.toast("Private rooms require a password");
       state.processingAction = false;
@@ -1041,14 +1143,29 @@ export function startChatApp(customConfig = {}) {
       state.processingAction = false;
       return;
     }
+    let allowedUsers = ['*'];
+    if (allowedStr) {
+      if (allowedStr.trim() === '*') {
+        allowedUsers = ['*'];
+      } else {
+        allowedUsers = allowedStr
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        if (!allowedUsers.includes(state.user.id)) {
+          allowedUsers.push(state.user.id);
+        }
+      }
+    }
     window.setLoading(true, "Deploying Room...");
     const roomSalt = generateSalt();
     const {data, error} = await db.from('rooms').insert([{
-      name:n,
-      has_password:!!p,
-      is_private:isP,
-      salt:roomSalt,
-      created_by:state.user.id
+      name: n,
+      has_password: !!p,
+      is_private: isP,
+      salt: roomSalt,
+      created_by: state.user.id,
+      allowed_users: allowedUsers
     }]).select();
     if(error) {
       window.toast("Error: " + error.message);
@@ -1070,6 +1187,7 @@ export function startChatApp(customConfig = {}) {
     state.processingAction = false;
     window.setLoading(false);
   };
+
   window.submitGate = async (e) => {
     if (!e || !e.isTrusted) return;
     const inputPass = $('gate-pass').value;
@@ -1083,6 +1201,7 @@ export function startChatApp(customConfig = {}) {
     if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
     else window.toast("Access Denied");
   };
+
   window.handleLogout = async (e) => {
     if (!e || !e.isTrusted) return;
     window.setLoading(true, "Switching Account...");
@@ -1110,6 +1229,7 @@ export function startChatApp(customConfig = {}) {
     }
     window.setLoading(false);
   };
+
   window.copyId = () => {
     navigator.clipboard.writeText(state.currentRoomId);
     const copyIcon = $('icon-copy-chat');
@@ -1121,15 +1241,18 @@ export function startChatApp(customConfig = {}) {
       checkIcon.style.display = 'none';
     }, 2000);
   };
+
   window.copySId = () => {
     navigator.clipboard.writeText(state.lastCreated.id);
     window.toast("ID Copied");
   };
+
   window.enterCreated = () => {
     const pass = state.lastCreatedPass;
     window.openVault(state.lastCreated.id, state.lastCreated.name, pass, state.lastCreated.salt);
     state.lastCreatedPass = null;
   };
+
   let touchStartX = 0, touchEndX = 0;
   document.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
   document.addEventListener('touchend', e => {
@@ -1140,16 +1263,19 @@ export function startChatApp(customConfig = {}) {
     if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left');
     else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right');
   }, false);
+
   window.addEventListener('online', () => {
     $('offline-screen').classList.remove('active');
     window.toast("Back online");
     if(state.user && state.isMasterTab) initPresence(true);
   });
+
   window.addEventListener('offline', () => {
     $('offline-screen').classList.add('active');
     updateOnlineDisplay(null);
     window.toast("Connection lost");
   });
+
   db.auth.onAuthStateChange(async (ev, ses) => {
     const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
     if (isFlaggedLogout) {
@@ -1188,6 +1314,7 @@ export function startChatApp(customConfig = {}) {
       window.nav('scr-start');
     }
   });
+
   const init = async () => {
     if (!navigator.onLine) {
       $('offline-screen').classList.add('active');
@@ -1237,5 +1364,6 @@ export function startChatApp(customConfig = {}) {
     window.setLoading(false);
     monitorConnection();
   };
+
   init();
 }
