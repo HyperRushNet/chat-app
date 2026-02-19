@@ -1,5 +1,7 @@
 // scripts/startChatAppFn.js | GH: HyperRushNet | 2026 | MIT License
 
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
 export function startChatApp(customConfig = {}) {
             const CONFIG = {
                 supabaseUrl: customConfig.supabaseUrl || "https://fahbqdajxnhswevdagdn.supabase.co",
