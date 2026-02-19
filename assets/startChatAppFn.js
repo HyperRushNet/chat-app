@@ -48,7 +48,7 @@ export function startChatApp(customConfig = {}) {
     currentRoomAccessType: null,
     currentRoomData: null,
     selectedAllowedUsers: [], 
-    currentPickerContext: null,
+    currentPickerContext: null, // 'c' or 'edit-room'
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -367,7 +367,7 @@ export function startChatApp(customConfig = {}) {
       btnEveryone.classList.add('active');
       btnSpecific.classList.remove('active');
       summaryEl.innerHTML = `<span class="c-main">Everyone can join</span><i data-lucide="globe" class="w-16 h-16"></i>`;
-      state.selectedAllowedUsers = []; // Clear selection
+      state.selectedAllowedUsers = [];
     } else {
       btnEveryone.classList.remove('active');
       btnSpecific.classList.add('active');
@@ -390,7 +390,6 @@ export function startChatApp(customConfig = {}) {
   window.openAccessManager = async (prefix) => {
     state.currentPickerContext = prefix;
     
-    // Load logic (same as before)
     if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) {
         const ids = state.currentRoomData.allowed_users;
         if (!ids.includes('*')) {
@@ -411,14 +410,18 @@ export function startChatApp(customConfig = {}) {
     $('picker-id-input').focus();
   };
 
+  // FIX: Navigate back to settings instead of closing if coming from settings
   window.closeAccessManager = () => {
-    window.closeOverlay();
+    if (state.currentPickerContext === 'edit-room') {
+        window.showOverlayView('room-settings');
+    } else {
+        window.closeOverlay();
+    }
     updateAccessSummary(state.currentPickerContext);
   };
 
   const renderPickerSelectedUsers = () => {
     const container = $('picker-selected-list');
-    // Show ALL users including self
     const displayUsers = state.selectedAllowedUsers;
     
     if (displayUsers.length === 0) {
@@ -451,7 +454,6 @@ export function startChatApp(customConfig = {}) {
     renderPickerSelectedUsers();
   };
 
-  // NEW: Add by ID button logic
   window.addUserById = async () => {
     const input = $('picker-id-input');
     const id = input.value.trim();
@@ -1253,7 +1255,6 @@ export function startChatApp(customConfig = {}) {
     
     if (!isEveryone) {
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
-        // Ensure creator is in the list
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
         if (allowedUsers.length === 0) {
              window.toast("Select at least one user");
