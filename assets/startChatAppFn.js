@@ -781,6 +781,7 @@ export function startChatApp(customConfig = {}) {
     const checkIcon = $('icon-check-chat');
     if (copyIcon) copyIcon.style.display = 'block';
     if (checkIcon) checkIcon.style.display = 'none';
+    
     const keySource = rawPassword ? (rawPassword + id) : id;
     try {
       await deriveKey(keySource, roomSalt);
@@ -788,11 +789,15 @@ export function startChatApp(customConfig = {}) {
       window.setLoading(false);
       return window.toast("Key derivation failed");
     }
+    
     const { data: room } = await db.from('rooms').select('*').eq('id', id).single();
     state.currentRoomData = room;
+    
+    // Room Settings Logic
     const isOwner = room && room.created_by === state.user.id;
     const settingsIcon = $('room-settings-icon');
     if (settingsIcon) settingsIcon.style.display = isOwner ? 'block' : 'none';
+
     window.setLoading(true, "Fetching History...");
     const { data } = await db.from('messages')
       .select('*')
@@ -806,6 +811,7 @@ export function startChatApp(customConfig = {}) {
     $('guest-replies').style.display = isGuest ? 'flex' : 'none';
     $('send-btn').style.display = isGuest ? 'none' : 'flex';
     window.nav('scr-chat');
+    
     if (data && data.length > 0) {
       data.reverse();
       if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at;
@@ -828,6 +834,7 @@ export function startChatApp(customConfig = {}) {
       checkChatEmpty();
       window.setLoading(false);
     }
+    
     state.chatChannel = db.channel(`room_chat_${id}`, {
       config: { broadcast: { self: true } }
     });
@@ -935,6 +942,11 @@ export function startChatApp(customConfig = {}) {
     state.roomGuestStatus = {};
     state.currentRoomAccessType = null;
     state.currentRoomData = null;
+    
+    // Hide settings icon
+    const settingsIcon = $('room-settings-icon');
+    if (settingsIcon) settingsIcon.style.display = 'none';
+    
     window.nav('scr-lobby');
     window.loadRooms();
     window.setLoading(false);
@@ -1324,6 +1336,7 @@ export function startChatApp(customConfig = {}) {
     }
   });
 
+  // --- NEW SETTINGS LOGIC ---
   window.openRoomSettings = async () => {
     if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) {
       return window.toast("You are not the owner of this room");
@@ -1346,11 +1359,13 @@ export function startChatApp(customConfig = {}) {
     const isPrivate = $('edit-room-private').checked;
     const allowedStr = $('edit-room-allowed').value.trim();
     const newPass = $('edit-room-pass').value;
+
     if (!name) {
       window.toast("Room name is required");
       state.processingAction = false;
       return;
     }
+
     let allowedUsers = ['*'];
     if (allowedStr) {
       if (allowedStr === '*') {
@@ -1360,15 +1375,19 @@ export function startChatApp(customConfig = {}) {
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
       }
     }
+
     window.setLoading(true, "Saving changes...");
+    
     const updates = { name, is_private: isPrivate, allowed_users: allowedUsers };
     const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId);
+
     if (updateError) {
       window.toast("Failed to update room: " + updateError.message);
       window.setLoading(false);
       state.processingAction = false;
       return;
     }
+
     if (newPass) {
       const roomSalt = state.currentRoomData.salt;
       const accessHash = await sha256(newPass + roomSalt);
@@ -1377,14 +1396,15 @@ export function startChatApp(customConfig = {}) {
         window.toast("Failed to update password");
       } else {
         await db.from('rooms').update({ has_password: true }).eq('id', state.currentRoomId);
+        state.currentRoomData.has_password = true; // Update local state
       }
-    } else if (state.currentRoomData.has_password) {
-      await db.from('room_passwords').delete().eq('room_id', state.currentRoomId);
-      await db.from('rooms').update({ has_password: false }).eq('id', state.currentRoomId);
     }
+    // Note: Removing password functionality omitted for security/simplicity in this iteration
+
     const { data: updatedRoom } = await db.from('rooms').select('*').eq('id', state.currentRoomId).single();
     state.currentRoomData = updatedRoom;
     $('chat-title').innerText = updatedRoom.name;
+    
     window.toast("Room settings saved");
     window.closeOverlay();
     state.processingAction = false;
