@@ -1,4 +1,5 @@
 -- Supabase SQL -- GH: HyperRushNet | MIT License | 2026
+-- You also need to go to Authentication => Sign in / Providers and disable "Confirm email".
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user CASCADE;
@@ -13,17 +14,19 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 CREATE TABLE public.profiles (
     id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text NOT NULL DEFAULT 'User',
-    is_guest boolean NOT NULL DEFAULT false,
+    avatar_url text,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE public.rooms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name text NOT NULL,
+    avatar_url text,
     has_password boolean NOT NULL DEFAULT false,
     is_private boolean NOT NULL DEFAULT false,
+    is_direct boolean NOT NULL DEFAULT false,
     salt text NOT NULL,
-    created_by uuid NOT NULL REFERENCES auth.users(id),
+    created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     allowed_users text[] NOT NULL DEFAULT '{*}',
     created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -36,7 +39,7 @@ CREATE TABLE public.room_passwords (
 CREATE TABLE public.messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id uuid NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
-    user_id uuid NOT NULL REFERENCES auth.users(id),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     user_name text NOT NULL,
     content text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
@@ -62,9 +65,8 @@ CREATE POLICY "rooms_select_visible" ON public.rooms FOR SELECT USING (
     OR (allowed_users @> ARRAY[auth.uid()::text])
 );
 
-CREATE POLICY "rooms_insert_non_guest" ON public.rooms FOR INSERT WITH CHECK (
-    auth.role() = 'authenticated'
-    AND (auth.jwt() ->> 'is_anonymous')::boolean IS NOT TRUE
+CREATE POLICY "rooms_insert_authenticated" ON public.rooms FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated' 
     AND auth.uid() = created_by
 );
 
@@ -95,44 +97,35 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $$ 
 BEGIN
-    INSERT INTO public.profiles (id, full_name, is_guest, updated_at)
+    INSERT INTO public.profiles (id, full_name, avatar_url, updated_at)
     VALUES (
         NEW.id,
         COALESCE(NEW.raw_user_meta_data ->> 'full_name', 'User'),
-        COALESCE((NEW.raw_user_meta_data ->> 'is_guest')::boolean, false),
+        NEW.raw_user_meta_data ->> 'avatar_url',
         NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
         full_name = COALESCE(NEW.raw_user_meta_data ->> 'full_name', profiles.full_name),
-        is_guest  = COALESCE((NEW.raw_user_meta_data ->> 'is_guest')::boolean, profiles.is_guest),
+        avatar_url = COALESCE(NEW.raw_user_meta_data ->> 'avatar_url', profiles.avatar_url),
         updated_at = NOW();
 
     RETURN NEW;
 END;
-$$;
+ $$;
 
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT OR UPDATE OF raw_user_meta_data ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user();
 
-INSERT INTO public.profiles (id, full_name, is_guest, updated_at)
-SELECT
-    u.id,
-    COALESCE(u.raw_user_meta_data ->> 'full_name', 'User'),
-    COALESCE((u.raw_user_meta_data ->> 'is_guest')::boolean, false),
-    NOW()
-FROM auth.users u
-ON CONFLICT (id) DO NOTHING;
-
 CREATE OR REPLACE FUNCTION public.set_room_password(p_room_id uuid, p_hash text)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $$ 
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM public.rooms
@@ -150,7 +143,7 @@ BEGIN
         DO UPDATE SET password_hash = EXCLUDED.password_hash;
     END IF;
 END;
-$$;
+ $$;
 
 CREATE OR REPLACE FUNCTION public.verify_room_password(p_room_id uuid, p_hash text)
 RETURNS boolean
@@ -158,7 +151,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
 SET search_path = public
-AS $$
+AS $$ 
 BEGIN
     RETURN EXISTS (
         SELECT 1
@@ -167,7 +160,7 @@ BEGIN
         AND password_hash = p_hash
     );
 END;
-$$;
+ $$;
 
 CREATE OR REPLACE FUNCTION public.can_access_room(p_room_id uuid)
 RETURNS boolean
@@ -175,7 +168,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
 SET search_path = public
-AS $$
+AS $$ 
 DECLARE
     r_allowed text[];
     r_creator uuid;
@@ -186,20 +179,16 @@ BEGIN
     FROM public.rooms
     WHERE id = p_room_id;
 
-    IF r_creator = auth.uid() THEN
-        RETURN true;
-    END IF;
+    IF r_creator IS NULL THEN RETURN false; END IF;
 
-    IF r_allowed @> ARRAY['*'] AND NOT r_private THEN
-        RETURN true;
-    END IF;
+    IF r_creator = auth.uid() THEN RETURN true; END IF;
 
-    IF r_allowed @> ARRAY[auth.uid()::text] THEN
-        RETURN true;
-    END IF;
+    IF r_allowed @> ARRAY['*'] AND NOT r_private THEN RETURN true; END IF;
+
+    IF r_allowed @> ARRAY[auth.uid()::text] THEN RETURN true; END IF;
 
     RETURN false;
 END;
-$$;
+ $$;
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
