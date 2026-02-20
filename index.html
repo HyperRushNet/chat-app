@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
- :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
+ :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#262626;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
 ::-webkit-scrollbar{width:0;height:0}
 body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center}
@@ -66,9 +66,9 @@ h1.title{font-size:28px;letter-spacing:-1px;color:#000;font-weight:800;margin-bo
 #context-tooltip.active{opacity:1;transform:scale(1)}
 .guest-pill{display:inline-flex;align-items:center;justify-content:center;padding:1px 5px;border-radius:5px;background:rgba(0,0,0,.08);font-size:7px;font-weight:800;text-transform:uppercase;color:var(--text-main)}
 .msg.me .guest-pill{background:rgba(255,255,255,.15);color:#fff}
-.chat-header-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
-.chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px}
+.chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1}
 .chat-avatar img{width:100%;height:100%;object-fit:cover}
+.chat-header-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .chat-header-title-wrapper{display:flex;flex-direction:column;min-width:0}
 .chat-header-title-wrapper .title{font-size:16px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .chat-subtitle{font-size:9px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
@@ -292,7 +292,7 @@ input:checked+.slider:before{transform:translateX(20px)}
         <div style="width:22px"></div>
     </div>
     <div class="center-content" style="padding-top: 20px; margin-bottom: 30px">
-        <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin-bottom:12px">?</div>
+        <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto">?</div>
         <h1 id="acc-page-name" class="title" style="font-size:22px">User Name</h1>
         <p id="acc-page-type" class="subtitle">Account Type</p>
     </div>
