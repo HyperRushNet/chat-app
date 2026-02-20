@@ -1,3 +1,5 @@
+// GH: HyperRushNet // 2026 // MIT License // index.html
+
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function startChatApp(customConfig = {}) {
