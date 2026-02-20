@@ -788,7 +788,6 @@ export function startChatApp(customConfig = {}) {
         else avEl.innerText = displayTitle.charAt(0).toUpperCase();
 
         const isOwner = room && room.created_by === state.user.id;
-        // Hide settings icon for DMs even if owner
         if ($('room-settings-icon')) $('room-settings-icon').style.display = (isOwner && !isDirect) ? 'block' : 'none';
 
         window.setLoading(true, "Fetching History...");
@@ -1057,9 +1056,7 @@ export function startChatApp(customConfig = {}) {
         if (isFlaggedLogout) { state.user = null; return; }
 
         state.user = ses?.user;
-        const createBtn = $('icon-plus-lobby');
         const activeScreenId = document.querySelector('.screen.active')?.id;
-        if (createBtn) createBtn.style.display = 'flex';
         
         if (ev === 'SIGNED_IN') {
             if(state.user) {
@@ -1172,8 +1169,12 @@ export function startChatApp(customConfig = {}) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         next.classList.add('active');
         lucide.createIcons();
-        const createBtn = $('icon-plus-lobby');
-        if (createBtn) createBtn.style.display = 'flex';
+
+        const fabBtn = $('main-fab');
+        if (fabBtn) {
+            if (id === 'scr-lobby') fabBtn.style.display = 'flex';
+            else fabBtn.style.display = 'none';
+        }
         
         if(id === 'scr-lobby') updateLobbyAvatar();
     };
@@ -1309,6 +1310,8 @@ export function startChatApp(customConfig = {}) {
             } else {
                 window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms();
             }
+        } else {
+            window.nav('scr-start');
         }
         lucide.createIcons(); window.setLoading(false); monitorConnection();
     };
