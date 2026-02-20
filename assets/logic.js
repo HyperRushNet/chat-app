@@ -62,7 +62,8 @@ export function startChatApp(customConfig = {}) {
     longPressTimer: null,
     currentStep: { create: 1, edit: 1, reg: 1 },
     selectedAvatar: null,
-    createType: 'group'
+    createType: 'group',
+    inviteId: null
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -438,13 +439,13 @@ export function startChatApp(customConfig = {}) {
     if(state.createType === 'direct') {
         $('create-group-fields').classList.add('dn');
         $('create-direct-fields').classList.remove('dn');
-        $('create-access-summary').classList.add('dn'); // Hide access manager for DMs
+        $('create-access-summary').classList.add('dn'); 
         $('create-step2-title').innerText = "Direct Message";
         $('create-step2-sub').innerText = "Who are you messaging?";
     } else {
         $('create-group-fields').classList.remove('dn');
         $('create-direct-fields').classList.add('dn');
-        $('create-access-summary').classList.remove('dn'); // Show for Groups
+        $('create-access-summary').classList.remove('dn'); 
         $('create-step2-title').innerText = "Setup";
         $('create-step2-sub').innerText = "Details";
     }
@@ -515,10 +516,10 @@ export function startChatApp(customConfig = {}) {
     $('picker-count').innerText = displayUsers.length;
     
     container.innerHTML = displayUsers.map(u => `
-      <div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">` : u.name.charAt(0)}</div>
+      <div class="picker-user-card" style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:10px;display:flex;align-items:center;justify-content:center;color:var(--text-main);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">` : u.name.charAt(0)}</div>
         <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div>
+            <div style="font-weight:700;font-size:13px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div>
             <div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div>
         </div>
         <button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')">
@@ -629,7 +630,16 @@ export function startChatApp(customConfig = {}) {
     const avPrev = $('acc-avatar-preview');
     if(avatar) { avPrev.innerHTML = `<img src="${avatar}">`; }
     else { avPrev.innerText = (state.user.user_metadata?.full_name || "U").charAt(0); }
+    
+    $('overlay-container').classList.add('active');
     window.showOverlayView('my-account');
+    lucide.createIcons();
+  };
+  
+  window.copyMyId = () => {
+      if(!state.user) return;
+      navigator.clipboard.writeText(state.user.id);
+      window.toast("ID Copied!");
   };
 
   const getDateLabel = (d) => {
@@ -771,7 +781,7 @@ export function startChatApp(customConfig = {}) {
     // Chat Header Logic
     const isDirect = room.is_direct;
     let displayTitle = n;
-    let displayAvatar = room.avatar_url; // Use group avatar if available
+    let displayAvatar = room.avatar_url;
     
     if (isDirect) {
         const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id);
@@ -998,7 +1008,7 @@ export function startChatApp(customConfig = {}) {
     } else {
         n = $('c-name').value.trim();
         avatarUrl = $('c-avatar').value.trim() || null;
-        rawPass = $('c-pass').value; // Get raw password
+        rawPass = $('c-pass').value;
         isP = $('c-private').checked;
         if(!n) { window.toast("Name required"); state.processingAction = false; return; }
     }
@@ -1012,7 +1022,6 @@ export function startChatApp(customConfig = {}) {
             allowedUsers = state.selectedAllowedUsers.map(u => u.id);
             if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
         } else if (isP) {
-             // If private but no users selected, it's just the creator
              allowedUsers = [state.user.id];
         }
     }
@@ -1037,7 +1046,6 @@ export function startChatApp(customConfig = {}) {
     if(data && data.length > 0) {
       const newRoom = data[0];
       
-      // Handle Password RPC if provided
       if (rawPass) {
           const accessHash = await sha256(rawPass + roomSalt);
           const { error: passError } = await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
@@ -1110,6 +1118,14 @@ export function startChatApp(customConfig = {}) {
   window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); window.toast("Back online"); if(state.user && state.isMasterTab) initPresence(true); });
   window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); updateOnlineDisplay(null); window.toast("Connection lost"); });
 
+  const updateHeaderAvatar = (url) => {
+      const btn = $('lobby-avatar-btn');
+      if(!btn) return;
+      if(url) btn.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+      else btn.innerHTML = `<i data-lucide="user" style="width:16px;height:16px;color:var(--text-mute)"></i>`;
+      lucide.createIcons();
+  };
+
   db.auth.onAuthStateChange(async (ev, ses) => {
     const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
     const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
@@ -1118,6 +1134,15 @@ export function startChatApp(customConfig = {}) {
     if (isFlaggedLogout || isSoftLoggedOut) { state.user = null; return; }
     
     state.user = ses?.user;
+    
+    // Update Header Avatar
+    if(state.user) {
+        const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
+        updateHeaderAvatar(profile?.avatar_url);
+    } else {
+        updateHeaderAvatar(null);
+    }
+
     const createBtn = $('icon-plus-lobby');
     const activeScreenId = document.querySelector('.screen.active')?.id;
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
@@ -1280,7 +1305,7 @@ export function startChatApp(customConfig = {}) {
 
       list.innerHTML = roomsWithMeta.map(r => `
         <div class="room-card" onclick="window.joinAttempt('${r.id}')">
-            <div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div>
+            <div class="chat-avatar" style="width:36px;height:36px;margin-right:12px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div>
             <span class="room-name">${esc(r.display_name)}</span>
             <span class="room-icon">
                 ${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}
@@ -1321,6 +1346,53 @@ export function startChatApp(customConfig = {}) {
       else window.openVault(data.id, data.name, null, data.salt);
     } else window.toast("Not found");
   };
+  
+  // Invite Logic
+  const checkInviteLink = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const inviteId = params.get('invite');
+      if(inviteId) {
+          state.inviteId = inviteId;
+          window.setLoading(true, "Loading Invite...");
+          const { data: room, error } = await db.from('rooms').select('id, name, avatar_url, allowed_users').eq('id', inviteId).single();
+          if(error || !room) { window.toast("Invalid invite link"); window.setLoading(false); window.nav('scr-start'); return; }
+          
+          // Render Invite Screen
+          $('invite-title').innerText = room.name;
+          const avEl = $('invite-avatar');
+          if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`;
+          else avEl.innerText = room.name.charAt(0);
+          
+          // Render Members
+          const membersList = $('invite-members');
+          if(room.allowed_users && !room.allowed_users.includes('*')) {
+              const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', room.allowed_users);
+              if(profiles) {
+                  membersList.innerHTML = profiles.map(p => `
+                      <div class="room-card" style="padding:10px; margin-bottom:6px">
+                        <div class="chat-avatar" style="width:24px;height:24px;font-size:10px">${p.avatar_url ? `<img src="${p.avatar_url}">` : p.full_name.charAt(0)}</div>
+                        <span style="font-size:13px;font-weight:600;margin-left:10px">${esc(p.full_name)}</span>
+                      </div>
+                  `).join('');
+              }
+          } else {
+              membersList.innerHTML = '<div style="text-align:center;color:var(--text-mute);font-size:13px;padding:10px">Public Group</div>';
+          }
+          
+          window.nav('scr-invite');
+          window.setLoading(false);
+      }
+  };
+  
+  window.joinFromInvite = async () => {
+      if(!state.inviteId) return;
+      if(!state.user) {
+          window.toast("Please login to join");
+          window.nav('scr-login');
+          return;
+      }
+      window.joinAttempt(state.inviteId);
+  };
 
   const init = async () => {
     if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; }
@@ -1328,6 +1400,13 @@ export function startChatApp(customConfig = {}) {
     const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
     if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
     if (isSoftLoggedOut) { window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+
+    // Check for invite link first
+    const params = new URLSearchParams(window.location.search);
+    if(params.get('invite')) {
+        // Wait for auth state to restore
+        await new Promise(resolve => setTimeout(resolve, 500)); 
+    }
 
     const [userRes, userErr] = await safeAwait(db.auth.getUser());
     if (userErr) { console.error("Session validation failed:", userErr); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
@@ -1337,6 +1416,11 @@ export function startChatApp(customConfig = {}) {
       state.user = user;
       localStorage.setItem(FLAG_GUEST_ID, state.user.id);
       if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
+      
+      // Update avatar
+      const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
+      updateHeaderAvatar(profile?.avatar_url);
+      
       const masterExists = await checkMaster();
       if (masterExists) {
         const overlay = $('block-overlay'); overlay.classList.add('active'); lucide.createIcons();
@@ -1349,7 +1433,11 @@ export function startChatApp(customConfig = {}) {
       state.uptimeInterval = setInterval(updateUptime, 1000);
       await initPresence(true);
     }
+    
     lucide.createIcons(); window.setLoading(false); monitorConnection();
+    
+    // Handle Invite
+    if(params.get('invite')) checkInviteLink();
   };
 
   init();
