@@ -15,6 +15,14 @@ export function startChatApp(customConfig = {}) {
     verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
   };
 
+  const AVATARS = [
+    'https://i.pinimg.com/236x/dd/f0/11/ddf0110aa19f445687b737679eec9cb2.jpg',
+    'https://static.vecteezy.com/system/resources/previews/067/754/604/non_2x/simple-profile-picture-of-a-man-faceless-online-avatar-for-diverse-purposes-vector.jpg',
+    'https://dthezntil550i.cloudfront.net/fm/latest/fm2010061930271030011683247/1280_960/4d67dad7-0a75-44b4-80b8-6a51c28a1e4b.png',
+    'https://images.unsplash.com/photo-1457449940276-e8deed18bfff?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Nnx8cHJvZmlsZXxlbnwwfHwwfHx8MA%3D%3D',
+    'https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8cHJvZmlsZXxlbnwwfHwwfHx8MA%3D%3D'
+  ];
+
   lucide.createIcons();
 
   const state = {
@@ -52,7 +60,9 @@ export function startChatApp(customConfig = {}) {
     lastLobbyRefresh: 0,
     removePasswordFlag: false,
     longPressTimer: null,
-    currentStep: { create: 1, edit: 1 }
+    currentStep: { create: 1, edit: 1, reg: 1 },
+    selectedAvatar: null,
+    createType: 'group' // 'group' or 'direct'
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -355,12 +365,6 @@ export function startChatApp(customConfig = {}) {
     initPresence(true);
   };
 
-  window.handlePrivateToggle = () => {
-    const isPrivate = $('c-private').checked;
-    const passInput = $('c-pass');
-    passInput.placeholder = isPrivate ? "Passkey (Recommended)" : "Passkey (Optional)";
-  };
-
   const updateAccessSummary = (prefix) => {
     const summaryEl = $(`${prefix}-access-summary`);
     if (!summaryEl) return;
@@ -382,14 +386,67 @@ export function startChatApp(customConfig = {}) {
 
     $(`${context}-step-1`).classList.toggle('active', current === 1);
     $(`${context}-step-2`).classList.toggle('active', current === 2);
+    
+    if(context === 'reg') {
+        $('reg-step-1').classList.toggle('active', current === 1);
+        $('reg-step-2').classList.toggle('active', current === 2);
+        if(current === 2) initAvatarGrid();
+    }
+    
     lucide.createIcons();
   };
 
+  const initAvatarGrid = () => {
+    const grid = $('avatar-grid');
+    if(!grid || grid.children.length > 0) return;
+    grid.innerHTML = AVATARS.map((url, i) => `
+        <div class="avatar-option ${state.selectedAvatar === url ? 'selected' : ''}" onclick="window.selectAvatar('${url}', this)">
+            <img src="${url}" alt="Avatar">
+        </div>
+    `).join('');
+  };
+
+  window.selectAvatar = (url, el) => {
+    state.selectedAvatar = url;
+    $('r-avatar-url').value = ''; 
+    document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+    el.classList.add('selected');
+  };
+
+  window.selectCreateType = (type) => {
+    state.createType = type;
+    document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected'));
+    $(`type-${type}`).classList.add('selected');
+  };
+
+  window.nextRegStep = () => {
+    const n = $('r-name').value, em = $('r-email').value, p = $('r-pass').value;
+    if(!n || !em || p.length < 8) return window.toast("Complete fields (min 8 chars password)");
+    state.currentStep.reg = 2;
+    updateStepUI('reg');
+  };
+
+  window.prevRegStep = () => {
+    state.currentStep.reg = 1;
+    updateStepUI('reg');
+  };
+
   window.nextCreateStep = () => {
-    const name = $('c-name').value.trim();
-    if(!name) return window.toast("Name required");
     state.currentStep.create = 2;
     updateStepUI('create');
+    
+    if(state.createType === 'direct') {
+        $('create-group-fields').classList.add('dn');
+        $('create-direct-fields').classList.remove('dn');
+        $('create-step2-title').innerText = "Direct Message";
+        $('create-step2-sub').innerText = "Who are you messaging?";
+    } else {
+        $('create-group-fields').classList.remove('dn');
+        $('create-direct-fields').classList.add('dn');
+        $('create-step2-title').innerText = "Setup";
+        $('create-step2-sub').innerText = "Details";
+    }
+    
     updateAccessSummary('create');
   };
 
@@ -417,10 +474,10 @@ export function startChatApp(customConfig = {}) {
     if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) {
         const ids = state.currentRoomData.allowed_users;
         if (ids && !ids.includes('*')) {
-            const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
+            const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids);
             state.selectedAllowedUsers = ids.map(id => {
                 const p = profiles?.find(pro => pro.id === id);
-                return { id: id, name: p?.full_name || 'Unknown' };
+                return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url };
             });
         }
     }
@@ -448,7 +505,7 @@ export function startChatApp(customConfig = {}) {
     const displayUsers = state.selectedAllowedUsers;
     
     if (displayUsers.length === 0) {
-      container.innerHTML = `<div class="picker-empty">No users selected (Public).</div>`;
+      container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:13px;text-align:center">No users selected.</div>`;
       $('picker-count').innerText = '0';
       return;
     }
@@ -456,15 +513,13 @@ export function startChatApp(customConfig = {}) {
     $('picker-count').innerText = displayUsers.length;
     
     container.innerHTML = displayUsers.map(u => `
-      <div class="picker-user-card">
-        <div class="picker-user-info">
-            <div class="picker-user-avatar">${u.name.charAt(0)}</div>
-            <div class="picker-user-text">
-                <span class="picker-user-name">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute)">(You)</span>' : ''}</span>
-                <span class="picker-user-id">${u.id}</span>
-            </div>
+      <div class="picker-user-card" style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:10px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px">${u.avatar ? `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">` : u.name.charAt(0)}</div>
+        <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:13px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div>
+            <div style="font-size:10px;color:var(--text-mute);font-family:monospace">${u.id}</div>
         </div>
-        <button class="picker-remove-btn" onclick="window.removePickerUser('${u.id}')">
+        <button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')">
             <i data-lucide="x" style="width:16px;height:16px"></i>
         </button>
       </div>
@@ -487,12 +542,12 @@ export function startChatApp(customConfig = {}) {
     }
 
     window.setLoading(true, "Fetching user...");
-    const { data, error } = await db.from('profiles').select('id, full_name').eq('id', id).single();
+    const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single();
     window.setLoading(false);
 
     if (error || !data) return window.toast("User ID not found");
 
-    state.selectedAllowedUsers.push({ id: data.id, name: data.full_name });
+    state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url });
     renderPickerSelectedUsers();
     input.value = '';
     window.toast("User added");
@@ -560,12 +615,6 @@ export function startChatApp(customConfig = {}) {
     });
   };
 
-  window.showGuestInfo = () => {
-    $('overlay-container').classList.add('active');
-    window.showOverlayView('guest-info');
-    lucide.createIcons();
-  };
-
   window.openHub = () => {
     $('overlay-container').classList.add('active');
     window.showOverlayView('hub');
@@ -585,194 +634,26 @@ export function startChatApp(customConfig = {}) {
     }
   };
 
-  window.prepareMyAccount = () => {
+  window.prepareMyAccount = async () => {
     if(!state.user) return;
     const isGuest = state.user.is_anonymous;
+    
+    const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
+    const avatar = profile?.avatar_url;
+    
     $('my-acc-name').innerText = state.user.user_metadata?.full_name || "User";
     $('my-acc-id').innerText = state.user.id;
     $('my-acc-email').innerText = isGuest ? "Guest Mode" : (state.user.email || "No email");
     $('my-acc-type').innerText = isGuest ? "Guest Account" : "Full Account";
-    $('my-acc-type').style.color = isGuest ? "var(--warning)" : "var(--success)";
+    
+    const avPrev = $('acc-avatar-preview');
+    if(avatar) {
+        avPrev.innerHTML = `<img src="${avatar}">`;
+    } else {
+        avPrev.innerText = (state.user.user_metadata?.full_name || "U").charAt(0);
+    }
+    
     window.showOverlayView('my-account');
-  };
-
-  window.inspectUser = async (uid) => {
-    if (!uid) return; 
-    if (uid === state.user?.id) return window.prepareMyAccount();
-    window.setLoading(true, "Fetching info...");
-    const { data, error } = await db.from('profiles').select('id, full_name, updated_at, is_guest').eq('id', uid).single();
-    window.setLoading(false);
-    if (error || !data) return window.toast("User not found");
-    $('qv-user-name').innerText = data.full_name;
-    $('qv-user-avatar').innerText = data.full_name.charAt(0).toUpperCase();
-    $('qv-user-id').innerText = data.id;
-    $('qv-full-name').innerText = data.full_name;
-    const statusEl = $('qv-status');
-    statusEl.innerText = data.is_guest ? "Guest" : "Registered";
-    statusEl.style.color = data.is_guest ? "var(--warning)" : "var(--success)";
-    const d = new Date(data.updated_at);
-    $('qv-user-date').innerText = d.toLocaleDateString('en-GB');
-    window.showOverlayView('quick-view-user');
-    $('overlay-container').classList.add('active');
-  };
-
-  const prepareGuestScreen = () => {
-    const storedName = localStorage.getItem(FLAG_GUEST_NAME);
-    const nameInput = $('g-name');
-    const lockIcon = document.querySelector('.input-lock-icon');
-    if (storedName) {
-      nameInput.value = storedName;
-      nameInput.disabled = true;
-      nameInput.placeholder = "Identity Locked";
-      if(lockIcon) lockIcon.style.display = 'block';
-    } else {
-      nameInput.value = '';
-      nameInput.disabled = false;
-      nameInput.placeholder = "Enter Name (Permanent)";
-      if(lockIcon) lockIcon.style.display = 'none';
-    }
-    lucide.createIcons();
-  };
-
-  window.nav = (id, direction = null) => {
-    const current = document.querySelector('.screen.active');
-    const next = $(id);
-    if(!next) return;
-    if(id === 'scr-guest') prepareGuestScreen();
-    if(id === 'scr-create') {
-        state.currentStep.create = 1;
-        state.selectedAllowedUsers = [];
-        updateStepUI('create');
-        $('c-name').value = '';
-        $('c-pass').value = '';
-        $('c-private').checked = false;
-    }
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
-    if(direction === 'left') {
-      current.classList.add('slide-left');
-      next.classList.remove('slide-right');
-    } else if(direction === 'right') {
-      current.classList.add('slide-right');
-      next.classList.remove('slide-left');
-    } else {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    }
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    next.classList.add('active');
-    lucide.createIcons();
-    const createBtn = $('icon-plus-lobby');
-    if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
-  };
-
-  window.refreshLobby = async () => {
-    const now = Date.now();
-    if (now - state.lastLobbyRefresh < 10000) {
-        const remaining = Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000);
-        return window.toast(`Wait ${remaining}s before refreshing`);
-    }
-    state.lastLobbyRefresh = now;
-    window.toast("Refreshing rooms...");
-    await window.loadRooms();
-  };
-
-  window.loadRooms = async () => {
-    if(!state.user) return;
-    window.setLoading(true, "Fetching rooms...");
-    const { data: rooms, error } = await db
-      .from('rooms')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) {
-      window.toast("Failed to load rooms");
-      window.setLoading(false);
-      return;
-    }
-    
-    state.allRooms = rooms || [];
-    window.filterRooms();
-    window.setLoading(false);
-  };
-
-  window.filterRooms = () => {
-    const q = $('search-bar').value.toLowerCase();
-    const list = $('room-list');
-    const uid = state.user?.id;
-
-    const filtered = state.allRooms.filter(r => {
-        const matchSearch = r.name.toLowerCase().includes(q);
-        if (!matchSearch) return false;
-        if (r.is_private && r.created_by !== uid) return false;
-        return true;
-    });
-
-    if (filtered.length === 0) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <i data-lucide="folder" class="empty-state-icon"></i>
-          <div class="empty-state-title">No groups yet</div>
-          <div class="empty-state-sub">Create one or get invited.</div>
-        </div>
-      `;
-    } else {
-      list.innerHTML = filtered.map(r => `
-        <div class="room-card" onclick="window.joinAttempt('${r.id}')">
-          <span class="room-name">${esc(r.name)}</span>
-          <span class="room-icon">
-            <i data-lucide="${r.has_password ? 'lock' : 'chevron-right'}" style="width:18px;height:18px;color:var(--text-mute)"></i>
-          </span>
-        </div>
-      `).join('');
-    }
-    lucide.createIcons();
-  };
-
-  window.joinAttempt = async (id) => {
-    if(state.serverFull) return window.toast("Network is full");
-    window.setLoading(true, "Checking access...");
-    
-    const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
-    
-    if (!canAccess) {
-      window.setLoading(false);
-      return window.toast("Access denied");
-    }
-
-    const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
-    window.setLoading(false);
-    if (error || !data) return window.toast("Room not found");
-    state.pending = { id: data.id, name: data.name, salt: data.salt };
-    state.currentRoomData = data;
-    if (data.has_password) {
-      window.nav('scr-gate');
-    } else {
-      window.openVault(data.id, data.name, null, data.salt);
-    }
-  };
-
-  window.joinPrivate = async () => {
-    if(state.serverFull) return window.toast("Network is full");
-    if(!state.user) return window.toast("Login required");
-    const id = $('join-id').value.trim();
-    if(!id) return;
-    window.setLoading(true, "Checking access...");
-    
-    const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
-    if (!canAccess) {
-      window.setLoading(false);
-      return window.toast("Access denied or room not found");
-    }
-
-    const { data } = await db.from('rooms').select('*').eq('id',id).single();
-    window.setLoading(false);
-    if(data) {
-      state.pending = { id: data.id, name: data.name, salt: data.salt };
-      state.currentRoomData = data;
-      if(data.has_password) {
-        window.nav('scr-gate');
-      } else {
-        window.openVault(data.id, data.name, null, data.salt);
-      }
-    } else window.toast("Not found");
   };
 
   const getDateLabel = (d) => {
@@ -807,14 +688,10 @@ export function startChatApp(customConfig = {}) {
     const tooltip = $('context-tooltip');
     tooltip.innerHTML = content;
     tooltip.classList.add('active');
-    
-    const rect = e.target.getBoundingClientRect();
     let x = e.clientX || e.touches?.[0]?.clientX;
     let y = e.clientY || e.touches?.[0]?.clientY;
-    
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y - 40}px`;
-    
     if (tooltip.offsetLeft < 10) tooltip.style.left = '10px';
     if (tooltip.offsetTop < 10) tooltip.style.top = `${y + 10}px`;
   };
@@ -823,7 +700,7 @@ export function startChatApp(customConfig = {}) {
     $('context-tooltip').classList.remove('active');
   };
 
-  const renderMsg = (m, prevMsg) => {
+  const renderMsg = (m, prevMsg, isDirect) => {
     let html = "";
     const msgDateObj = new Date(m.created_at);
     const currentLabel = getDateLabel(msgDateObj);
@@ -846,9 +723,12 @@ export function startChatApp(customConfig = {}) {
     const fullDate = msgDateObj.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
     const tooltipContent = `<b>${esc(displayName)}</b><br>${fullDate}`;
 
+    // In Direct Messages, hide the name header unless it's the first message (optional, but user requested "never see the name")
+    // Logic: If isDirect, we hide name entirely because it's implied. 
+    
     html += `
       <div class="msg ${sideClass} ${msgClass}" data-time="${m.created_at}" data-tooltip="${esc(tooltipContent)}" oncontextmenu="event.preventDefault(); showTooltip(event, this.dataset.tooltip)" ontouchstart="window.startMsgTimer(event, this)" ontouchend="window.clearMsgTimer()" ontouchmove="window.clearMsgTimer()">
-        ${isGroupStart ? `<div class="msg-header"><span class="msg-user">${esc(displayName)} ${guestPill}</span></div>` : ''}
+        ${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)} ${guestPill}</span></div>` : ''}
         <div>${processedText}</div>
         <span class="msg-time">${esc(m.time)}</span>
       </div>`;
@@ -919,7 +799,7 @@ export function startChatApp(customConfig = {}) {
         let html = "";
         let prev = null;
         validMsgs.forEach(m => {
-            html += renderMsg(m, prev);
+            html += renderMsg(m, prev, state.currentRoomData?.is_direct);
             prev = m;
         });
         
@@ -942,8 +822,9 @@ export function startChatApp(customConfig = {}) {
     state.oldestMessageTimestamp = null;
     state.hasMoreHistory = true;
     state.isLoadingHistory = false;
-    $('chat-title').innerText = n;
-    $('chat-messages').innerHTML = '<div id="chat-empty-state" class="empty-state"><i data-lucide="message-circle" class="empty-state-icon"></i><div class="empty-state-title">No messages yet</div><div class="empty-state-sub">Be the first to say something.</div></div>';
+
+    // UI Setup
+    $('chat-messages').innerHTML = '<div id="chat-empty-state" style="inset:0;z-index:5;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;width:100%"><i data-lucide="message-circle" style="width:48px;height:48px;color:#d1d1d6;margin-bottom:16px"></i><div style="font-size:15px;font-weight:700;color:var(--text-main);margin-bottom:4px">No messages yet</div><div style="font-size:13px;color:var(--text-mute)">Be the first to say something.</div></div>';
     $('chat-messages').onscroll = handleScroll;
     const copyIcon = $('icon-copy-chat');
     const checkIcon = $('icon-check-chat');
@@ -960,6 +841,35 @@ export function startChatApp(customConfig = {}) {
     
     const { data: room } = await db.from('rooms').select('*').eq('id', id).single();
     state.currentRoomData = room;
+
+    // Chat Header Logic
+    const isDirect = room.is_direct;
+    let displayTitle = n;
+    let displayAvatar = null;
+    
+    if (isDirect) {
+        const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id);
+        if (otherUserId) {
+            const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single();
+            if (profile) {
+                displayTitle = profile.full_name;
+                displayAvatar = profile.avatar_url;
+            }
+        }
+    } else {
+        // Group chat: try to get owner avatar for the icon maybe? Or just use default.
+        // For simplicity, we keep the group icon or name.
+    }
+
+    $('chat-title').innerText = displayTitle;
+    const avEl = $('chat-avatar-display');
+    if (displayAvatar) {
+        avEl.innerHTML = `<img src="${displayAvatar}">`;
+        avEl.classList.add('has-img');
+    } else {
+        avEl.innerText = displayTitle.charAt(0).toUpperCase();
+        avEl.classList.remove('has-img');
+    }
     
     const isOwner = room && room.created_by === state.user.id;
     const settingsIcon = $('room-settings-icon');
@@ -972,8 +882,6 @@ export function startChatApp(customConfig = {}) {
       .order('created_at', { ascending: false })
       .limit(CONFIG.maxMessages);
     const isGuest = state.user.is_anonymous;
-    const guestInfoBtn = $('guest-info-chat');
-    if (guestInfoBtn) guestInfoBtn.style.display = isGuest ? 'flex' : 'none';
     $('chat-input').style.display = isGuest ? 'none' : 'block';
     $('guest-replies').style.display = isGuest ? 'flex' : 'none';
     $('send-btn').style.display = isGuest ? 'none' : 'flex';
@@ -992,7 +900,7 @@ export function startChatApp(customConfig = {}) {
         let prev = null;
         res.results.forEach(m => {
           if(!m.error) {
-              b.insertAdjacentHTML('beforeend', renderMsg(m, prev));
+              b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect));
               prev = m;
           }
         });
@@ -1030,7 +938,7 @@ export function startChatApp(customConfig = {}) {
                 prevMsg = { user_id: lastMsg.classList.contains('me') ? state.user.id : 'other', created_at: lastMsg.dataset.time };
             }
             
-            const html = renderMsg(msgObj, prevMsg);
+            const html = renderMsg(msgObj, prevMsg, isDirect);
             container.insertAdjacentHTML('beforeend', html);
             container.scrollTop = container.scrollHeight;
             checkChatEmpty();
@@ -1065,7 +973,7 @@ export function startChatApp(customConfig = {}) {
     if (!state.user || !state.currentRoomId) return;
     if (state.processingAction) return;
     if (!state.isChatChannelReady) {
-      window.toast("Connection not ready yet – please wait a moment");
+      window.toast("Connection not ready yet");
       return;
     }
     if (!applyRateLimit()) return;
@@ -1095,10 +1003,7 @@ export function startChatApp(customConfig = {}) {
     if (!e || !e.isTrusted) return;
     if (!state.user || !state.currentRoomId) return;
     if (state.processingAction) return;
-    if (!state.isChatChannelReady) {
-      window.toast("Connection not ready yet – please wait a moment");
-      return;
-    }
+    if (!state.isChatChannelReady) return;
     if (!applyRateLimit()) return;
     state.processingAction = true;
     state.lastMessageTime = Date.now();
@@ -1159,11 +1064,17 @@ export function startChatApp(customConfig = {}) {
     if(state.processingAction) return;
     state.processingAction = true;
     const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value;
+    const customAvatar = $('r-avatar-url').value.trim();
+    const selectedAvatar = state.selectedAvatar;
+    
     if(!n || !em || p.length < 8) {
       window.toast("Check inputs");
       state.processingAction = false;
       return;
     }
+    
+    const avatarUrl = customAvatar || selectedAvatar;
+    
     window.setLoading(true, "Sending Code...");
     const [r, err] = await safeAwait(fetch(CONFIG.mailApi, {
       method: "POST",
@@ -1179,7 +1090,7 @@ export function startChatApp(customConfig = {}) {
       }
       const j = await r.json();
       if(j.message === "Code sent") {
-        sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p}));
+        sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl}));
         window.nav('scr-verify');
         startVTimer();
         window.setLoading(false);
@@ -1236,7 +1147,7 @@ export function startChatApp(customConfig = {}) {
       const { error } = await db.auth.signUp({
         email: temp.em,
         password: temp.p,
-        options: { data: { full_name: temp.n } }
+        options: { data: { full_name: temp.n, avatar_url: temp.avatar } }
       });
       if(error) {
         window.toast(error.message);
@@ -1263,25 +1174,10 @@ export function startChatApp(customConfig = {}) {
     }
     localStorage.removeItem(FLAG_SOFT_LOGOUT);
     localStorage.removeItem(FLAG_LOGOUT);
-    
-    if (!lockedName) {
-      window.openHub();
-      window.showOverlayView('guest-warn');
-    } else {
-      await performGuestLogin(name);
-      await initPresence(true);
-    }
-  };
-
-  window.confirmGuestLoginAction = async (e) => {
-    if (!e || !e.isTrusted) return;
-    const name = $('g-name').value.trim();
-    if(!name) return;
     await performGuestLogin(name);
   };
 
   const performGuestLogin = async (name) => {
-    window.closeOverlay();
     window.setLoading(true, "Initializing...");
     localStorage.removeItem(FLAG_LOGOUT);
     localStorage.removeItem(FLAG_SOFT_LOGOUT);
@@ -1335,37 +1231,56 @@ export function startChatApp(customConfig = {}) {
     if(state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
     if(state.processingAction) return;
     state.processingAction = true;
-    const n = $('c-name').value.trim();
-    const p = $('c-pass').value;
-    const isP = $('c-private').checked;
     
+    const isDirect = state.createType === 'direct';
+    let n, isP = false, targetUser = null;
+    
+    if(isDirect) {
+        targetUser = $('c-target-user').value.trim();
+        if(!targetUser) {
+            window.toast("User ID required for direct chat");
+            state.processingAction = false;
+            return;
+        }
+        // Verify user exists
+        const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single();
+        if(error || !profile) {
+            window.toast("User not found");
+            state.processingAction = false;
+            return;
+        }
+        n = `DM ${profile.full_name}`; // Internal name, UI overrides this
+    } else {
+        n = $('c-name').value.trim();
+        isP = $('c-private').checked;
+        if(!n) {
+            window.toast("Name required");
+            state.processingAction = false;
+            return;
+        }
+    }
+
     let allowedUsers = ['*'];
     
     if (state.selectedAllowedUsers.length > 0) {
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
     }
-
-    if(isP && !p) {
-      window.toast("Private rooms require a password");
-      state.processingAction = false;
-      return;
-    }
-    if(!n) {
-      window.toast("Name required");
-      state.processingAction = false;
-      return;
+    
+    if(isDirect) {
+        allowedUsers = [state.user.id, targetUser];
     }
 
     window.setLoading(true, "Deploying Room...");
     const roomSalt = generateSalt();
     const {data, error} = await db.from('rooms').insert([{
       name: n,
-      has_password: !!p,
-      is_private: isP,
+      has_password: false,
+      is_private: isDirect ? true : isP, // DMs are always private in visibility
       salt: roomSalt,
       created_by: state.user.id,
-      allowed_users: allowedUsers
+      allowed_users: allowedUsers,
+      is_direct: isDirect
     }]).select();
     if(error) {
       window.toast("Error: " + error.message);
@@ -1375,12 +1290,8 @@ export function startChatApp(customConfig = {}) {
     }
     if(data && data.length > 0) {
       const newRoom = data[0];
-      if(p) {
-        const accessHash = await sha256(p + roomSalt);
-        await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
-      }
       state.lastCreated = newRoom;
-      state.lastCreatedPass = p;
+      state.lastCreatedPass = null;
       $('s-id').innerText = newRoom.id;
       window.nav('scr-success');
       state.selectedAllowedUsers = [];
@@ -1420,7 +1331,7 @@ export function startChatApp(customConfig = {}) {
       state.user = null; 
       state.isMasterTab = false;
       window.nav('scr-start');
-      window.toast("Guest session saved. Refresh to restore.");
+      window.toast("Guest session saved.");
     } else {
       localStorage.setItem(FLAG_LOGOUT, 'true');
       localStorage.removeItem(FLAG_SOFT_LOGOUT);
@@ -1530,9 +1441,9 @@ export function startChatApp(customConfig = {}) {
 
   window.openRoomSettings = async () => {
     if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) {
-      return window.toast("You are not the owner of this room");
+      return window.toast("You are not the owner");
     }
-    window.setLoading(true, "Loading room settings...");
+    window.setLoading(true, "Loading settings...");
     const room = state.currentRoomData;
     
     state.currentStep.edit = 1;
@@ -1561,10 +1472,10 @@ export function startChatApp(customConfig = {}) {
     
     const ids = room.allowed_users;
     if (ids && !ids.includes('*')) {
-        const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
+        const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids);
         state.selectedAllowedUsers = ids.map(id => {
             const p = profiles?.find(pro => pro.id === id);
-            return { id: id, name: p?.full_name || 'Unknown' };
+            return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url };
         });
     }
     
@@ -1617,14 +1528,14 @@ export function startChatApp(customConfig = {}) {
     const isRemovingPass = state.removePasswordFlag;
     
     if ((room.has_password && isRemovingPass) || (room.has_password && isChangingPass) || (!room.has_password && isChangingPass)) {
-        const confirmChange = confirm("Warning: Changing or removing the password will change the encryption key. Old messages will become unreadable. Continue?");
+        const confirmChange = confirm("Warning: Changing password changes encryption key. Old messages become unreadable. Continue?");
         if (!confirmChange) {
             state.processingAction = false;
             return;
         }
     }
 
-    window.setLoading(true, "Saving changes...");
+    window.setLoading(true, "Saving...");
     
     const updates = { name, is_private: isPrivate, allowed_users: allowedUsers };
     
@@ -1637,7 +1548,7 @@ export function startChatApp(customConfig = {}) {
     const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId);
 
     if (updateError) {
-      window.toast("Failed to update room: " + updateError.message);
+      window.toast("Failed to update: " + updateError.message);
       window.setLoading(false);
       state.processingAction = false;
       return;
@@ -1661,7 +1572,7 @@ export function startChatApp(customConfig = {}) {
     state.currentRoomData = updatedRoom;
     $('chat-title').innerText = updatedRoom.name;
     
-    window.toast("Room settings saved");
+    window.toast("Saved");
     window.closeOverlay();
     state.processingAction = false;
     window.setLoading(false);
@@ -1673,18 +1584,18 @@ export function startChatApp(customConfig = {}) {
         return window.toast("Unauthorized");
     }
 
-    const confirm1 = confirm("Are you sure you want to delete this room? This cannot be undone.");
+    const confirm1 = confirm("Are you sure you want to delete this room?");
     if (!confirm1) return;
 
-    const confirm2 = confirm("ALL MESSAGES WILL BE LOST PERMANENTLY. Proceed?");
+    const confirm2 = confirm("ALL MESSAGES WILL BE LOST. Proceed?");
     if (!confirm2) return;
 
-    window.setLoading(true, "Deleting room...");
+    window.setLoading(true, "Deleting...");
     
     const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId);
     
     if (error) {
-        window.toast("Failed to delete: " + error.message);
+        window.toast("Failed: " + error.message);
         window.setLoading(false);
         return;
     }
@@ -1696,6 +1607,165 @@ export function startChatApp(customConfig = {}) {
     window.nav('scr-lobby');
     window.loadRooms();
     window.setLoading(false);
+  };
+  
+  window.nav = (id, direction = null) => {
+    const current = document.querySelector('.screen.active');
+    const next = $(id);
+    if(!next) return;
+    if(id === 'scr-guest') {
+        const storedName = localStorage.getItem(FLAG_GUEST_NAME);
+        if (storedName) $('g-name').value = storedName;
+        else $('g-name').value = '';
+    }
+    if(id === 'scr-create') {
+        state.currentStep.create = 1;
+        state.selectedAllowedUsers = [];
+        state.createType = 'group';
+        updateStepUI('create');
+        $('c-name').value = '';
+        $('c-target-user').value = '';
+        document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected'));
+        $('type-group').classList.add('selected');
+    }
+    if(id === 'scr-register') {
+        state.currentStep.reg = 1;
+        updateStepUI('reg');
+    }
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
+    if(direction === 'left') {
+      current.classList.add('slide-left');
+      next.classList.remove('slide-right');
+    } else if(direction === 'right') {
+      current.classList.add('slide-right');
+      next.classList.remove('slide-left');
+    } else {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    }
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    next.classList.add('active');
+    lucide.createIcons();
+    const createBtn = $('icon-plus-lobby');
+    if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
+  };
+
+  window.refreshLobby = async () => {
+    const now = Date.now();
+    if (now - state.lastLobbyRefresh < 10000) {
+        const remaining = Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000);
+        return window.toast(`Wait ${remaining}s`);
+    }
+    state.lastLobbyRefresh = now;
+    window.toast("Refreshing...");
+    await window.loadRooms();
+  };
+
+  window.loadRooms = async () => {
+    if(!state.user) return;
+    window.setLoading(true, "Fetching...");
+    const { data: rooms, error } = await db
+      .from('rooms')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      window.toast("Failed to load rooms");
+      window.setLoading(false);
+      return;
+    }
+    
+    state.allRooms = rooms || [];
+    window.filterRooms();
+    window.setLoading(false);
+  };
+
+  window.filterRooms = async () => {
+    const q = $('search-bar').value.toLowerCase();
+    const list = $('room-list');
+    const uid = state.user?.id;
+
+    const filtered = state.allRooms.filter(r => {
+        const matchSearch = r.name.toLowerCase().includes(q);
+        if (!matchSearch) return false;
+        if (r.is_private && r.created_by !== uid && !(r.allowed_users?.includes(uid))) return false;
+        return true;
+    });
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:48px;height:48px;margin-bottom:16px;color:#d1d1d6"></i><div style="font-size:15px;font-weight:700;color:var(--text-main);margin-bottom:4px">No groups yet</div><div style="font-size:13px">Create one or get invited.</div></div>`;
+    } else {
+        // Resolve names for DMs
+        const roomsWithMeta = await Promise.all(filtered.map(async r => {
+            if(r.is_direct && r.allowed_users) {
+                const otherId = r.allowed_users.find(id => id !== uid);
+                if(otherId) {
+                    const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single();
+                    return { ...r, display_name: data?.full_name || 'User', display_avatar: data?.avatar_url };
+                }
+            }
+            return { ...r, display_name: r.name, display_avatar: null };
+        }));
+
+      list.innerHTML = roomsWithMeta.map(r => `
+        <div class="room-card" onclick="window.joinAttempt('${r.id}')">
+            <div class="chat-avatar" style="width:40px;height:40px;margin-right:12px;font-size:14px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div>
+            <span class="room-name">${esc(r.display_name)}</span>
+            <span class="room-icon">
+                ${r.is_direct ? '<i data-lucide="user" style="width:16px;height:16px"></i>' : ''}
+                ${r.has_password ? '<i data-lucide="lock" style="width:16px;height:16px"></i>' : ''}
+            </span>
+        </div>
+      `).join('');
+    }
+    lucide.createIcons();
+  };
+
+  window.joinAttempt = async (id) => {
+    if(state.serverFull) return window.toast("Network is full");
+    window.setLoading(true, "Checking access...");
+    
+    const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
+    
+    if (!canAccess) {
+      window.setLoading(false);
+      return window.toast("Access denied");
+    }
+
+    const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
+    window.setLoading(false);
+    if (error || !data) return window.toast("Room not found");
+    state.pending = { id: data.id, name: data.name, salt: data.salt };
+    state.currentRoomData = data;
+    if (data.has_password) {
+      window.nav('scr-gate');
+    } else {
+      window.openVault(data.id, data.name, null, data.salt);
+    }
+  };
+
+  window.joinPrivate = async () => {
+    if(state.serverFull) return window.toast("Network is full");
+    if(!state.user) return window.toast("Login required");
+    const id = $('join-id').value.trim();
+    if(!id) return;
+    window.setLoading(true, "Checking access...");
+    
+    const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
+    if (!canAccess) {
+      window.setLoading(false);
+      return window.toast("Access denied or room not found");
+    }
+
+    const { data } = await db.from('rooms').select('*').eq('id',id).single();
+    window.setLoading(false);
+    if(data) {
+      state.pending = { id: data.id, name: data.name, salt: data.salt };
+      state.currentRoomData = data;
+      if(data.has_password) {
+        window.nav('scr-gate');
+      } else {
+        window.openVault(data.id, data.name, null, data.salt);
+      }
+    } else window.toast("Not found");
   };
 
   const init = async () => {
@@ -1755,7 +1825,7 @@ export function startChatApp(customConfig = {}) {
       state.uptimeInterval = setInterval(updateUptime, 1000);
       await initPresence(true);
     } else {
-      $('guest-swipe-hint').style.display = 'flex';
+      // window.nav('scr-start'); Already default
     }
     lucide.createIcons();
     window.setLoading(false);
