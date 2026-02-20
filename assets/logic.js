@@ -259,15 +259,6 @@ export function startChatApp(customConfig = {}) {
     }
   };
 
-  const updateAccessSummary = (prefix) => {
-    const summaryEl = $(`${prefix}-access-summary`);
-    if (!summaryEl) return;
-    const count = state.selectedAllowedUsers.length;
-    const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`;
-    summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
-    lucide.createIcons();
-  };
-
   const queryOnlineCountImmediately = async () => {
     if (!state.presenceChannel) return;
     const presState = state.presenceChannel.presenceState();
@@ -370,20 +361,13 @@ export function startChatApp(customConfig = {}) {
     passInput.placeholder = isPrivate ? "Passkey (Recommended)" : "Passkey (Optional)";
   };
 
-  window.nextCreateStep = () => {
-    const name = $('c-name').value.trim();
-    if(!name) return window.toast("Name required");
-    state.currentStep.create = 2;
-    updateStepUI('create');
-    updateAccessSummary('create');
-  };
-
-  window.nextEditStep = () => {
-    const name = $('edit-room-name').value.trim();
-    if(!name) return window.toast("Name required");
-    state.currentStep.edit = 2;
-    updateStepUI('edit');
-    updateAccessSummary('edit');
+  const updateAccessSummary = (prefix) => {
+    const summaryEl = $(`${prefix}-access-summary`);
+    if (!summaryEl) return;
+    const count = state.selectedAllowedUsers.length;
+    const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`;
+    summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
+    lucide.createIcons();
   };
 
   const updateStepUI = (context) => {
@@ -401,19 +385,30 @@ export function startChatApp(customConfig = {}) {
     lucide.createIcons();
   };
 
-  const renderPickerPreview = (id) => {
-    const container = $(id);
-    if(!container) return;
-    if(state.selectedAllowedUsers.length === 0) {
-        container.innerHTML = `<div class="picker-empty">Public Room</div>`;
-    } else {
-        container.innerHTML = state.selectedAllowedUsers.map(u => `
-            <div class="picker-user-card" style="padding:8px;border:none;border-bottom:1px solid var(--border)">
-                <div class="picker-user-avatar" style="width:24px;height:24px;font-size:10px">${u.name.charAt(0)}</div>
-                <span class="picker-user-name" style="font-size:12px">${esc(u.name)}</span>
-            </div>
-        `).join('');
-    }
+  window.nextCreateStep = () => {
+    const name = $('c-name').value.trim();
+    if(!name) return window.toast("Name required");
+    state.currentStep.create = 2;
+    updateStepUI('create');
+    updateAccessSummary('create');
+  };
+
+  window.prevCreateStep = () => {
+    state.currentStep.create = 1;
+    updateStepUI('create');
+  };
+  
+  window.nextEditStep = () => {
+    const name = $('edit-room-name').value.trim();
+    if(!name) return window.toast("Name required");
+    state.currentStep.edit = 2;
+    updateStepUI('edit');
+    updateAccessSummary('edit');
+  };
+
+  window.prevEditStep = () => {
+    state.currentStep.edit = 1;
+    updateStepUI('edit');
   };
 
   window.openAccessManager = async (prefix) => {
@@ -429,15 +424,6 @@ export function startChatApp(customConfig = {}) {
             });
         }
     }
-    
-    renderPickerSelectedUsers();
-    
-    $('overlay-container').classList.add('active');
-    window.showOverlayView('access-manager');
-    
-    $('picker-id-input').value = '';
-    $('picker-id-input').focus();
-  };
     
     renderPickerSelectedUsers();
     
@@ -657,7 +643,6 @@ export function startChatApp(customConfig = {}) {
         state.currentStep.create = 1;
         state.selectedAllowedUsers = [];
         updateStepUI('create');
-        renderPickerPreview('create-picker-preview');
         $('c-name').value = '';
         $('c-pass').value = '';
         $('c-private').checked = false;
@@ -1582,13 +1567,6 @@ export function startChatApp(customConfig = {}) {
             return { id: id, name: p?.full_name || 'Unknown' };
         });
     }
-    
-    $('overlay-container').classList.add('active');
-    window.showOverlayView('room-settings');
-    window.setLoading(false);
-  };
-    
-    renderPickerPreview('edit-picker-preview');
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
