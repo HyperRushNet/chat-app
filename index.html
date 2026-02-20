@@ -128,7 +128,7 @@ h1.title{font-size:28px;letter-spacing:-1px;color:#000;font-weight:800;margin-bo
 input:checked+.slider{background-color:var(--accent)}
 input:checked+.slider:before{transform:translateX(20px)}
 
-/* Verbeterde lege chat state – perfect gecentreerd */
+/* Empty State Centering */
 #chat-messages{position:relative}
 #chat-empty-state{position:absolute;inset:0;z-index:5;pointer-events:none;display:flex;align-items:center;justify-content:center;background:var(--bg)}
 #chat-empty-state .empty-content{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;text-align:center;max-width:320px}
@@ -335,7 +335,7 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div style="display:flex;gap:10px;padding-top:12px;border-top:1px solid var(--border)"><input id="join-id" class="input-field m-0-flex-1" placeholder="Direct ID"><button class="btn btn-accent w-80" onclick="window.joinPrivate()">Join</button></div>
 </div>
 
-<!-- CHAT SCREEN – met gecentreerde lege state -->
+<!-- CHAT SCREEN -->
 <div id="scr-chat" class="screen">
 <div class="header" style="margin-bottom:12px">
 <div class="chat-header-main">
@@ -386,6 +386,8 @@ input:checked+.slider:before{transform:translateX(20px)}
 <p class="subtitle" id="create-step2-sub">Details</p>
 <div id="create-group-fields">
 <input id="c-name" class="input-field" placeholder="Group Name">
+<input id="c-avatar" class="input-field" placeholder="Avatar URL (optional)">
+<input id="c-pass" type="password" class="input-field" placeholder="Password (optional)">
 <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="c-private"><span class="slider"></span></label></div>
 </div>
 <div id="create-direct-fields" class="dn">
