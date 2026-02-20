@@ -86,6 +86,11 @@ export function startChatApp(customConfig = {}) {
         return p.innerHTML;
     };
 
+    const truncateText = (text, maxLength = 20) => {
+        if (!text) return "";
+        return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
+    };
+
     const $ = id => document.getElementById(id);
 
     const updateOnlineDisplay = (count) => {
@@ -427,13 +432,13 @@ export function startChatApp(customConfig = {}) {
         if(state.createType === 'direct') {
             $('create-group-fields').classList.add('dn');
             $('create-direct-fields').classList.remove('dn');
-            $('create-access-summary').classList.add('dn'); // Hide access manager for DMs
+            $('create-access-summary').classList.add('dn');
             $('create-step2-title').innerText = "Direct Message";
             $('create-step2-sub').innerText = "Who are you messaging?";
         } else {
             $('create-group-fields').classList.remove('dn');
             $('create-direct-fields').classList.add('dn');
-            $('create-access-summary').classList.remove('dn'); // Show for Groups
+            $('create-access-summary').classList.remove('dn');
             $('create-step2-title').innerText = "Setup";
             $('create-step2-sub').innerText = "Details";
         }
@@ -599,12 +604,10 @@ export function startChatApp(customConfig = {}) {
         if(target) { target.classList.add('active'); lucide.createIcons(); }
     };
     
-    // New Account Page Logic
     window.prepareAccountPage = async () => {
         if(!state.user) return;
         const isGuest = state.user.is_anonymous;
         
-        // Fetch profile to ensure we have the latest avatar/name
         const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single();
         
         const name = profile?.full_name || state.user.user_metadata?.full_name || "User";
@@ -640,7 +643,6 @@ export function startChatApp(customConfig = {}) {
         const btn = $('lobby-avatar-btn');
         if(!btn) return;
         
-        // Try to get avatar from state or fetch
         let avatar = state.user.user_metadata?.avatar_url;
         let name = state.user.user_metadata?.full_name;
         
@@ -710,13 +712,13 @@ export function startChatApp(customConfig = {}) {
         }
 
         const isGuest = state.roomGuestStatus[m.user_id] || false;
-        const displayName = m.user_name || 'User';
+        const displayName = truncateText(m.user_name || 'User', 18);
         const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
         const processedText = processText(m.text);
         const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
         const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me';
         const fullDate = msgDateObj.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
-        const tooltipContent = `<b>${esc(displayName)}</b><br>${fullDate}`;
+        const tooltipContent = `<b>${esc(m.user_name || 'User')}</b><br>${fullDate}`;
 
         html += `
         <div class="msg ${sideClass} ${msgClass}" data-time="${m.created_at}" data-tooltip="${esc(tooltipContent)}" oncontextmenu="event.preventDefault(); showTooltip(event, this.dataset.tooltip)" ontouchstart="window.startMsgTimer(event, this)" ontouchend="window.clearMsgTimer()" ontouchmove="window.clearMsgTimer()">
@@ -792,10 +794,9 @@ export function startChatApp(customConfig = {}) {
         const { data: room } = await db.from('rooms').select('*').eq('id', id).single();
         state.currentRoomData = room;
 
-        // Chat Header Logic
         const isDirect = room.is_direct;
         let displayTitle = n;
-        let displayAvatar = room.avatar_url; // Use group avatar if available
+        let displayAvatar = room.avatar_url;
 
         if (isDirect) {
             const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id);
@@ -1018,16 +1019,15 @@ export function startChatApp(customConfig = {}) {
             const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single();
             if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; }
             n = `DM ${profile.full_name}`;
-            isP = true; // Force private for DMs
+            isP = true;
         } else {
               n = $('c-name').value.trim();
               avatarUrl = $('c-avatar').value.trim() || null;
-              rawPass = $('c-pass').value; // Get raw password
+              rawPass = $('c-pass').value;
           isP = $('c-private').checked;
           if(!n) { window.toast("Name required"); state.processingAction = false; return; }
           }
 
-        // Handle allowed_users
         let allowedUsers = ['*'];
             if (isDirect) {
             allowedUsers = [state.user.id, targetUser];
@@ -1036,7 +1036,6 @@ export function startChatApp(customConfig = {}) {
               allowedUsers = state.selectedAllowedUsers.map(u => u.id);
               if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
           } else if (isP) {
-          // If private but no users selected, it's just the creator
           allowedUsers = [state.user.id];
           }
           }
@@ -1061,7 +1060,6 @@ export function startChatApp(customConfig = {}) {
         if(data && data.length > 0) {
             const newRoom = data[0];
 
-        // Handle Password RPC if provided
         if (rawPass) {
             const accessHash = await sha256(rawPass + roomSalt);
             const { error: passError } = await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
@@ -1150,7 +1148,6 @@ export function startChatApp(customConfig = {}) {
                 const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
                 if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); }
                 
-                // Update Avatar immediately on sign in
                 updateLobbyAvatar();
             }
         }
@@ -1249,7 +1246,7 @@ export function startChatApp(customConfig = {}) {
         if(id === 'scr-guest') { const storedName = localStorage.getItem(FLAG_GUEST_NAME); if (storedName) $('g-name').value = storedName; else $('g-name').value = ''; }
         if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); }
         if(id === 'scr-register') { state.currentStep.reg = 1; updateStepUI('reg'); }
-        if(id === 'scr-account') { window.prepareAccountPage(); } // Prepare account data when navigating
+        if(id === 'scr-account') { window.prepareAccountPage(); }
         
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
         if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); }
@@ -1261,7 +1258,6 @@ export function startChatApp(customConfig = {}) {
             const createBtn = $('icon-plus-lobby');
             if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
             
-            // Update lobby avatar when returning to lobby
             if(id === 'scr-lobby') updateLobbyAvatar();
     };
 
@@ -1278,7 +1274,7 @@ export function startChatApp(customConfig = {}) {
         if (error) { window.toast("Failed to load rooms"); window.setLoading(false); return; }
         state.allRooms = rooms || [];
         window.filterRooms(); window.setLoading(false);
-        updateLobbyAvatar(); // Ensure avatar is set after load
+        updateLobbyAvatar();
     };
 
     window.filterRooms = async () => {
@@ -1356,7 +1352,16 @@ export function startChatApp(customConfig = {}) {
         if (isSoftLoggedOut) { window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
 
         const [userRes, userErr] = await safeAwait(db.auth.getUser());
-        if (userErr) { console.error("Session validation failed:", userErr); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+        
+        if (userErr) { 
+            console.error("Session validation failed:", userErr);
+            await db.auth.signOut(); 
+            window.nav('scr-start'); 
+            window.setLoading(false); 
+            monitorConnection(); 
+            return; 
+        }
+        
         const user = userRes?.data?.user;
 
         if (user) {
