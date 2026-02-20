@@ -489,50 +489,6 @@ export function startChatApp(customConfig = {}) {
         updateAccessSummary(state.currentPickerContext);
     };
 
-    window.spamConnections = async (count = 100) => {
-    // Helper functie om een willekeurige ID te genereren
-    const generateUUID = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-
-    console.log(`Starten met aanmaken van ${count} simulaties...`);
-    let successCount = 0;
-
-    for (let i = 0; i < count; i++) {
-        try {
-            // 1. Forceer een unieke Tab ID in de session storage
-            // Dit is nodig omdat de app anders denkt dat het dezelfde tab is
-            sessionStorage.setItem('hrn_tab_id', generateUUID());
-
-            // 2. Roep de app opnieuw aan
-            // We gebruiken een short-circuit evaluatie om de startChatApp te vinden
-            // Omdat de code de functie exporteert, is hij globaal beschikbaar als de module geladen is.
-            // Als de module in een scope zit, moeten we kijken of 'startChatApp' globaal is.
-            // In jouw code staat: export function startChatApp...
-            // Als je dit in de browser draait via een <script type="module">, is 'startChatApp' misschien niet direct window.startChatApp.
-            // Echter, de code gebruikt veel window.foo = ... functies.
-            
-            // Indien startChatApp niet globaal is, moeten we de initialisatie code herhalen:
-            
-            // We voeren de init logica van de app uit, maar dan 100 keer.
-            // Omdat de 'state' variabele lokaal is in de functie, creëren we zo 100 losse states.
-            
-            startChatApp(); 
-            
-            successCount++;
-            
-            // Kleine pauze om de event loop niet te blokkeren
-            await new Promise(r => setTimeout(r, 50)); 
-            
-        } catch (e) {
-            console.error(`Fout bij verbinding ${i}:`, e);
-        }
-    }
-
-    console.log(`Klaar. ${successCount} connecties geprobeerd te initialiseren.`);
-};
-
     const renderPickerSelectedUsers = () => {
         const container = $('picker-selected-list');
         const displayUsers = state.selectedAllowedUsers;
