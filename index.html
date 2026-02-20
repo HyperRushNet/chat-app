@@ -9,148 +9,123 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        :root{--bg:#fff;--surface:#fff;--border:#e2e2e7;--text-main:#1c1c1e;--text-mute:#636366;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--pad:32px}
+        :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--pad:24px;--radius:16px}
         *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
         ::-webkit-scrollbar{width:0;height:0}
         body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center}
-        #app{width:100%;max-width:440px;height:100%;position:relative;display:flex;flex-direction:column;box-shadow:0 0 50px rgb(0 0 0 / .1);background:var(--bg);overflow:hidden}
-        .screen{display:none;padding:var(--pad);padding-top:calc(var(--pad) + 10px);inset:0;background:var(--bg);position:absolute;will-change:transform,opacity;transition:transform .4s cubic-bezier(.16, 1, .3, 1),opacity .4s;flex-direction:column}
+        #app{width:100%;max-width:440px;height:100%;position:relative;display:flex;flex-direction:column;box-shadow:0 0 80px rgb(0 0 0 / .08);background:var(--bg);overflow:hidden}
+        
+        /* Screens & Navigation */
+        .screen{display:none;padding:var(--pad);inset:0;background:var(--bg);position:absolute;will-change:transform,opacity;transition:transform .35s cubic-bezier(.16, 1, .3, 1),opacity .35s;flex-direction:column}
         .screen.active{display:flex;animation:.2s ease-out instantFade}
         .screen.slide-left{transform:translateX(-100%);opacity:0}
         .screen.slide-right{transform:translateX(100%);opacity:0}
-        @keyframes instantFade{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+        @keyframes instantFade{from{opacity:0;transform:scale(.99)}to{opacity:1;transform:scale(1)}}
         .center-content{justify-content:center;align-items:center;text-align:center}
-        .header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:20px;border-bottom:1px solid var(--border);margin-bottom:32px;flex-shrink:0;padding-top:8px}
-        .online-indicator{display:inline-flex;gap:6px;background:rgba(52,199,89,.1);padding:4px 10px;border-radius:8px;font-size:11px;line-height:1;color:var(--success)!important;flex-shrink:0;font-weight:800;align-items:center;text-transform:uppercase}
+        
+        /* Typography */
+        h1.title{font-size:28px;letter-spacing:-1px;color:#000;font-weight:800;margin-bottom:8px}
+        .subtitle{text-transform:uppercase;color:var(--text-mute);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:40px;display:block}
+        
+        /* Components */
+        .header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 24px 0;border-bottom:1px solid var(--border);margin-bottom:24px;flex-shrink:0}
+        .online-indicator{display:inline-flex;gap:6px;background:rgba(52,199,89,.12);padding:4px 10px;border-radius:20px;font-size:11px;line-height:1;color:var(--success)!important;flex-shrink:0;font-weight:700;align-items:center}
         .dot{width:6px;height:6px;background:var(--success)!important;border-radius:50%;animation:2s ease-in-out infinite pulse}
-        @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.9)}}
-        .title{font-size:26px;letter-spacing:-.8px;color:#000;margin-bottom:4px;display:flex;justify-content:center;gap:10px;font-weight:800;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .subtitle{text-transform:uppercase;color:var(--text-mute);font-size:12px;font-weight:600;letter-spacing:1.2px;margin-bottom:32px;display:block}
-        .input-field{color:var(--text-main);width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:12px;padding:16px;font-size:16px;outline:0;margin-bottom:16px;transition:.2s}
+        @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+        
+        /* Inputs & Buttons */
+        .input-field{color:var(--text-main);width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:var(--radius);padding:16px;font-size:15px;outline:0;margin-bottom:16px;transition:.2s}
         .input-field:focus{border-color:var(--accent);background:#fff}
-        .input-field:disabled{opacity:.6;cursor:not-allowed}
-        .btn{color:var(--text-main);width:100%;height:56px;border-radius:12px;border:1px solid var(--border);background:0 0;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px;transition:.15s;cursor:pointer}
-        .btn-accent{background:var(--text-main);color:#fff;border:none}
+        .btn{color:var(--text-main);width:100%;height:54px;border-radius:var(--radius);border:1px solid var(--border);background:0 0;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px;transition:.15s;cursor:pointer}
+        .btn-accent{background:var(--accent);color:#fff;border:none}
         .btn-danger{background:var(--danger);color:#fff;border:none}
-        #scr-start .btn:not(.btn-accent){background:#fff;border:none;color:#000}
-        .btn:active{transform:scale(.97);opacity:.8}
-        .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+        .btn:active{transform:scale(.98);opacity:.8}
+        
+        /* Toast & Overlays */
         #toast-container{position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:999999;width:85%;pointer-events:none;display:flex;flex-direction:column;align-items:center}
-        .toast-item{background:rgba(28,28,30,.95);backdrop-filter:blur(22px);color:#fff;padding:14px 22px;border-radius:80px;font-weight:600;font-size:13px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:.25s cubic-bezier(.2,1,.3,1) slideUp;pointer-events:auto;cursor:pointer;width:100%;margin-bottom:8px}
+        .toast-item{background:rgba(28,28,30,.95);backdrop-filter:blur(20px);color:#fff;padding:12px 20px;border-radius:40px;font-weight:600;font-size:13px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:.25s cubic-bezier(.2,1,.3,1) slideUp;pointer-events:auto;cursor:pointer;width:100%;margin-bottom:8px}
         @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
         #block-overlay,#capacity-overlay,#offline-screen{position:absolute;inset:0;background:var(--bg);z-index:6000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:var(--pad);text-align:center}
         #block-overlay.active,#capacity-overlay.active,#offline-screen.active{display:flex}
-        #loader-overlay{position:absolute;inset:0;background:rgba(255,255,255,.98);z-index:3500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;transition:opacity .2s;backdrop-filter:blur(12px);opacity:0}
+        #loader-overlay{position:absolute;inset:0;background:rgba(255,255,255,.98);z-index:3500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;transition:opacity .2s;backdrop-filter:blur(16px);opacity:0}
         #loader-overlay.active{display:flex;opacity:1}
-        .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:.5s linear infinite spin}
+        .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:.5s linear infinite spin}
         @keyframes spin{to{transform:rotate(360deg)}}
-        .loader-text{font-size:13px;font-weight:700;margin-top:4px;color:var(--text-mute);text-align:center}
-        .room-card{padding:20px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);margin-bottom:12px;width:100%;transition:.15s;cursor:pointer}
-        .room-card:active{transform:scale(.98);background:#f9f9f9}
-        .room-name{flex:1;min-width:0;font-weight:700;margin-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .room-icon{flex-shrink:0;display:flex;align-items:center;gap:5px}
-        #chat-messages{flex:1;display:flex;flex-direction:column;padding:4px;position:relative;overflow-y:auto}
-        .date-divider{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;margin:16px 0 8px 0}
-        .date-label{font-weight:800;text-transform:uppercase;letter-spacing:.5px;width:25%;margin:0 auto;background:rgba(255,255,255,.9);backdrop-filter:blur(4px);padding:6px 0;border-radius:20px;font-size:11px;border:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,.05);text-align:center;color:var(--text-mute)}
-        .msg{position:relative;max-width:85%;padding:10px 14px;border-radius:16px;background:#f2f2f7;font-size:15px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word;width:fit-content;margin-top:2px}
-        .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:2px}
-        .msg.not-me{align-self:flex-start;border-bottom-left-radius:2px}
-        .msg.group-start{margin-top:14px}
+        .loader-text{font-size:12px;font-weight:700;margin-top:8px;color:var(--text-mute);text-align:center}
+        
+        /* Room List */
+        .room-card{padding:18px;border-radius:var(--radius);background:#fff;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);margin-bottom:12px;width:100%;transition:.15s;cursor:pointer}
+        .room-card:active{transform:scale(.99);background:#f9f9f9}
+        .room-name{flex:1;min-width:0;font-weight:700;margin-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+        .room-icon{flex-shrink:0;display:flex;align-items:center;gap:5px;color:var(--text-mute)}
+        
+        /* Chat Area */
+        #chat-messages{flex:1;display:flex;flex-direction:column;padding:8px 0;position:relative;overflow-y:auto}
+        .date-divider{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;margin:20px 0 8px 0}
+        .date-label{font-weight:700;text-transform:uppercase;letter-spacing:.5px;width:25%;margin:0 auto;background:var(--bg);padding:4px 0;font-size:10px;text-align:center;color:var(--text-mute)}
+        .msg{position:relative;max-width:80%;padding:10px 14px;border-radius:18px;background:#f2f2f7;font-size:15px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word;width:fit-content;margin-top:2px}
+        .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+        .msg.not-me{align-self:flex-start;border-bottom-left-radius:4px}
+        .msg.group-start{margin-top:16px}
         .msg-header{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-        .msg-user{font-size:11px;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:6px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+        .msg-user{font-size:11px;color:var(--accent);cursor:pointer;font-weight:700}
         .msg.me .msg-user{color:rgba(255,255,255,.8)}
-        .msg-time{font-size:9px;opacity:.5;text-align:right;margin-top:2px;align-self:flex-end}
+        .msg-time{font-size:9px;opacity:.4;text-align:right;margin-top:2px;align-self:flex-end}
         .msg-continuation .msg-header{display:none}
         .msg-continuation{margin-top:1px}
-        .msg-continuation.msg.me{border-radius:16px 4px 4px 16px}
-        .msg-continuation.msg.not-me{border-radius:4px 16px 16px 4px}
-        .msg.me.group-start{border-radius:16px 16px 4px 16px}
-        .msg.not-me.group-start{border-radius:16px 16px 16px 4px}
-        #context-tooltip{position:fixed;background:rgba(0,0,0,.85);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:500;z-index:99999;pointer-events:none;opacity:0;transform:scale(.9);transition:opacity .15s, transform .15s;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+        .msg-continuation.msg.me{border-radius:18px 4px 4px 18px}
+        .msg-continuation.msg.not-me{border-radius:4px 18px 18px 4px}
+        .msg.me.group-start{border-radius:18px 18px 4px 18px}
+        .msg.not-me.group-start{border-radius:18px 18px 18px 4px}
+        #context-tooltip{position:fixed;background:rgba(0,0,0,.85);color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:500;z-index:99999;pointer-events:none;opacity:0;transform:scale(.9);transition:opacity .15s, transform .15s;backdrop-filter:blur(10px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
         #context-tooltip.active{opacity:1;transform:scale(1)}
-        .bottom-hint{position:absolute;bottom:30px;left:0;right:0;font-size:12px;font-weight:700;color:var(--text-mute);display:flex;align-items:center;justify-content:center;gap:8px;opacity:0;animation:1s 2s forwards fadeInHint;pointer-events:auto;cursor:pointer;text-align:center}
-        @keyframes fadeInHint{to{opacity:.6}}
-        .header-action-group{display:flex;gap:14px;align-items:center;flex-shrink:0}
-        .chat-header-title-wrapper{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
-        .chat-header-title-wrapper .title{display:block;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:18px;margin:0;text-align:left}
-        .input-wrapper{position:relative;width:100%;margin-bottom:16px}
-        #chat-empty-state,.input-lock-icon{position:absolute;pointer-events:none}
-        .input-wrapper .input-field{margin-bottom:0;padding-right:44px}
-        .input-lock-icon{right:16px;top:50%;transform:translateY(-50%);color:var(--text-mute)}
-        .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-        .stat-box{padding:16px;border-radius:14px;background:#f2f2f7;text-align:center}
-        .stat-value{font-size:24px;font-weight:800;color:var(--accent);margin-bottom:4px}
-        .stat-label{font-size:10px;font-weight:700;color:var(--text-mute);text-transform:uppercase}
-        .chat-link{color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.4);transition:color .2s}
-        .msg:not(.me) .chat-link{color:var(--accent);text-decoration-color:rgba(0,122,255,0.3)}
-        .chat-link:hover{opacity:.8}
-        #chat-empty-state{inset:0;z-index:5;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;width:100%}
-        .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;width:100%;text-align:center;color:var(--text-mute)}
-        .empty-state-icon{width:48px;height:48px;color:#d1d1d6;margin-bottom:16px}
-        .empty-state-title{font-size:15px;font-weight:700;color:var(--text-main);margin-bottom:4px}
-        .empty-state-sub{font-size:13px;font-weight:500}
-        .flex-gap12-pt16{display:flex;gap:12px;padding-top:16px;align-items:flex-end}
-        #chat-input,.h-52-resize{height:52px;resize:none}
-        #chat-input-area{display:flex;gap:12px;padding-top:16px;align-items:flex-end}
-        .guest-replies-bar{display:none;gap:10px;overflow-x:auto;padding:8px 0;width:100%;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
-        .guest-replies-bar::-webkit-scrollbar{display:none}
-        .reply-block{flex:0 0 auto;padding:12px 20px;background:#f2f2f7;border:1px solid var(--border);border-radius:20px;font-weight:600;font-size:14px;white-space:nowrap;scroll-snap-align:start;cursor:pointer;transition:.1s}
-        .reply-block:active{transform:scale(.95);background:var(--accent);color:#fff;border-color:var(--accent)}
-        .guest-pill{display:inline-flex;align-items:center;justify-content:center;padding:2px 8px;border-radius:12px;background:rgba(0,122,255,.1);font-size:9px;font-weight:800;line-height:1;margin-left:6px;letter-spacing:.3px;text-transform:uppercase;color:var(--accent)}
+        .guest-pill{display:inline-flex;align-items:center;justify-content:center;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.08);font-size:8px;font-weight:800;line-height:1;margin-left:4px;letter-spacing:.3px;text-transform:uppercase;color:var(--text-main)}
         .msg.me .guest-pill{background:rgba(255,255,255,.15);color:#fff}
-        .w-48{width:48px}.h-48{height:48px}.mb-24{margin-bottom:24px}.c-danger{color:var(--danger)}.c-warning{color:var(--warning)}.c-main{color:var(--text-main)}.c-accent{color:var(--accent)}.c-white{color:#fff}.mb-48{margin-bottom:48px}.h-52{height:52px}.mt-24{margin-top:24px}.w-100{width:100%}.mt-12{margin-top:12px}.bn{border:none}.mb-20{margin-bottom:20px}.fs-11{font-size:11px}.c-mute{color:var(--text-mute)}.fw-700{font-weight:700}.fs-14{font-size:14px}.fs-18{font-size:18px}.fs-22{font-size:22px}.m-0{margin:0}.p-2-8{padding:2px 8px}.fs-10{font-size:10px}.w-22{width:22px}.h-22{height:22px}.flex-1{flex:1}.flex-gap12-mt20{display:flex;gap:12px;margin-top:20px}.m-0-flex-1{margin:0;flex:1}.w-80{width:80px}.mb-16,.mb-16px{margin-bottom:16px}.flex-s0{flex-shrink:0}.dn{display:none}.w-20{width:20px}.h-20{height:20px}#chat-input,.h-52-resize{height:52px;resize:none}.c-success{color:var(--success)}#chat-input{flex:1;margin:0}#send-btn{width:52px!important;height:52px!important;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center}
-        .flex-col-gap16{display:flex;flex-direction:column;gap:16px}
-        .guide-box{padding:14px;border-radius:14px;background:#f2f2f7;margin-bottom:12px;font-size:13px;line-height:1.5}
-        .guide-box b{color:var(--accent);text-transform:uppercase;margin-bottom:4px;display:block;font-weight:800}
-        #overlay-container{position:absolute;background:rgba(0,0,0,.4);z-index:5000;align-items:center;justify-content:center;transition:opacity .3s;backdrop-filter:blur(12px);opacity:0;display:none;padding:var(--pad);inset:0}
+
+        /* Chat Header & Avatar */
+        .chat-header-main{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+        .chat-avatar{width:36px;height:36px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:14px}
+        .chat-avatar img{width:100%;height:100%;object-fit:cover}
+        .chat-header-title-wrapper{display:flex;flex-direction:column;min-width:0}
+        .chat-header-title-wrapper .title{font-size:17px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+        .chat-subtitle{font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
+
+        /* Wizard Steps */
+        .step-container{position:relative;overflow:hidden;width:100%}
+        .wizard-step{display:none;flex-direction:column;gap:16px;width:100%;animation:.3s ease stepFade}
+        .wizard-step.active{display:flex}
+        @keyframes stepFade{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+        .step-indicator{display:flex;justify-content:center;gap:6px;margin-bottom:32px}
+        .step-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .2s}
+        .step-dot.active{background:var(--accent);width:20px;border-radius:4px}
+        
+        /* Type Selector Cards */
+        .type-card{padding:20px;border-radius:var(--radius);background:#fff;border:2px solid var(--border);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:16px;width:100%;text-align:left;margin-bottom:12px}
+        .type-card:active{transform:scale(.99)}
+        .type-card.selected{border-color:var(--accent);background:rgba(0,122,255,.03)}
+        .type-icon{width:40px;height:40px;border-radius:12px;background:#f2f2f7;display:flex;align-items:center;justify-content:center;color:var(--accent)}
+        .type-info h4{font-size:15px;margin-bottom:2px;font-weight:700}
+        .type-info p{font-size:12px;color:var(--text-mute)}
+
+        /* Avatar Selector */
+        .avatar-grid{display:grid;grid-template-columns:repeat(3, 1fr);gap:12px;margin-bottom:20px}
+        .avatar-option{aspect-ratio:1;border-radius:var(--radius);border:2px solid var(--border);cursor:pointer;overflow:hidden;background:#f2f2f7;display:flex;align-items:center;justify-content:center;transition:.15s}
+        .avatar-option img{width:100%;height:100%;object-fit:cover}
+        .avatar-option.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,122,255,.2)}
+
+        /* Panels & Overlays */
+        #overlay-container{position:absolute;background:rgba(0,0,0,.4);z-index:5000;align-items:center;justify-content:center;transition:opacity .3s;backdrop-filter:blur(16px);opacity:0;display:none;padding:var(--pad);inset:0}
         #overlay-container.active{display:flex;opacity:1}
-        .panel-card{background:var(--bg);width:100%;max-width:380px;border-radius:24px;padding:24px;box-shadow:0 30px 60px rgba(0,0,0,.3);animation:.4s cubic-bezier(.16,1,.3,1) panelSlide;max-height:90vh;overflow-y:auto}
+        .panel-card{background:var(--bg);width:100%;max-width:360px;border-radius:24px;padding:24px;box-shadow:0 30px 60px rgba(0,0,0,.3);animation:.4s cubic-bezier(.16,1,.3,1) panelSlide;max-height:85vh;overflow-y:auto}
         @keyframes panelSlide{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
         .view-content{display:none}
         .view-content.active{display:block}
-        .picker-container{display:flex;flex-direction:column;gap:16px;height:100%}
-        .picker-add-row{display:flex;gap:8px;align-items:center}
-        .picker-add-row .input-field{flex:1;margin-bottom:0}
-        .picker-add-row .btn{height:52px;flex-shrink:0;width:auto;padding:0 20px}
-        .picker-selected-list{flex:1;overflow-y:auto;padding-right:4px;max-height:300px}
-        .picker-user-card{display:flex;align-items:center;padding:12px;gap:12px;border-bottom:1px solid var(--border);transition:.15s;background:#fff}
-        .picker-user-card:last-child{border-bottom:none}
-        .picker-user-info{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
-        .picker-user-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0}
-        .picker-user-text{display:flex;flex-direction:column;min-width:0}
-        .picker-user-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .picker-user-id{font-size:10px;color:var(--text-mute);font-family:monospace}
-        .picker-remove-btn{background:0 0;border:none;color:var(--danger);cursor:pointer;padding:8px}
-        .picker-empty{color:var(--text-mute);padding:40px 0;font-size:13px;text-align:center}
-        .picker-header{margin-bottom:16px;text-align:center}
-        .picker-header h3{font-size:18px;font-weight:800;margin-bottom:4px}
-        .picker-header p{font-size:12px;color:var(--text-mute)}
-        .settings-header-row{display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:20px}
-        .settings-header-row h3{margin:0;font-weight:800;font-size:18px}
-        .delete-icon-btn{background:rgba(255,59,48,.1);border:none;border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger);transition:.15s}
-        .delete-icon-btn:active{transform:scale(.9);background:rgba(255,59,48,.2)}
-        .step-container{position:relative;overflow:hidden}
-        .wizard-step{display:none;flex-direction:column;gap:16px;animation:.3s ease stepFade}
-        .wizard-step.active{display:flex}
-        @keyframes stepFade{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-        .step-indicator{display:flex;justify-content:center;gap:8px;margin-bottom:20px}
-        .step-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:background .2s}
-        .step-dot.active{background:var(--accent);width:20px;border-radius:4px}
-        .flex-sb-aic-w100-p18-bg-br12-mb20{display:flex;justify-content:space-between;align-items:center;width:100%;padding:18px;background:#f2f2f7;border-radius:12px;margin-bottom:20px}
-        .p-12-bg-f2-br12{padding:12px;background:#f2f2f7;border-radius:12px}
-        .mono-fs11{font-family:monospace;font-size:11px}
-        .fs-12-c-mute{font-size:12px;color:var(--text-mute)}
-        .fs-15{font-size:15px}
-        .flex-aic-gap10-min0-flex1{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
-        #qv-user-avatar{display:flex;align-items:center;justify-content:center;line-height:1}
-        .switch{position:relative;display:inline-block;width:44px;height:24px}
-        .switch input{opacity:0;width:0;height:0}
-        .slider{position:absolute;cursor:pointer;inset:0;background-color:#ccc;transition:.2s;border-radius:24px}
-        .slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background-color:#fff;transition:.2s;border-radius:50%}
-        input:checked+.slider{background-color:var(--accent)}
-        input:checked+.slider:before{transform:translateX(20px)}
-        .access-summary-card{width:100%;background:#f2f2f7;border-radius:12px;padding:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border:1px solid var(--border);cursor:pointer;transition:.15s}
-        .access-summary-card:active{transform:scale(.98);background:#e5e5ea}
+        
+        /* Misc */
+        .access-summary-card{width:100%;background:#f2f2f7;border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);cursor:pointer;transition:.15s;margin-bottom:16px}
+        .access-summary-card:active{transform:scale(.98)}
+        .flex-sb-aic-w100-p18-bg-br12-mb20{display:flex;justify-content:space-between;align-items:center;width:100%;padding:16px;background:#f2f2f7;border-radius:var(--radius);margin-bottom:16px}
+        .w-48{width:48px}.h-48{height:48px}.mb-24{margin-bottom:24px}.c-danger{color:var(--danger)}.c-warning{color:var(--warning)}.c-main{color:var(--text-main)}.c-accent{color:var(--accent)}.mb-48{margin-bottom:48px}.mt-24{margin-top:24px}.w-100{width:100%}.mt-12{margin-top:12px}.bn{border:none}.mb-20{margin-bottom:20px}.c-mute{color:var(--text-mute)}.fs-12{font-size:12px}.flex-1{flex:1}.flex-gap12-mt20{display:flex;gap:12px;margin-top:20px}.m-0-flex-1{margin:0;flex:1}.w-80{width:80px}.mb-16{margin-bottom:16px}.flex-s0{flex-shrink:0}.dn{display:none}.w-20{width:20px}.h-20{height:20px}.switch{position:relative;display:inline-block;width:44px;height:24px}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;inset:0;background-color:#ccc;transition:.2s;border-radius:24px}.slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background-color:#fff;transition:.2s;border-radius:50%}input:checked+.slider{background-color:var(--accent)}input:checked+.slider:before{transform:translateX(20px)}
     </style>
 </head>
 <body>
@@ -163,158 +138,122 @@
         </div>
         <div id="overlay-container">
             <div class="panel-card">
+                <!-- Hub, Settings, Account etc. Views -->
                 <div id="view-hub" class="view-content active">
                     <div style="text-align:center;margin-bottom:24px">
-                        <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.5px">Intelligence Hub</h2>
-                        <p style="font-size:11px;color:var(--text-mute);font-weight:700;text-transform:uppercase">System Resources</p>
+                        <h2 style="font-size:20px;font-weight:800;letter-spacing:-0.5px">Intelligence Hub</h2>
+                        <p style="font-size:10px;color:var(--text-mute);font-weight:700;text-transform:uppercase;letter-spacing:1px">System Resources</p>
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-                        <div class="p-12-bg-f2-br12" style="cursor:pointer;transition:.15s" onclick="window.prepareMyAccount()">
-                             <div style="display:flex;align-items:center;gap:15px"><i data-lucide="shield-check" style="color:var(--text-main)"></i><div><span style="font-weight:700;font-size:14px">My Account</span><br><span style="font-size:11px;color:var(--text-mute)">Secure credentials</span></div></div>
+                    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+                        <div class="access-summary-card" style="margin-bottom:0" onclick="window.prepareMyAccount()">
+                             <div style="display:flex;align-items:center;gap:12px"><i data-lucide="shield-check" class="c-main w-20 h-20"></i><div><span style="font-weight:700;font-size:14px">My Account</span><br><span style="font-size:11px;color:var(--text-mute)">Secure credentials</span></div></div><i data-lucide="chevron-right" class="w-16 h-16 c-mute"></i>
                         </div>
-                        <div class="p-12-bg-f2-br12" style="cursor:pointer;transition:.15s" onclick="window.showOverlayView('network')">
-                             <div style="display:flex;align-items:center;gap:15px"><i data-lucide="activity"></i><div><span style="font-weight:700;font-size:14px">Protocols</span><br><span style="font-size:11px;color:var(--text-mute)">Network state</span></div></div>
+                        <div class="access-summary-card" style="margin-bottom:0" onclick="window.showOverlayView('network')">
+                             <div style="display:flex;align-items:center;gap:12px"><i data-lucide="activity" class="w-20 h-20"></i><div><span style="font-weight:700;font-size:14px">Protocols</span><br><span style="font-size:11px;color:var(--text-mute)">Network state</span></div></div><i data-lucide="chevron-right" class="w-16 h-16 c-mute"></i>
                         </div>
-                        <div class="p-12-bg-f2-br12" style="cursor:pointer;transition:.15s" onclick="window.showOverlayView('guide')">
-                             <div style="display:flex;align-items:center;gap:15px"><i data-lucide="book-open"></i><div><span style="font-weight:700;font-size:14px">Manual</span><br><span style="font-size:11px;color:var(--text-mute)">Usage guide</span></div></div>
+                        <div class="access-summary-card" style="margin-bottom:0" onclick="window.showOverlayView('guide')">
+                             <div style="display:flex;align-items:center;gap:12px"><i data-lucide="book-open" class="w-20 h-20"></i><div><span style="font-weight:700;font-size:14px">Manual</span><br><span style="font-size:11px;color:var(--text-mute)">Usage guide</span></div></div><i data-lucide="chevron-right" class="w-16 h-16 c-mute"></i>
                         </div>
                     </div>
-                    <button class="btn btn-accent h-52 mt-12 w-100" onclick="window.closeOverlay()">Close Hub</button>
+                    <button class="btn btn-accent" style="height:48px" onclick="window.closeOverlay()">Close Hub</button>
                 </div>
+                
                 <div id="view-my-account" class="view-content">
-                    <h3 class="mb-20 fw-800 fs-18">My Account</h3>
-                    <div class="flex-col-gap16">
-                        <div class="p-12-bg-f2-br12"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Identity</span><br><span id="my-acc-name" style="font-size:14px;font-weight:600">---</span></div>
-                        <div class="p-12-bg-f2-br12"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Unique ID</span><br><span id="my-acc-id" class="mono-fs11">---</span></div>
-                        <div class="p-12-bg-f2-br12"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Mail Node</span><br><span id="my-acc-email" style="font-size:14px;font-weight:600">---</span></div>
-                        <div class="p-12-bg-f2-br12"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Account Type</span><br><span id="my-acc-type" style="font-size:14px;font-weight:600">---</span></div>
+                    <h3 style="font-weight:800;font-size:18px;margin-bottom:20px">My Account</h3>
+                    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                            <div id="acc-avatar-preview" class="chat-avatar" style="width:48px;height:48px;font-size:18px">?</div>
+                            <div><div id="my-acc-name" style="font-weight:800;font-size:16px">---</div><div id="my-acc-type" style="font-size:11px;color:var(--text-mute)">---</div></div>
+                        </div>
+                        <div class="p-12-bg-f2-br12" style="padding:12px;background:#f2f2f7;border-radius:var(--radius)"><span style="font-size:10px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Unique ID</span><br><span id="my-acc-id" style="font-size:12px;font-family:monospace">---</span></div>
+                        <div class="p-12-bg-f2-br12" style="padding:12px;background:#f2f2f7;border-radius:var(--radius)"><span style="font-size:10px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Mail Node</span><br><span id="my-acc-email" style="font-size:12px">---</span></div>
                     </div>
-                    <button class="btn h-48 mt-24 w-100 bn" style="background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
+                    <button class="btn" style="height:48px;background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
                 </div>
-                <div id="view-quick-view-user" class="view-content">
-                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
-                        <div id="qv-user-avatar" class="w-44 h-44" style="border-radius:12px;background:var(--accent);color:#fff;font-weight:800;font-size:18px">?</div>
-                        <div style="display:flex;flex-direction:column;min-width:0"><span id="qv-user-name" style="font-size:18px;font-weight:800;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">---</span><span id="qv-status" style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px">---</span></div>
-                    </div>
-                    <div class="flex-col-gap16">
-                        <div class="p-12-bg-f2-br12" style="padding:14px;background:#f2f2f7;border-radius:14px"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Full Name</span><br><span id="qv-full-name" style="font-size:14px;font-weight:600">---</span></div>
-                        <div class="p-12-bg-f2-br12" style="padding:14px;background:#f2f2f7;border-radius:14px"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">System ID</span><br><span id="qv-user-id" class="mono-fs11">---</span></div>
-                        <div class="p-12-bg-f2-br12" style="padding:14px;background:#f2f2f7;border-radius:14px"><span style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Created At</span><br><span id="qv-user-date" style="font-size:14px;font-weight:600">---</span></div>
-                    </div>
-                    <button class="btn btn-accent h-52 mt-24 w-100" onclick="window.closeOverlay()">Dismiss</button>
-                </div>
+
                 <div id="view-network" class="view-content">
-                    <h3 class="mb-20 fw-800 fs-18">Network Status</h3>
-                    <div class="stat-grid">
-                        <div class="stat-box">
-                            <div class="stat-value" id="hub-online-count">--</div>
-                            <div class="stat-label">Users Online</div>
+                    <h3 style="font-weight:800;font-size:18px;margin-bottom:20px">Network Status</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                        <div style="padding:16px;border-radius:var(--radius);background:#f2f2f7;text-align:center">
+                            <div style="font-size:22px;font-weight:800;color:var(--accent);margin-bottom:4px" id="hub-online-count">--</div>
+                            <div style="font-size:10px;font-weight:700;color:var(--text-mute);text-transform:uppercase">Users Online</div>
                         </div>
-                        <div class="stat-box">
-                            <div class="stat-value" id="hub-uptime">00:00</div>
-                            <div class="stat-label">Session Uptime</div>
+                        <div style="padding:16px;border-radius:var(--radius);background:#f2f2f7;text-align:center">
+                            <div style="font-size:22px;font-weight:800;color:var(--accent);margin-bottom:4px" id="hub-uptime">00:00</div>
+                            <div style="font-size:10px;font-weight:700;color:var(--text-mute);text-transform:uppercase">Session Uptime</div>
                         </div>
                     </div>
-                    <button class="btn h-48 mt-16 w-100 bn" style="background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
+                    <button class="btn" style="height:48px;background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
                 </div>
                 <div id="view-guide" class="view-content">
-                    <h3 class="mb-20 fw-800 fs-18">Extended Manual</h3>
-                    <div style="max-height:320px;overflow-y:auto;padding-right:4px">
-                        <div class="guide-box"><b>SignIn & Register</b>Use a valid email. The 6-digit code expires after 10 minutes. Passwords must be at least 8 characters.</div>
-                        <div class="guide-box"><b>Guest Mode</b>Guests cannot create rooms. They can only choose from predefined messages. Name cannot be changed once set.</div>
-                        <div class="guide-box"><b>Private Rooms</b>Hidden from list. Requires a password to join.</div>
-                        <div class="guide-box"><b>Restricted Rooms</b>Only users explicitly allowed by the creator can enter.</div>
-                        <div class="guide-box"><b>Links</b>URLs are automatically detected and made clickable.</div>
+                    <h3 style="font-weight:800;font-size:18px;margin-bottom:20px">Extended Manual</h3>
+                    <div style="max-height:300px;overflow-y:auto;padding-right:4px">
+                        <div style="padding:14px;background:#f2f2f7;border-radius:var(--radius);margin-bottom:8px;font-size:13px;line-height:1.5"><b style="color:var(--accent);text-transform:uppercase;margin-bottom:4px;font-size:10px;display:block;font-weight:800">SignIn & Register</b>Use a valid email. The 6-digit code expires after 10 minutes. Passwords must be at least 8 characters.</div>
+                        <div style="padding:14px;background:#f2f2f7;border-radius:var(--radius);margin-bottom:8px;font-size:13px;line-height:1.5"><b style="color:var(--accent);text-transform:uppercase;margin-bottom:4px;font-size:10px;display:block;font-weight:800">Private Chat</b>Direct messages are between you and one other person. Names are hidden in the chat for privacy.</div>
+                        <div style="padding:14px;background:#f2f2f7;border-radius:var(--radius);margin-bottom:8px;font-size:13px;line-height:1.5"><b style="color:var(--accent);text-transform:uppercase;margin-bottom:4px;font-size:10px;display:block;font-weight:800">Group Rooms</b>Standard group chats. You can restrict access or set passwords.</div>
                     </div>
-                    <button class="btn h-48 mt-16 w-100 bn" style="background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
+                    <button class="btn" style="height:48px;background:#f2f2f7" onclick="window.showOverlayView('hub')">Back</button>
                 </div>
-                <div id="view-guest-info" class="view-content">
-                    <h3 class="mb-20 fw-800 fs-18">Guest Limitations</h3>
-                    <div class="flex-col-gap16">
-                        <div style="padding:14px;background:#f2f2f7;border-radius:14px;border-left:4px solid var(--danger)"><span style="font-size:14px;color:var(--danger);font-weight:700">Room Creation</span><br><span style="font-size:12px;color:var(--text-mute)">Guests cannot create new rooms.</span></div>
-                        <div style="padding:14px;background:#f2f2f7;border-radius:14px;border-left:4px solid var(--danger)"><span style="font-size:14px;color:var(--danger);font-weight:700">Custom Messages</span><br><span style="font-size:12px;color:var(--text-mute)">You can only send selected replies.</span></div>
+
+                <div id="view-access-manager" class="view-content">
+                    <div style="display:flex;flex-direction:column;gap:16px;height:100%">
+                        <div style="text-align:center">
+                            <h3 style="font-size:18px;font-weight:800;margin-bottom:4px">Select Users</h3>
+                            <p style="font-size:12px;color:var(--text-mute)">Add users to restrict access.</p>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input id="picker-id-input" class="input-field" placeholder="Paste User ID..." style="margin-bottom:0">
+                            <button class="btn btn-accent" style="width:auto;padding:0 16px;height:48px" onclick="window.addUserById()">Add</button>
+                        </div>
+                        <label style="font-size:10px;color:var(--text-mute);text-transform:uppercase;letter-spacing:1px;font-weight:800">Added Users (<span id="picker-count">0</span>)</label>
+                        <div id="picker-selected-list" style="flex:1;overflow-y:auto;padding-right:4px;max-height:250px">
+                             <div style="color:var(--text-mute);padding:20px 0;font-size:13px;text-align:center">No users added yet.</div>
+                        </div>
+                        <button class="btn btn-accent" style="height:52px" onclick="window.closeAccessManager()">Done</button>
                     </div>
-                    <button class="btn btn-accent h-52 mt-24 w-100" onclick="window.closeOverlay()">Understood</button>
-                </div>
-                <div id="view-guest-warn" class="view-content">
-                    <h3 class="mb-20 fw-800 fs-18">Guest Confirmation</h3>
-                    <div class="flex-col-gap16 fs-13 c-mute mb-20" style="line-height:1.5">
-                        <div style="padding:14px;background:#f2f2f7;border-radius:14px">You are about to create a <b style="color:var(--text-main)">Guest Account</b>.</div>
-                        <div style="padding:14px;background:#f2f2f7;border-radius:14px;border-left:4px solid var(--danger)">Your name will be locked forever for this session.</div>
-                    </div>
-                    <button id="btn-confirm-guest" class="btn btn-accent h-52 w-100" onclick="window.confirmGuestLoginAction(event)">I Understand, Continue</button>
-                    <button id="btn-cancel-guest" class="btn h-48 mt-12 w-100 bn" style="background:#f2f2f7" onclick="window.closeOverlay()">Cancel</button>
                 </div>
                 
                 <div id="view-room-settings" class="view-content">
-                    <div class="settings-header-row">
-                        <h3 class="fw-800 fs-18">Room Settings</h3>
-                        <button class="delete-icon-btn" onclick="window.deleteRoom(event)">
-                            <i data-lucide="trash-2" class="w-20 h-20"></i>
-                        </button>
+                    <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:20px">
+                        <h3 style="margin:0;font-weight:800;font-size:18px">Room Settings</h3>
+                        <button style="background:rgba(255,59,48,.1);border:none;border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--danger)" onclick="window.deleteRoom(event)"><i data-lucide="trash-2" class="w-20 h-20"></i></button>
                     </div>
-                    
-                    <div class="step-indicator" id="edit-step-indicator">
-                        <div class="step-dot active"></div>
-                        <div class="step-dot"></div>
-                    </div>
-
+                    <div class="step-indicator" id="edit-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div>
                     <div class="step-container">
                         <div id="edit-step-1" class="wizard-step active">
                             <input id="edit-room-name" class="input-field" placeholder="Room Name">
                             <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span class="fw-700">Private Room</span><label class="switch"><input type="checkbox" id="edit-room-private"><span class="slider"></span></label></div>
-                            <button class="btn btn-accent" onclick="window.nextEditStep()">Next: Access & Security</button>
+                            <button class="btn btn-accent" onclick="window.nextEditStep()">Next: Security</button>
                         </div>
-                        
                         <div id="edit-step-2" class="wizard-step">
-                             <div class="p-12-bg-f2-br12 mb-16">
-                                <div style="display:flex;justify-content:space-between;align-items:center;width:100%;background:transparent;padding:0 0 12px 0">
-                                    <span style="font-weight:700;font-size:14px">Room Password</span>
-                                    <span id="pass-status-label" style="font-size:11px;color:var(--text-mute)">Not Set</span>
+                             <div style="margin-bottom:16px">
+                                <div style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 0 12px 0">
+                                    <span style="font-weight:700;font-size:13px">Room Password</span>
+                                    <span id="pass-status-label" style="font-size:10px;color:var(--text-mute);text-transform:uppercase;font-weight:700">Not Set</span>
                                 </div>
-                                <input id="edit-room-pass" type="password" class="input-field" placeholder="Enter new password to change" autocomplete="new-password" style="margin-bottom:8px">
-                                <button id="btn-remove-pass" class="btn bn c-danger fs-12" style="height:auto;padding:4px 0;display:none" onclick="window.prepareRemovePassword()">Remove Current Password</button>
+                                <input id="edit-room-pass" type="password" class="input-field" placeholder="Enter new password to change" autocomplete="new-password">
+                                <button id="btn-remove-pass" class="btn bn c-danger fs-12" style="height:auto;padding:4px 0;display:none;justify-content:flex-start" onclick="window.prepareRemovePassword()">Remove Current Password</button>
                             </div>
-
                             <div id="edit-access-summary" class="access-summary-card" onclick="window.openAccessManager('edit-room')">
                                  <span class="c-main">Public Room</span>
                                  <i data-lucide="chevron-right" class="w-16 h-16"></i>
                             </div>
-
-                            <div style="display:flex;gap:12px;margin-top:auto">
-                                <button class="btn" style="background:#f2f2f7" onclick="window.prevEditStep()">Back</button>
-                                <button class="btn btn-accent" onclick="window.saveRoomSettings(event)">Save</button>
+                            <div style="display:flex;gap:12px;margin-top:8px">
+                                <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevEditStep()">Back</button>
+                                <button class="btn btn-accent" style="flex:1" onclick="window.saveRoomSettings(event)">Save</button>
                             </div>
                         </div>
                     </div>
-                    <button class="btn h-48 mt-12 w-100 bn" style="background:#f2f2f7" onclick="window.closeOverlay()">Cancel</button>
-                </div>
-
-                <div id="view-access-manager" class="view-content">
-                    <div class="picker-container">
-                        <div class="picker-header">
-                            <h3>Select Users</h3>
-                            <p>Add users to restrict access. Empty means public.</p>
-                        </div>
-                        <div class="picker-add-row">
-                            <input id="picker-id-input" class="input-field" placeholder="Paste User ID...">
-                            <button class="btn btn-accent" onclick="window.addUserById()">Add</button>
-                        </div>
-                        <label style="font-size:11px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:800">Added Users (<span id="picker-count">0</span>)</label>
-                        <div id="picker-selected-list" class="picker-selected-list">
-                             <div class="picker-empty">No users added yet (Public).</div>
-                        </div>
-                        <button class="btn btn-accent h-52 w-100 mt-12" onclick="window.closeAccessManager()">Done</button>
-                    </div>
+                    <button class="btn mt-12 bn" style="background:transparent;color:var(--text-mute)" onclick="window.closeOverlay()">Cancel</button>
                 </div>
             </div>
         </div>
+        
         <div id="block-overlay">
             <i data-lucide="copy" class="w-48 h-48 mb-24 c-warning"></i>
             <h1 class="title">Active Session</h1>
             <p class="subtitle mb-48">HRN Chat is open in another tab.</p>
             <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
-            <button class="btn mt-12 bn" style="background:#f2f2f7" onclick="window.closeTabAttempt()">Close Tab</button>
         </div>
         <div id="offline-screen">
             <i data-lucide="wifi-off" class="w-48 h-48 mb-24 c-main"></i>
@@ -328,132 +267,163 @@
         <div id="toast-container"></div>
         <div id="context-tooltip"></div>
         
-        <div id="scr-start" class="screen active center-content" style="background:url('https://img.freepik.com/free-vector/geometric-pattern-background-vector-white_53876-128361.jpg?semt=ais_user_personalization&w=1000&q=80') center/cover no-repeat,var(--bg)">
-            <div style="transform:translateY(-20px);margin-bottom:20px"><i data-lucide="shield" style="width:36px;height:36px;stroke-width:1.5;color:var(--accent)"></i></div>
-            <h1 class="title">HRN Chat</h1>
-            <p class="subtitle">Secure Network 2026</p>
-            <button class="btn btn-accent auth-btn mb-16" onclick="window.nav('scr-login')">Sign In</button>
-            <button class="btn auth-btn" onclick="window.nav('scr-register')">Create Account</button>
-            <div id="guest-swipe-hint" class="bottom-hint" onclick="window.nav('scr-guest', 'left')"><i data-lucide="chevron-left" style="width:16px;height:16px"></i><span>Swipe for Guest Access</span></div>
+        <!-- Screens -->
+        <div id="scr-start" class="screen active center-content">
+            <div style="transform:translateY(-20px)">
+                <i data-lucide="shield" style="width:40px;height:40px;stroke-width:1.5;color:var(--accent);margin-bottom:24px"></i>
+                <h1 class="title">HRN Chat</h1>
+                <p class="subtitle">Secure Network 2026</p>
+                <button class="btn btn-accent mb-16" onclick="window.nav('scr-login')">Sign In</button>
+                <button class="btn" onclick="window.nav('scr-register')">Create Account</button>
+                <div style="margin-top:32px;font-size:12px;color:var(--text-mute);cursor:pointer;opacity:.6" onclick="window.nav('scr-guest', 'left')">Use as Guest</div>
+            </div>
         </div>
         <div id="scr-guest" class="screen center-content">
             <i data-lucide="user" style="width:32px;height:32px;color:var(--accent);margin-bottom:16px"></i>
             <h1 class="title">Guest Access</h1>
             <p class="subtitle">Persistent Session</p>
-            <div class="input-wrapper">
-                <input id="g-name" class="input-field" placeholder="Enter Name (Permanent)">
-                <i data-lucide="lock" class="input-lock-icon dn" style="width:18px;height:18px"></i>
-            </div>
+            <input id="g-name" class="input-field" placeholder="Enter Name (Permanent)">
             <button class="btn btn-accent" onclick="window.handleGuestLogin(event)">Enter Lobby</button>
-            <div id="guest-back-hint" class="bottom-hint" onclick="window.nav('scr-start', 'right')"><i data-lucide="chevron-left" style="width:16px;height:16px"></i><span>Back to Home</span></div>
+            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start', 'right')">Back to Home</button>
         </div>
         <div id="scr-login" class="screen center-content">
             <h1 class="title">Sign In</h1><p class="subtitle">Access Secure Room</p>
             <input id="l-email" class="input-field" type="email" placeholder="Email Address">
             <input id="l-pass" type="password" class="input-field" placeholder="Password">
-            <button class="btn btn-accent auth-btn" onclick="window.handleLogin(event)">Access</button>
-            <button class="btn bn mt-12" onclick="window.nav('scr-start')">Back</button>
+            <button class="btn btn-accent" onclick="window.handleLogin(event)">Access</button>
+            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Back</button>
         </div>
         <div id="scr-register" class="screen center-content">
-            <h1 class="title">Sign Up</h1><p class="subtitle">Join the Network</p>
-            <input id="r-name" class="input-field" placeholder="Full Name">
-            <input id="r-email" class="input-field" type="email" placeholder="Email Address">
-            <input id="r-pass" class="input-field" type="password" placeholder="Password (min. 8 chars)">
-            <button class="btn btn-accent auth-btn" onclick="window.handleRegister(event)">Verify</button>
-            <button class="btn bn mt-12" onclick="window.nav('scr-start')">Back</button>
+             <div class="step-indicator" id="reg-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div>
+             <div class="step-container">
+                <div id="reg-step-1" class="wizard-step active">
+                    <h1 class="title" style="margin-bottom:4px">Sign Up</h1><p class="subtitle">Step 1 of 2</p>
+                    <input id="r-name" class="input-field" placeholder="Full Name">
+                    <input id="r-email" class="input-field" type="email" placeholder="Email Address">
+                    <input id="r-pass" class="input-field" type="password" placeholder="Password (min. 8 chars)">
+                    <button class="btn btn-accent" onclick="window.nextRegStep()">Next: Profile</button>
+                </div>
+                <div id="reg-step-2" class="wizard-step">
+                    <h1 class="title" style="margin-bottom:4px">Profile</h1><p class="subtitle">Choose Avatar</p>
+                    <div class="avatar-grid" id="avatar-grid">
+                        <!-- Injected via JS -->
+                    </div>
+                    <input id="r-avatar-url" class="input-field" placeholder="Or paste Image URL...">
+                    <div style="display:flex;gap:12px">
+                        <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
+                        <button class="btn btn-accent" style="flex:1" onclick="window.handleRegister(event)">Verify</button>
+                    </div>
+                </div>
+             </div>
+             <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Cancel</button>
         </div>
         <div id="scr-verify" class="screen center-content">
             <h1 class="title">Verify</h1><p class="subtitle">Confirm Identity</p>
-            <input id="v-code" class="input-field" style="text-align:center;font-size:24px" placeholder="000000">
+            <input id="v-code" class="input-field" style="text-align:center;font-size:24px;letter-spacing:8px" placeholder="000000">
             <button class="btn btn-accent" onclick="window.handleVerify(event)">Confirm</button>
-            <div id="v-timer" class="mt-20" style="color:var(--accent);font-weight:800">10:00</div>
+            <div id="v-timer" class="mt-24" style="color:var(--accent);font-weight:800;font-size:13px">10:00</div>
         </div>
         <div id="scr-lobby" class="screen">
             <div class="header">
-                <div class="flex-aic-gap10-min0-flex1">
-                    <h1 class="title fs-22 m-0" style="cursor:pointer" onclick="window.refreshLobby()">Rooms</h1>
-                    <span class="online-indicator p-2-8 fs-10"><div class="dot"></div><span class="live-count">--</span></span>
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                    <h1 class="title" style="font-size:20px;margin:0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="window.refreshLobby()">Rooms</h1>
+                    <span class="online-indicator"><div class="dot"></div><span class="live-count">--</span></span>
                 </div>
-                <div class="header-action-group">
+                <div style="display:flex;gap:14px;align-items:center;flex-shrink:0">
                     <span class="clickable" onclick="window.openHub()"><i data-lucide="info" class="w-22 h-22"></i></span>
                     <span class="clickable" id="icon-plus-lobby" onclick="window.nav('scr-create')"><i data-lucide="plus" class="w-22 h-22"></i></span>
                     <span class="clickable" onclick="window.handleLogout(event)"><i data-lucide="log-out" class="w-22 h-22"></i></span>
                 </div>
             </div>
-            <input id="search-bar" class="input-field" placeholder="Filter secure rooms..." oninput="window.filterRooms()">
-            <div id="room-list" class="flex-1" style="overflow-y:auto"></div>
-            <div class="flex-gap12-mt20"><input id="join-id" class="input-field m-0-flex-1" placeholder="Direct ID"><button class="btn btn-accent w-80" onclick="window.joinPrivate()">Join</button></div>
+            <input id="search-bar" class="input-field" placeholder="Search rooms..." oninput="window.filterRooms()">
+            <div id="room-list" class="flex-1" style="overflow-y:auto;padding-bottom:12px"></div>
+            <div style="display:flex;gap:12px;padding-top:16px;border-top:1px solid var(--border)"><input id="join-id" class="input-field m-0-flex-1" placeholder="Direct ID"><button class="btn btn-accent w-80" onclick="window.joinPrivate()">Join</button></div>
         </div>
         <div id="scr-chat" class="screen">
-            <div class="header mb-16">
-               <div class="chat-header-title-wrapper">
+            <div class="header" style="margin-bottom:16px">
+               <div class="chat-header-main">
                     <span class="clickable flex-s0" onclick="window.leaveChat()"><i data-lucide="chevron-left" style="width:24px;height:24px"></i></span>
-                    <h2 id="chat-title" class="title">---</h2>
+                    <div class="chat-avatar" id="chat-avatar-display">?</div>
+                    <div class="chat-header-title-wrapper">
+                        <h2 id="chat-title" class="title">---</h2>
+                        <div id="chat-subtitle" class="chat-subtitle dn">Typing...</div>
+                    </div>
                 </div>
-                <div class="header-action-group">
+                <div style="display:flex;gap:14px;align-items:center;flex-shrink:0">
                     <span class="clickable dn" id="room-settings-icon" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-22 h-22"></i></span>
-                    <span class="clickable dn" id="guest-info-chat" onclick="window.showGuestInfo()"><i data-lucide="info" class="w-22 h-22"></i></span>
                     <span class="clickable" id="copy-btn-wrapper" onclick="window.copyId()"><i data-lucide="copy" id="icon-copy-chat" class="w-22 h-22"></i><i data-lucide="check" id="icon-check-chat" class="w-22 h-22 dn c-success"></i></span>
                 </div>
             </div>
             <div id="chat-messages" class="pos-rel">
-                <div id="chat-empty-state" class="empty-state">
-                    <i data-lucide="message-circle" class="empty-state-icon"></i>
-                    <div class="empty-state-title">No messages yet</div>
-                    <div class="empty-state-sub">Be the first to say something.</div>
+                <div id="chat-empty-state" style="inset:0;z-index:5;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;width:100%">
+                    <i data-lucide="message-circle" style="width:48px;height:48px;color:#d1d1d6;margin-bottom:16px"></i>
+                    <div style="font-size:15px;font-weight:700;color:var(--text-main);margin-bottom:4px">No messages yet</div>
+                    <div style="font-size:13px;color:var(--text-mute)">Be the first to say something.</div>
                 </div>
             </div>
-            <div id="chat-input-area">
-                <textarea id="chat-input" class="input-field" placeholder="Secure message..."></textarea>
-                <div id="guest-replies" class="guest-replies-bar dn">
-                    <div class="reply-block" onclick="window.sendGuestReply(event, 'Hello!')">Hello!</div>
-                    <div class="reply-block" onclick="window.sendGuestReply(event, 'How is it going?')">How is it going?</div>
-                    <div class="reply-block" onclick="window.sendGuestReply(event, 'Good to be here.')">Good to be here.</div>
-                    <div class="reply-block" onclick="window.sendGuestReply(event, 'I agree.')">I agree.</div>
+            <div id="chat-input-area" style="display:flex;gap:12px;padding-top:16px;align-items:flex-end;border-top:1px solid var(--border)">
+                <textarea id="chat-input" class="input-field" placeholder="Secure message..." style="height:48px;resize:none;min-height:48px;margin:0"></textarea>
+                <div id="guest-replies" class="dn" style="display:none;gap:8px;overflow-x:auto;width:100%;padding-bottom:8px">
+                    <div style="padding:10px 16px;background:#f2f2f7;border-radius:20px;font-weight:600;font-size:13px;white-space:nowrap;cursor:pointer" onclick="window.sendGuestReply(event, 'Hello!')">Hello!</div>
+                    <div style="padding:10px 16px;background:#f2f2f7;border-radius:20px;font-weight:600;font-size:13px;white-space:nowrap;cursor:pointer" onclick="window.sendGuestReply(event, 'Ok.')">Ok.</div>
                 </div>
-                <button id="send-btn" class="btn btn-accent" onclick="window.sendMsg(event)"><i data-lucide="arrow-up" style="width:20px;height:20px"></i></button>
+                <button id="send-btn" class="btn btn-accent" style="width:48px;height:48px;padding:0" onclick="window.sendMsg(event)"><i data-lucide="arrow-up" style="width:20px;height:20px"></i></button>
             </div>
         </div>
         <div id="scr-create" class="screen center-content">
-            <h1 class="title">Create Room</h1>
-            <p class="subtitle">Step 1</p>
-            
-            <div class="step-indicator" id="create-step-indicator">
-                <div class="step-dot active"></div>
-                <div class="step-dot"></div>
-            </div>
-
+            <div class="step-indicator" id="create-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div>
             <div class="step-container">
                 <div id="create-step-1" class="wizard-step active">
-                    <input id="c-name" class="input-field" placeholder="Room Name">
-                    <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span class="fw-700">Private Room</span><label class="switch"><input type="checkbox" id="c-private" onchange="window.handlePrivateToggle()"><span class="slider"></span></label></div>
-                    <button class="btn btn-accent" onclick="window.nextCreateStep()">Next: Security</button>
+                    <h1 class="title" style="margin-bottom:4px">New Chat</h1><p class="subtitle">Choose Type</p>
+                    
+                    <div id="type-group" class="type-card" onclick="window.selectCreateType('group')">
+                        <div class="type-icon"><i data-lucide="users" class="w-22 h-22"></i></div>
+                        <div class="type-info"><h4>Group Chat</h4><p>Multiple people, custom name</p></div>
+                    </div>
+                    
+                    <div id="type-direct" class="type-card" onclick="window.selectCreateType('direct')">
+                        <div class="type-icon"><i data-lucide="user" class="w-22 h-22"></i></div>
+                        <div class="type-info"><h4>Private Chat</h4><p>Direct message with one person</p></div>
+                    </div>
+
+                    <button class="btn btn-accent" onclick="window.nextCreateStep()">Next</button>
                 </div>
                 
                 <div id="create-step-2" class="wizard-step">
-                    <input id="c-pass" class="input-field" type="password" placeholder="Password (Optional)" autocomplete="new-password">
+                    <h1 class="title" style="margin-bottom:4px" id="create-step2-title">Setup</h1>
+                    <p class="subtitle" id="create-step2-sub">Details</p>
                     
+                    <div id="create-group-fields">
+                        <input id="c-name" class="input-field" placeholder="Group Name">
+                        <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span class="fw-700">Private Room</span><label class="switch"><input type="checkbox" id="c-private"><span class="slider"></span></label></div>
+                    </div>
+                    
+                    <div id="create-direct-fields" class="dn">
+                        <input id="c-target-user" class="input-field" placeholder="Paste User ID...">
+                        <div style="font-size:12px;color:var(--text-mute);margin-top:-12px;margin-bottom:16px">The chat will be named after them.</div>
+                    </div>
+
                     <div id="create-access-summary" class="access-summary-card" onclick="window.openAccessManager('create')">
                          <span class="c-main">Public Room</span>
                          <i data-lucide="chevron-right" class="w-16 h-16"></i>
                     </div>
 
-                    <div style="display:flex;gap:12px;margin-top:auto">
-                        <button class="btn" style="background:#f2f2f7" onclick="window.prevCreateStep()">Back</button>
-                        <button class="btn btn-accent" onclick="window.handleCreate(event)">Deploy</button>
+                    <div style="display:flex;gap:12px">
+                        <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevCreateStep()">Back</button>
+                        <button class="btn btn-accent" style="flex:1" onclick="window.handleCreate(event)">Deploy</button>
                     </div>
                 </div>
             </div>
-            
-            <button class="btn bn mt-12" onclick="window.nav('scr-lobby')">Cancel</button>
+            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Cancel</button>
         </div>
         <div id="scr-gate" class="screen center-content">
             <h1 class="title">Encrypted</h1><p class="subtitle">Authentication Required</p>
             <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Passkey">
             <button class="btn btn-accent" onclick="window.submitGate(event)">Decrypt</button>
-            <button class="btn bn mt-12" onclick="window.nav('scr-lobby')">Abort</button>
+            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Abort</button>
         </div>
         <div id="scr-success" class="screen center-content">
+            <i data-lucide="check-circle" class="w-48 h-48 mb-24 c-success"></i>
             <h1 class="title">Room Created</h1><p class="subtitle">Deployment Successful</p>
             <div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:800;border:1px dashed var(--accent)" onclick="window.copySId()">---</div>
             <button class="btn btn-accent" onclick="window.enterCreated()">Enter</button>
