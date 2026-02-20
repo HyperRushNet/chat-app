@@ -1,4 +1,4 @@
-// GH: HyperRushNet // 2026 // MIT License // index.html
+maak // GH: HyperRushNet // 2026 // MIT License // index.html
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -788,7 +788,8 @@ export function startChatApp(customConfig = {}) {
         else avEl.innerText = displayTitle.charAt(0).toUpperCase();
 
         const isOwner = room && room.created_by === state.user.id;
-        if ($('room-settings-icon')) $('room-settings-icon').style.display = isOwner ? 'block' : 'none';
+        // Hide settings icon for DMs even if owner
+        if ($('room-settings-icon')) $('room-settings-icon').style.display = (isOwner && !isDirect) ? 'block' : 'none';
 
         window.setLoading(true, "Fetching History...");
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages);
@@ -1077,6 +1078,8 @@ export function startChatApp(customConfig = {}) {
 
     window.openRoomSettings = async () => {
         if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner");
+        if (state.currentRoomData.is_direct) return window.toast("Cannot edit DMs");
+        
         window.setLoading(true, "Loading...");
         const room = state.currentRoomData;
 
@@ -1241,11 +1244,24 @@ export function startChatApp(customConfig = {}) {
         else window.openVault(data.id, data.name, null, data.salt);
     };
 
-    window.joinPrivate = async () => {
+    window.openJoinModal = () => {
+        const overlay = $('join-modal-overlay');
+        overlay.classList.add('active');
+        $('join-id-modal').focus();
+    };
+
+    window.closeJoinModal = () => {
+        $('join-modal-overlay').classList.remove('active');
+    };
+
+    window.confirmJoin = async () => {
+        const id = $('join-id-modal').value.trim();
+        if(!id) return window.toast("Enter ID");
+        window.closeJoinModal();
+        
         if(state.serverFull) return window.toast("Network full");
         if(!state.user) return window.toast("Login required");
-        const id = $('join-id').value.trim();
-        if(!id) return;
+        
         window.setLoading(true, "Checking...");
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
         if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); }
@@ -1256,6 +1272,14 @@ export function startChatApp(customConfig = {}) {
             if(data.has_password) window.nav('scr-gate');
             else window.openVault(data.id, data.name, null, data.salt);
         } else window.toast("Not found");
+    };
+
+    window.openFabMenu = () => {
+        $('fab-menu-overlay').classList.add('active');
+    };
+
+    window.closeFabMenu = () => {
+        $('fab-menu-overlay').classList.remove('active');
     };
 
     const init = async () => {
