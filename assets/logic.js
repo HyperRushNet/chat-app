@@ -438,11 +438,13 @@ export function startChatApp(customConfig = {}) {
     if(state.createType === 'direct') {
         $('create-group-fields').classList.add('dn');
         $('create-direct-fields').classList.remove('dn');
+        $('create-access-summary').classList.add('dn'); // Hide access manager for DMs
         $('create-step2-title').innerText = "Direct Message";
         $('create-step2-sub').innerText = "Who are you messaging?";
     } else {
         $('create-group-fields').classList.remove('dn');
         $('create-direct-fields').classList.add('dn');
+        $('create-access-summary').classList.remove('dn'); // Show for Groups
         $('create-step2-title').innerText = "Setup";
         $('create-step2-sub').innerText = "Details";
     }
@@ -769,7 +771,7 @@ export function startChatApp(customConfig = {}) {
     // Chat Header Logic
     const isDirect = room.is_direct;
     let displayTitle = n;
-    let displayAvatar = null;
+    let displayAvatar = room.avatar_url; // Use group avatar if available
     
     if (isDirect) {
         const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id);
@@ -983,6 +985,8 @@ export function startChatApp(customConfig = {}) {
     
     const isDirect = state.createType === 'direct';
     let n, isP = false, targetUser = null;
+    let avatarUrl = null;
+    let rawPass = null;
     
     if(isDirect) {
         targetUser = $('c-target-user').value.trim();
@@ -990,26 +994,59 @@ export function startChatApp(customConfig = {}) {
         const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single();
         if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; }
         n = `DM ${profile.full_name}`;
+        isP = true; // Force private for DMs
     } else {
         n = $('c-name').value.trim();
+        avatarUrl = $('c-avatar').value.trim() || null;
+        rawPass = $('c-pass').value; // Get raw password
         isP = $('c-private').checked;
         if(!n) { window.toast("Name required"); state.processingAction = false; return; }
     }
 
-    let allowedUsers = state.selectedAllowedUsers.length > 0 ? state.selectedAllowedUsers.map(u => u.id) : ['*'];
-    if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
-    if(isDirect) allowedUsers = [state.user.id, targetUser];
+    // Handle allowed_users
+    let allowedUsers = ['*'];
+    if (isDirect) {
+        allowedUsers = [state.user.id, targetUser];
+    } else {
+        if (state.selectedAllowedUsers.length > 0) {
+            allowedUsers = state.selectedAllowedUsers.map(u => u.id);
+            if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
+        } else if (isP) {
+             // If private but no users selected, it's just the creator
+             allowedUsers = [state.user.id];
+        }
+    }
 
     window.setLoading(true, "Creating...");
     const roomSalt = generateSalt();
-    const {data, error} = await db.from('rooms').insert([{
-      name: n, has_password: false, is_private: isDirect ? true : isP, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect
-    }]).select();
+    const insertData = {
+      name: n, 
+      avatar_url: avatarUrl,
+      has_password: !!rawPass, 
+      is_private: isP, 
+      salt: roomSalt, 
+      created_by: state.user.id, 
+      allowed_users: allowedUsers, 
+      is_direct: isDirect
+    };
+
+    const {data, error} = await db.from('rooms').insert([insertData]).select();
+    
     if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; }
+    
     if(data && data.length > 0) {
-      state.lastCreated = data[0];
-      state.lastCreatedPass = null;
-      $('s-id').innerText = data[0].id;
+      const newRoom = data[0];
+      
+      // Handle Password RPC if provided
+      if (rawPass) {
+          const accessHash = await sha256(rawPass + roomSalt);
+          const { error: passError } = await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
+          if (passError) window.toast("Password set failed, but room created.");
+      }
+
+      state.lastCreated = newRoom;
+      state.lastCreatedPass = rawPass;
+      $('s-id').innerText = newRoom.id;
       window.nav('scr-success');
       state.selectedAllowedUsers = [];
     }
@@ -1057,7 +1094,7 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
-  window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, null, state.lastCreated.salt); state.lastCreatedPass = null; };
+  window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
   let touchStartX = 0, touchEndX = 0;
   document.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
@@ -1190,7 +1227,7 @@ export function startChatApp(customConfig = {}) {
     const next = $(id);
     if(!next) return;
     if(id === 'scr-guest') { const storedName = localStorage.getItem(FLAG_GUEST_NAME); if (storedName) $('g-name').value = storedName; else $('g-name').value = ''; }
-    if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); }
+    if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); }
     if(id === 'scr-register') { state.currentStep.reg = 1; updateStepUI('reg'); }
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
     if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); }
@@ -1238,7 +1275,7 @@ export function startChatApp(customConfig = {}) {
                 const otherId = r.allowed_users.find(id => id !== uid);
                 if(otherId) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); return { ...r, display_name: data?.full_name || 'User', display_avatar: data?.avatar_url }; }
             }
-            return { ...r, display_name: r.name, display_avatar: null };
+            return { ...r, display_name: r.name, display_avatar: r.avatar_url };
         }));
 
       list.innerHTML = roomsWithMeta.map(r => `
