@@ -23,7 +23,7 @@ export function startChatApp(customConfig = {}) {
     'https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8cHJvZmlsZXxlbnwwfHwwfHx8MA%3D%3D'
   ];
 
-  // Initialize Lucide icons immediately if available
+  // Safe check for Lucide
   if (window.lucide) window.lucide.createIcons();
 
   const state = {
@@ -89,6 +89,9 @@ export function startChatApp(customConfig = {}) {
   };
 
   const $ = id => document.getElementById(id);
+
+  // Helper: Create icons safely
+  const createIcons = () => { if (window.lucide) window.lucide.createIcons(); };
 
   const updateOnlineDisplay = (count) => {
     if (typeof count === 'number') state.lastKnownOnlineCount = count;
@@ -156,6 +159,24 @@ export function startChatApp(customConfig = {}) {
   const safeAwait = async (promise) => {
     try { return [await promise, null]; }
     catch (error) { return [null, error]; }
+  };
+  
+  // Helper: Promise Timeout
+  const promiseTimeout = (ms, promise) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error("Promise timed out"));
+      }, ms);
+      promise
+        .then(value => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch(reason => {
+          clearTimeout(timer);
+          reject(reason);
+        });
+    });
   };
 
   const workerCode = `self.onmessage = async (e) => {
@@ -374,7 +395,7 @@ export function startChatApp(customConfig = {}) {
     const count = state.selectedAllowedUsers.length;
     const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`;
     summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
-    if (window.lucide) window.lucide.createIcons();
+    createIcons();
   };
 
   const updateStepUI = (context) => {
@@ -396,7 +417,7 @@ export function startChatApp(customConfig = {}) {
         if(current === 2) initAvatarGrid();
     }
     
-    if (window.lucide) window.lucide.createIcons();
+    createIcons();
   };
 
   const initAvatarGrid = () => {
@@ -529,7 +550,7 @@ export function startChatApp(customConfig = {}) {
         </button>
       </div>
     `).join('');
-    if (window.lucide) window.lucide.createIcons();
+    createIcons();
   };
 
   window.removePickerUser = (id) => {
@@ -589,7 +610,7 @@ export function startChatApp(customConfig = {}) {
           <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
         `;
         overlay.classList.add('active');
-        if (window.lucide) window.lucide.createIcons();
+        createIcons();
       }
     }
     if (ev.data.type === 'PING_MASTER') {
@@ -609,14 +630,14 @@ export function startChatApp(customConfig = {}) {
     });
   };
 
-  window.openHub = () => { $('overlay-container').classList.add('active'); window.showOverlayView('hub'); if (window.lucide) window.lucide.createIcons(); };
+  window.openHub = () => { $('overlay-container').classList.add('active'); window.showOverlayView('hub'); createIcons(); };
   window.closeOverlay = () => $('overlay-container').classList.remove('active');
   window.showOverlayView = (viewId) => {
     const panel = document.querySelector('.panel-card');
     if(!panel) return;
     panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
     const target = $(`view-${viewId}`);
-    if(target) { target.classList.add('active'); if (window.lucide) window.lucide.createIcons(); }
+    if(target) { target.classList.add('active'); createIcons(); }
   };
 
   window.prepareMyAccount = async () => {
@@ -635,7 +656,7 @@ export function startChatApp(customConfig = {}) {
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('my-account');
-    if (window.lucide) window.lucide.createIcons();
+    createIcons();
   };
   
   window.copyMyId = () => {
@@ -1124,7 +1145,7 @@ export function startChatApp(customConfig = {}) {
       if(!btn) return;
       if(url) btn.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
       else btn.innerHTML = `<i data-lucide="user" style="width:16px;height:16px;color:var(--text-mute)"></i>`;
-      if (window.lucide) window.lucide.createIcons();
+      createIcons();
   };
 
   db.auth.onAuthStateChange(async (ev, ses) => {
@@ -1260,7 +1281,7 @@ export function startChatApp(customConfig = {}) {
     else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     next.classList.add('active');
-    if (window.lucide) window.lucide.createIcons();
+    createIcons();
     const createBtn = $('icon-plus-lobby');
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
   };
@@ -1314,7 +1335,7 @@ export function startChatApp(customConfig = {}) {
         </div>
       `).join('');
     }
-    if (window.lucide) window.lucide.createIcons();
+    createIcons();
   };
 
   window.joinAttempt = async (id) => {
@@ -1357,13 +1378,11 @@ export function startChatApp(customConfig = {}) {
           const { data: room, error } = await db.from('rooms').select('id, name, avatar_url, allowed_users').eq('id', inviteId).single();
           if(error || !room) { window.toast("Invalid invite link"); window.setLoading(false); window.nav('scr-start'); return; }
           
-          // Render Invite Screen
           $('invite-title').innerText = room.name;
           const avEl = $('invite-avatar');
           if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`;
           else avEl.innerText = room.name.charAt(0);
           
-          // Render Members
           const membersList = $('invite-members');
           if(room.allowed_users && !room.allowed_users.includes('*')) {
               const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', room.allowed_users);
@@ -1399,53 +1418,61 @@ export function startChatApp(customConfig = {}) {
       if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; }
       const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
       const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
-      if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
-      if (isSoftLoggedOut) { window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+      if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); monitorConnection(); return; }
+      if (isSoftLoggedOut) { window.nav('scr-start'); monitorConnection(); return; }
 
       const params = new URLSearchParams(window.location.search);
       if(params.get('invite')) {
           await new Promise(resolve => setTimeout(resolve, 500)); 
       }
 
-      const [userRes, userErr] = await safeAwait(db.auth.getUser());
-      if (userErr) { console.error("Session validation failed:", userErr); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
-      const user = userRes?.data?.user;
-
-      if (user) {
-        state.user = user;
-        localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-        if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
-        
-        // Update avatar safely
-        try {
-          const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
-          updateHeaderAvatar(profile?.avatar_url);
-        } catch (e) {
-          console.warn("Could not fetch profile avatar", e);
-        }
-        
-        const masterExists = await checkMaster();
-        if (masterExists) {
-          const overlay = $('block-overlay'); overlay.classList.add('active'); if (window.lucide) window.lucide.createIcons();
-          window.nav('scr-lobby'); window.loadRooms();
-        } else {
-          window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms();
-        }
-        state.sessionStartTime = Date.now();
-        if(state.uptimeInterval) clearInterval(state.uptimeInterval);
-        state.uptimeInterval = setInterval(updateUptime, 1000);
-        await initPresence(true);
-      }
+      // TIMEOUT FIX: If getUser hangs for 5 seconds, proceed as logged out
+      const [userRes, userErr] = await promiseTimeout(5000, safeAwait(db.auth.getUser()));
       
-      if (window.lucide) window.lucide.createIcons();
-      window.setLoading(false);
-      monitorConnection();
+      if (userErr || !userRes) { 
+        console.warn("Auth check timed out or failed"); 
+        window.nav('scr-start'); 
+      } else {
+        const user = userRes?.data?.user;
+        if (user) {
+          state.user = user;
+          localStorage.setItem(FLAG_GUEST_ID, state.user.id);
+          if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
+          
+          // Try to fetch avatar, but don't wait forever
+          try {
+            const { data: profile } = await promiseTimeout(3000, db.from('profiles').select('avatar_url').eq('id', state.user.id).single());
+            updateHeaderAvatar(profile?.avatar_url);
+          } catch(e) {
+            console.warn("Profile fetch timed out");
+            updateHeaderAvatar(null);
+          }
+          
+          const masterExists = await checkMaster();
+          if (masterExists) {
+            const overlay = $('block-overlay'); overlay.classList.add('active'); createIcons();
+            window.nav('scr-lobby'); window.loadRooms();
+          } else {
+            window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms();
+          }
+          state.sessionStartTime = Date.now();
+          if(state.uptimeInterval) clearInterval(state.uptimeInterval);
+          state.uptimeInterval = setInterval(updateUptime, 1000);
+          await initPresence(true);
+        } else {
+           window.nav('scr-start');
+        }
+      }
       
       if(params.get('invite')) checkInviteLink();
     } catch (err) {
       console.error("Critical Init Error:", err);
+      window.nav('scr-start');
+    } finally {
+      // GUARANTEE: Loader ALWAYS goes off
       window.setLoading(false);
-      window.toast("App initialization failed");
+      monitorConnection();
+      createIcons();
     }
   };
 
