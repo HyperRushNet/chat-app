@@ -10,7 +10,7 @@
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <script src="https://unpkg.com/lucide@latest"></script>
       <style>
-         :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#007aff;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
+         :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#1f1f1f;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
          *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
          ::-webkit-scrollbar{width:0;height:0}
          body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center}
@@ -287,18 +287,18 @@
                <div style="width:22px"></div>
             </div>
             <div class="center-content" style="padding-top: 20px; margin-bottom: 30px">
-               <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto">?</div>
-               <h1 id="acc-page-name" class="title" style="font-size:22px">User Name</h1>
-               <p id="acc-page-type" class="subtitle">Account Type</p>
+               <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto"></div>
+               <h1 id="acc-page-name" class="title" style="font-size:22px">...</h1>
+               <p id="acc-page-type" class="subtitle">...</p>
             </div>
             <div style="padding: 0 10px">
                <div class="acc-info-card">
                   <div class="acc-label">User ID</div>
-                  <div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()">Tap to copy</div>
+                  <div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()">...</div>
                </div>
                <div id="acc-email-wrapper" class="acc-info-card" style="display:none">
                   <div class="acc-label">Email Address</div>
-                  <div id="acc-page-email" class="acc-value" style="font-size:12px">email@example.com</div>
+                  <div id="acc-page-email" class="acc-value" style="font-size:12px">...</div>
                </div>
                <div class="acc-info-card">
                   <div class="acc-label">Status</div>
@@ -306,7 +306,7 @@
                </div>
             </div>
             <div style="padding: 20px; margin-top:auto">
-               <button class="btn" style="background:var(--danger);color:#fff" onclick="window.handleLogout(event)">Log Out</button>
+               <button class="btn" style="background:transparent;color:var(--accent);border:1px dashed var(--accent)" onclick="window.handleLogout(event)">Log Out</button>
             </div>
          </div>
          <div id="scr-lobby" class="screen">
