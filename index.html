@@ -1,5 +1,4 @@
 <!-- GH: HyperRushNet | 2026 | MIT License | index.html -->
-
 <!DOCTYPE html>
 <html lang="en">
    <head>
@@ -10,7 +9,7 @@
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <script src="https://unpkg.com/lucide@latest"></script>
       <style>
-         :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#1f1f1f;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
+         :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#262626;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
          *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent}
          ::-webkit-scrollbar{width:0;height:0}
          body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center}
@@ -48,7 +47,7 @@
          .room-name{flex:1;min-width:0;font-weight:700;font-size:14px;margin-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
          .room-icon{flex-shrink:0;color:var(--text-mute)}
          #chat-messages{flex:1;display:flex;flex-direction:column;position:relative;overflow-y:auto;background:var(--bg)}
-         .date-divider{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;margin:16px 0 4px}
+         .date-divider{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;margin:16px auto 4px;width:25%;padding:2px 6px;background:#fff;border:1px solid #ddd;border-radius:999px;text-align:center;color:#333;box-sizing:border-box;font-size:.875rem;} 
          .date-label{font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:0 auto;background:var(--bg);padding:4px 0;font-size:9px;text-align:center;color:var(--text-mute)}
          .msg{position:relative;max-width:82%;padding:8px 12px;border-radius:16px;background:#f2f2f7;font-size:14px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word;width:fit-content;margin-top:2px}
          .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
@@ -66,8 +65,6 @@
          .msg.not-me.group-start{border-radius:16px 16px 16px 4px}
          #context-tooltip{position:fixed;background:rgba(0,0,0,.85);color:#fff;padding:6px 10px;border-radius:8px;font-size:11px;z-index:99999;pointer-events:none;opacity:0;transform:scale(.9);transition:opacity .15s,transform .15s;backdrop-filter:blur(10px)}
          #context-tooltip.active{opacity:1;transform:scale(1)}
-         .guest-pill{display:inline-flex;align-items:center;justify-content:center;padding:1px 5px;border-radius:5px;background:rgba(0,0,0,.08);font-size:7px;font-weight:800;text-transform:uppercase;color:var(--text-main)}
-         .msg.me .guest-pill{background:rgba(255,255,255,.15);color:#fff}
          .chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1}
          .chat-avatar img{width:100%;height:100%;object-fit:cover}
          .chat-header-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
@@ -218,7 +215,7 @@
          </div>
          <div id="loader-overlay" class="active">
             <div class="spinner"></div>
-            <span id="loader-text" class="loader-text">Loading...</span>
+            <span id="loader-text" class="loader-text">Initializing...</span>
          </div>
          <div id="toast-container"></div>
          <div id="context-tooltip"></div>
@@ -228,15 +225,6 @@
             <p class="subtitle">Secure Network</p>
             <button class="btn btn-accent" onclick="window.nav('scr-login')">Sign In</button>
             <button class="btn mt-12" onclick="window.nav('scr-register')">Create Account</button>
-            <div style="position:absolute;bottom:30px;font-size:11px;color:var(--text-mute);opacity:.6;cursor:pointer" onclick="window.nav('scr-guest', 'left')">Use as Guest</div>
-         </div>
-         <div id="scr-guest" class="screen center-content">
-            <i data-lucide="user" style="width:32px;height:32px;color:var(--accent);margin-bottom:12px"></i>
-            <h1 class="title">Guest Access</h1>
-            <p class="subtitle">Persistent Session</p>
-            <input id="g-name" class="input-field" placeholder="Enter Name">
-            <button class="btn btn-accent" onclick="window.handleGuestLogin(event)">Enter Lobby</button>
-            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start', 'right')">Back</button>
          </div>
          <div id="scr-login" class="screen center-content">
             <h1 class="title">Sign In</h1>
@@ -287,18 +275,18 @@
                <div style="width:22px"></div>
             </div>
             <div class="center-content" style="padding-top: 20px; margin-bottom: 30px">
-               <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto"></div>
-               <h1 id="acc-page-name" class="title" style="font-size:22px">...</h1>
-               <p id="acc-page-type" class="subtitle">...</p>
+               <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto">?</div>
+               <h1 id="acc-page-name" class="title" style="font-size:22px">User Name</h1>
+               <p id="acc-page-type" class="subtitle">Account Type</p>
             </div>
             <div style="padding: 0 10px">
                <div class="acc-info-card">
                   <div class="acc-label">User ID</div>
-                  <div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()">...</div>
+                  <div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()">Tap to copy</div>
                </div>
-               <div id="acc-email-wrapper" class="acc-info-card" style="display:none">
+               <div id="acc-email-wrapper" class="acc-info-card">
                   <div class="acc-label">Email Address</div>
-                  <div id="acc-page-email" class="acc-value" style="font-size:12px">...</div>
+                  <div id="acc-page-email" class="acc-value" style="font-size:12px">email@example.com</div>
                </div>
                <div class="acc-info-card">
                   <div class="acc-label">Status</div>
@@ -306,7 +294,7 @@
                </div>
             </div>
             <div style="padding: 20px; margin-top:auto">
-               <button class="btn" style="background:transparent;color:var(--accent);border:1px dashed var(--accent)" onclick="window.handleLogout(event)">Log Out</button>
+               <button class="btn" style="background:transparent;border:1px dotted var(--accent);color:var(--accent)" onclick="window.handleLogout(event)">Log Out</button>
             </div>
          </div>
          <div id="scr-lobby" class="screen">
@@ -422,7 +410,7 @@
       </div>
       <script type="module">
          import { startChatApp } from './assets/logic.js';
-         startChatApp({ maxUsers: 475, maxMessages: 25, rateLimitMs: 1500, historyLoadLimit: 15 });
+         startChatApp({ maxUsers: 0, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 });
       </script>
    </body>
 </html>
