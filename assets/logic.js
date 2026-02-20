@@ -1,4 +1,3 @@
-// assets/logic.js | HyperRushNet | 2026 | MIT License
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function startChatApp(customConfig = {}) {
@@ -39,7 +38,6 @@ export function startChatApp(customConfig = {}) {
         sessionStartTime: null,
         isPresenceSubscribed: false,
         lastReconnectAttempt: 0,
-        roomGuestStatus: {},
         pending: null,
         lastCreated: null,
         lastCreatedPass: null,
@@ -66,9 +64,6 @@ export function startChatApp(customConfig = {}) {
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
-    const FLAG_SOFT_LOGOUT = 'hrn_flag_soft_logout';
-    const FLAG_GUEST_NAME = 'hrn_flag_guest_name';
-    const FLAG_GUEST_ID = 'hrn_flag_guest_id';
 
     let toastQueue = [];
     let toastVisible = false;
@@ -552,7 +547,7 @@ export function startChatApp(customConfig = {}) {
             state.isMasterTab = true;
             tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
             $('block-overlay').classList.remove('active');
-            if (localStorage.getItem(FLAG_LOGOUT) !== 'true' && localStorage.getItem(FLAG_SOFT_LOGOUT) !== 'true' && state.user) {
+            if (localStorage.getItem(FLAG_LOGOUT) !== 'true' && state.user) {
                 initPresence(true);
             }
         }
@@ -606,7 +601,6 @@ export function startChatApp(customConfig = {}) {
     
     window.prepareAccountPage = async () => {
         if(!state.user) return;
-        const isGuest = state.user.is_anonymous;
         
         const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single();
         
@@ -614,7 +608,7 @@ export function startChatApp(customConfig = {}) {
         const avatar = profile?.avatar_url || state.user.user_metadata?.avatar_url;
         
         $('acc-page-name').innerText = name;
-        $('acc-page-type').innerText = isGuest ? "Guest Account" : "Full Account";
+        $('acc-page-type').innerText = "Full Account";
         $('acc-page-id').innerText = state.user.id;
         
         const avPrev = $('acc-page-avatar');
@@ -622,12 +616,8 @@ export function startChatApp(customConfig = {}) {
         else { avPrev.innerText = name.charAt(0); }
 
         const emailWrapper = $('acc-email-wrapper');
-        if(isGuest) {
-            emailWrapper.style.display = 'none';
-        } else {
-            emailWrapper.style.display = 'block';
-            $('acc-page-email').innerText = state.user.email || "Not set";
-        }
+        emailWrapper.style.display = 'block';
+        $('acc-page-email').innerText = state.user.email || "Not set";
         
         lucide.createIcons();
     };
@@ -711,9 +701,7 @@ export function startChatApp(customConfig = {}) {
             state.lastRenderedDateLabel = currentLabel;
         }
 
-        const isGuest = state.roomGuestStatus[m.user_id] || false;
         const displayName = truncateText(m.user_name || 'User', 18);
-        const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
         const processedText = processText(m.text);
         const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
         const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me';
@@ -722,7 +710,7 @@ export function startChatApp(customConfig = {}) {
 
         html += `
         <div class="msg ${sideClass} ${msgClass}" data-time="${m.created_at}" data-tooltip="${esc(tooltipContent)}" oncontextmenu="event.preventDefault(); showTooltip(event, this.dataset.tooltip)" ontouchstart="window.startMsgTimer(event, this)" ontouchend="window.clearMsgTimer()" ontouchmove="window.clearMsgTimer()">
-        ${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)} ${guestPill}</span></div>` : ''}
+        ${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}
         <div>${processedText}</div>
         <span class="msg-time">${esc(m.time)}</span>
         </div>`;
@@ -740,14 +728,6 @@ export function startChatApp(customConfig = {}) {
         if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory();
     };
 
-    const fetchGuestStatuses = async (userIds) => {
-        if (!userIds || userIds.length === 0) return;
-        const uniqueIds = [...new Set(userIds)].filter(id => id);
-        if (uniqueIds.length === 0) return;
-        const { data } = await db.from('profiles').select('id, full_name, is_guest').in('id', uniqueIds);
-        if (data) data.forEach(p => state.roomGuestStatus[p.id] = p.is_guest);
-    };
-
     const loadMoreHistory = async () => {
         if (!state.oldestMessageTimestamp || !state.currentRoomId) return;
         state.isLoadingHistory = true;
@@ -762,7 +742,6 @@ export function startChatApp(customConfig = {}) {
             const validMsgs = res.results.filter(m => !m.error);
             if (validMsgs.length > 0) {
                 state.oldestMessageTimestamp = validMsgs[0].created_at;
-                await fetchGuestStatuses(validMsgs.map(m => m.user_id));
                 let html = "", prev = null;
                 validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; });
                 container.insertAdjacentHTML('afterbegin', html);
@@ -779,7 +758,6 @@ export function startChatApp(customConfig = {}) {
         if (state.chatChannel) state.chatChannel.unsubscribe();
         state.currentRoomId = id;
         state.lastRenderedDateLabel = null;
-        state.roomGuestStatus = {};
         state.oldestMessageTimestamp = null;
         state.hasMoreHistory = true;
         state.isLoadingHistory = false;
@@ -816,9 +794,9 @@ export function startChatApp(customConfig = {}) {
 
         window.setLoading(true, "Fetching History...");
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages);
-        const isGuest = state.user.is_anonymous;
-        $('chat-input').style.display = isGuest ? 'none' : 'block';
-        $('send-btn').style.display = isGuest ? 'none' : 'flex';
+        
+        $('chat-input').style.display = 'block';
+        $('send-btn').style.display = 'flex';
         window.nav('scr-chat');
 
         if (data && data.length > 0) {
@@ -828,7 +806,6 @@ export function startChatApp(customConfig = {}) {
             pendingCallbacks['historyDecrypted'] = async (res) => {
                 const b = $('chat-messages');
                 b.innerHTML = '';
-                await fetchGuestStatuses(res.results.map(m => m.user_id));
                 let prev = null;
                 res.results.forEach(m => { if(!m.error) { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; } });
                 b.scrollTop = b.scrollHeight;
@@ -837,27 +814,26 @@ export function startChatApp(customConfig = {}) {
             };
             cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
         } else {
-              state.hasMoreHistory = false;
-          checkChatEmpty();
-              window.setLoading(false);
-          }
+            state.hasMoreHistory = false;
+            checkChatEmpty();
+            window.setLoading(false);
+        }
 
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new;
             if (m && state.currentRoomId) {
                 pendingCallbacks['singleDecrypted'] = async (decRes) => {
-                if(decRes.result) {
-                    await fetchGuestStatuses([m.user_id]);
-                    const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
-                    const container = $('chat-messages');
-                    const lastMsg = container.querySelector('.msg:last-of-type');
-                    let prevMsg = null;
-                if(lastMsg) prevMsg = { user_id: lastMsg.classList.contains('me') ? state.user.id : 'other', created_at: lastMsg.dataset.time };
-                    container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect));
-                    container.scrollTop = container.scrollHeight;
-                checkChatEmpty();
-                }
+                    if(decRes.result) {
+                        const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
+                        const container = $('chat-messages');
+                        const lastMsg = container.querySelector('.msg:last-of-type');
+                        let prevMsg = null;
+                        if(lastMsg) prevMsg = { user_id: lastMsg.classList.contains('me') ? state.user.id : 'other', created_at: lastMsg.dataset.time };
+                        container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect));
+                        container.scrollTop = container.scrollHeight;
+                        checkChatEmpty();
+                    }
                 };
                 cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
             }
@@ -885,10 +861,10 @@ export function startChatApp(customConfig = {}) {
         $('chat-input').value = '';
         state.lastMessageTime = Date.now();
         try {
-                const enc = await encryptMessage(v);
-                await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
-            } catch(e) { window.toast("Failed to send"); }
-            state.processingAction = false;
+            const enc = await encryptMessage(v);
+            await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
+        } catch(e) { window.toast("Failed to send"); }
+        state.processingAction = false;
     };
 
     window.leaveChat = async () => {
@@ -908,7 +884,7 @@ export function startChatApp(customConfig = {}) {
         const em = $('l-email').value, p = $('l-pass').value;
         if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; }
         window.setLoading(true, "Signing In...");
-        localStorage.removeItem(FLAG_LOGOUT); localStorage.removeItem(FLAG_SOFT_LOGOUT);
+        localStorage.removeItem(FLAG_LOGOUT);
         const {error} = await db.auth.signInWithPassword({email:em, password:p});
         if(error) { window.toast(error.message); window.setLoading(false); }
         else await initPresence(true);
@@ -926,9 +902,9 @@ export function startChatApp(customConfig = {}) {
         window.setLoading(true, "Sending Code...");
         const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) }));
         if(r) {
-        if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; }
+            if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; }
             const j = await r.json();
-        if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); }
+            if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); }
             else { window.toast(j.message || "Error"); window.setLoading(false); }
         } else { window.toast("Network error"); window.setLoading(false); }
         state.processingAction = false;
@@ -951,60 +927,17 @@ export function startChatApp(customConfig = {}) {
         if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; }
         const j = await r.json();
         if(j.message === "Verified") {
-        localStorage.removeItem(FLAG_LOGOUT); localStorage.removeItem(FLAG_SOFT_LOGOUT);
-        const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } });
-        if(error) { window.toast(error.message); window.setLoading(false); }
-        else await initPresence(true);
+            localStorage.removeItem(FLAG_LOGOUT);
+            const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } });
+            if(error) { window.toast(error.message); window.setLoading(false); }
+            else await initPresence(true);
         } else { window.toast(j.message || "Wrong code"); window.setLoading(false); }
         state.processingAction = false;
-    };
-
-    window.handleGuestLogin = async (e) => {
-        if (!e || !e.isTrusted) return;
-        if(state.processingAction) return;
-        const nameInput = $('g-name');
-        let name = nameInput.value.trim();
-        const lockedName = localStorage.getItem(FLAG_GUEST_NAME);
-        if (lockedName) name = lockedName;
-        else if (!name) return window.toast("Enter a name");
-        localStorage.removeItem(FLAG_SOFT_LOGOUT); localStorage.removeItem(FLAG_LOGOUT);
-        await performGuestLogin(name);
-    };
-
-    const performGuestLogin = async (name) => {
-        window.setLoading(true, "Initializing...");
-        localStorage.removeItem(FLAG_LOGOUT); localStorage.removeItem(FLAG_SOFT_LOGOUT);
-        const { data: { user: existingUser } } = await db.auth.getUser();
-        let finalUser;
-        if (existingUser && existingUser.is_anonymous) {
-            const currentName = existingUser.user_metadata?.full_name;
-            if (!currentName || currentName !== name) { await db.auth.updateUser({ data: { full_name: name } }); finalUser = existingUser; finalUser.user_metadata = finalUser.user_metadata || {}; finalUser.user_metadata.full_name = name; }
-            else finalUser = existingUser;
-        } else {
-              const { data, error } = await db.auth.signInAnonymously();
-              if (error) { window.toast(error.message || "Failed"); window.setLoading(false); return; }
-              finalUser = data.user;
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              await db.auth.refreshSession();
-              const refreshed = await db.auth.getSession();
-              finalUser = refreshed.data.session?.user || finalUser;
-          }
-        await db.auth.updateUser({ data: { full_name: name } });
-        await db.from('profiles').upsert({ id: finalUser.id, full_name: name, is_guest: true });
-        state.user = finalUser;
-        state.user.user_metadata = state.user.user_metadata || {}; state.user.user_metadata.full_name = name;
-        localStorage.setItem(FLAG_GUEST_ID, state.user.id); localStorage.setItem(FLAG_GUEST_NAME, name);
-        window.nav('scr-lobby'); window.loadRooms();
-        await new Promise(resolve => setTimeout(resolve, 800));
-        window.forceClaimMaster();
-        window.setLoading(false);
-        await initPresence(true);
     };
 
     window.handleCreate = async (e) => {
         if (!e || !e.isTrusted) return;
         if(state.serverFull) return window.toast("Network full");
-        if(state.user?.is_anonymous) return window.toast("Guests cannot create rooms");
         if(state.processingAction) return;
         state.processingAction = true;
 
@@ -1021,24 +954,24 @@ export function startChatApp(customConfig = {}) {
             n = `DM ${profile.full_name}`;
             isP = true;
         } else {
-              n = $('c-name').value.trim();
-              avatarUrl = $('c-avatar').value.trim() || null;
-              rawPass = $('c-pass').value;
-          isP = $('c-private').checked;
-          if(!n) { window.toast("Name required"); state.processingAction = false; return; }
-          }
+            n = $('c-name').value.trim();
+            avatarUrl = $('c-avatar').value.trim() || null;
+            rawPass = $('c-pass').value;
+            isP = $('c-private').checked;
+            if(!n) { window.toast("Name required"); state.processingAction = false; return; }
+        }
 
         let allowedUsers = ['*'];
-            if (isDirect) {
+        if (isDirect) {
             allowedUsers = [state.user.id, targetUser];
         } else {
-              if (state.selectedAllowedUsers.length > 0) {
-              allowedUsers = state.selectedAllowedUsers.map(u => u.id);
-              if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
-          } else if (isP) {
-          allowedUsers = [state.user.id];
-          }
-          }
+            if (state.selectedAllowedUsers.length > 0) {
+                allowedUsers = state.selectedAllowedUsers.map(u => u.id);
+                if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
+            } else if (isP) {
+                allowedUsers = [state.user.id];
+            }
+        }
 
         window.setLoading(true, "Creating...");
         const roomSalt = generateSalt();
@@ -1060,11 +993,11 @@ export function startChatApp(customConfig = {}) {
         if(data && data.length > 0) {
             const newRoom = data[0];
 
-        if (rawPass) {
-            const accessHash = await sha256(rawPass + roomSalt);
-            const { error: passError } = await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
-            if (passError) window.toast("Password set failed, but room created.");
-        }
+            if (rawPass) {
+                const accessHash = await sha256(rawPass + roomSalt);
+                const { error: passError } = await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash });
+                if (passError) window.toast("Password set failed, but room created.");
+            }
 
             state.lastCreated = newRoom;
             state.lastCreatedPass = rawPass;
@@ -1084,7 +1017,7 @@ export function startChatApp(customConfig = {}) {
         const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash });
         window.setLoading(false);
         if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
-            else window.toast("Access Denied");
+        else window.toast("Access Denied");
     };
 
     window.handleLogout = async (e) => {
@@ -1094,15 +1027,10 @@ export function startChatApp(customConfig = {}) {
         if (state.presenceChannel) state.presenceChannel.unsubscribe();
         if (state.chatChannel) state.chatChannel.unsubscribe();
 
-        if (state.user && state.user.is_anonymous) {
-            localStorage.setItem(FLAG_GUEST_ID, state.user.id); localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata?.full_name); localStorage.setItem(FLAG_SOFT_LOGOUT, 'true');
-            state.user = null; state.isMasterTab = false;
-            window.nav('scr-start'); window.toast("Guest session saved.");
-        } else {
-              localStorage.setItem(FLAG_LOGOUT, 'true'); localStorage.removeItem(FLAG_SOFT_LOGOUT); state.user = null;
-              localStorage.removeItem(FLAG_GUEST_ID); localStorage.removeItem(FLAG_GUEST_NAME);
-              await db.auth.signOut(); window.nav('scr-start');
-          }
+        localStorage.setItem(FLAG_LOGOUT, 'true'); 
+        state.user = null;
+        await db.auth.signOut(); 
+        window.nav('scr-start');
         window.setLoading(false);
     };
 
@@ -1120,11 +1048,6 @@ export function startChatApp(customConfig = {}) {
     document.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, false);
     document.addEventListener('touchend', e => {
         touchEndX = e.changedTouches[0].screenX;
-        const active = document.querySelector('.screen.active');
-        if(!active) return;
-        const diff = touchEndX - touchStartX;
-        if(active.id === 'scr-start' && diff < -50) window.nav('scr-guest', 'left');
-            else if(active.id === 'scr-guest' && diff > 50) window.nav('scr-start', 'right');
     }, false);
 
     window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); window.toast("Back online"); if(state.user && state.isMasterTab) initPresence(true); });
@@ -1132,22 +1055,17 @@ export function startChatApp(customConfig = {}) {
 
     db.auth.onAuthStateChange(async (ev, ses) => {
         const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
-        const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
-        const hasGuestId = localStorage.getItem(FLAG_GUEST_ID);
-        if (isFlaggedLogout && hasGuestId) localStorage.removeItem(FLAG_LOGOUT);
-        if (isFlaggedLogout || isSoftLoggedOut) { state.user = null; return; }
+        if (isFlaggedLogout) { state.user = null; return; }
 
         state.user = ses?.user;
         const createBtn = $('icon-plus-lobby');
         const activeScreenId = document.querySelector('.screen.active')?.id;
-        if (createBtn) createBtn.style.display = state.user?.is_anonymous && activeScreenId === 'scr-lobby' ? 'none' : 'flex';
+        if (createBtn) createBtn.style.display = 'flex';
+        
         if (ev === 'SIGNED_IN') {
             if(state.user) {
-                localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-                if(state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
                 const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
                 if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); }
-                
                 updateLobbyAvatar();
             }
         }
@@ -1155,7 +1073,6 @@ export function startChatApp(customConfig = {}) {
             if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
             if (state.presenceChannel) state.presenceChannel.unsubscribe();
             if (state.chatChannel) state.chatChannel.unsubscribe();
-            if (!hasGuestId) { localStorage.removeItem(FLAG_GUEST_ID); localStorage.removeItem(FLAG_GUEST_NAME); }
             localStorage.removeItem(FLAG_LOGOUT); window.nav('scr-start');
         }
     });
@@ -1243,22 +1160,21 @@ export function startChatApp(customConfig = {}) {
         const current = document.querySelector('.screen.active');
         const next = $(id);
         if(!next) return;
-        if(id === 'scr-guest') { const storedName = localStorage.getItem(FLAG_GUEST_NAME); if (storedName) $('g-name').value = storedName; else $('g-name').value = ''; }
         if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); }
         if(id === 'scr-register') { state.currentStep.reg = 1; updateStepUI('reg'); }
         if(id === 'scr-account') { window.prepareAccountPage(); }
         
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
         if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); }
-            else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); }
-            else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            next.classList.add('active');
-            lucide.createIcons();
-            const createBtn = $('icon-plus-lobby');
-            if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
-            
-            if(id === 'scr-lobby') updateLobbyAvatar();
+        else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); }
+        else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        next.classList.add('active');
+        lucide.createIcons();
+        const createBtn = $('icon-plus-lobby');
+        if (createBtn) createBtn.style.display = 'flex';
+        
+        if(id === 'scr-lobby') updateLobbyAvatar();
     };
 
     window.refreshLobby = async () => {
@@ -1292,25 +1208,25 @@ export function startChatApp(customConfig = {}) {
         if (filtered.length === 0) {
             list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`;
         } else {
-              const roomsWithMeta = await Promise.all(filtered.map(async r => {
-          if(r.is_direct && r.allowed_users) {
-              const otherId = r.allowed_users.find(id => id !== uid);
-          if(otherId) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); return { ...r, display_name: data?.full_name || 'User', display_avatar: data?.avatar_url }; }
-          }
-              return { ...r, display_name: r.name, display_avatar: r.avatar_url };
-          }));
+            const roomsWithMeta = await Promise.all(filtered.map(async r => {
+                if(r.is_direct && r.allowed_users) {
+                    const otherId = r.allowed_users.find(id => id !== uid);
+                    if(otherId) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); return { ...r, display_name: data?.full_name || 'User', display_avatar: data?.avatar_url }; }
+                }
+                return { ...r, display_name: r.name, display_avatar: r.avatar_url };
+            }));
 
-              list.innerHTML = roomsWithMeta.map(r => `
-          <div class="room-card" onclick="window.joinAttempt('${r.id}')">
-          <div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div>
-          <span class="room-name">${esc(r.display_name)}</span>
-          <span class="room-icon">
-          ${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}
-          ${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}
-          </span>
-          </div>
-          `).join('');
-          }
+            list.innerHTML = roomsWithMeta.map(r => `
+            <div class="room-card" onclick="window.joinAttempt('${r.id}')">
+            <div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div>
+            <span class="room-name">${esc(r.display_name)}</span>
+            <span class="room-icon">
+            ${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}
+            ${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}
+            </span>
+            </div>
+            `).join('');
+        }
         lucide.createIcons();
     };
 
@@ -1347,9 +1263,7 @@ export function startChatApp(customConfig = {}) {
     const init = async () => {
         if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; }
         const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
-        const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
         if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
-        if (isSoftLoggedOut) { window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
 
         const [userRes, userErr] = await safeAwait(db.auth.getUser());
         
@@ -1366,8 +1280,6 @@ export function startChatApp(customConfig = {}) {
 
         if (user) {
             state.user = user;
-            localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-            if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
             const masterExists = await checkMaster();
             if (masterExists) {
                 const overlay = $('block-overlay'); overlay.classList.add('active'); lucide.createIcons();
