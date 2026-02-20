@@ -138,13 +138,14 @@
          .acc-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-mute);font-weight:700;margin-bottom:4px}
          .acc-value{font-size:14px;font-weight:600;color:var(--text-main);word-break:break-all}
          
-         .fab-overlay{position:absolute;inset:0;background:rgba(0,0,0,.2);backdrop-filter:blur(4px);z-index:4000;display:none;opacity:0;transition:opacity .2s}
+         /* FAB and Overlay Styles */
+         .fab-overlay{position:absolute;inset:0;background:transparent;z-index:4000;display:none;opacity:0;transition:opacity .2s}
          .fab-overlay.active{display:flex;opacity:1}
          .fab-menu{position:absolute;bottom:90px;right:20px;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
-         .fab-item{background:var(--bg);padding:12px 20px;border-radius:30px;box-shadow:0 4px 12px rgba(0,0,0,.1);font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:.15s;border:1px solid var(--border)}
+         .fab-item{background:var(--bg);padding:12px 20px;border-radius:30px;box-shadow:0 2px 10px rgba(0,0,0,.08);font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:.15s;border:1px solid var(--border)}
          .fab-item:active{transform:scale(.95)}
          
-         .fab-btn{position:absolute;bottom:20px;right:20px;width:56px;height:56px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:4500;transition:.2s}
+         .fab-btn{position:absolute;bottom:20px;right:20px;width:56px;height:56px;background:#444;border-radius:50%;display:none;align-items:center;justify-content:center;color:#fff;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:4500;transition:.2s}
          .fab-btn:active{transform:scale(.9)}
          .fab-btn i{transition:transform .2s}
          .fab-btn.active i{transform:rotate(45deg)}
