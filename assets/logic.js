@@ -259,6 +259,15 @@ export function startChatApp(customConfig = {}) {
     }
   };
 
+  const updateAccessSummary = (prefix) => {
+    const summaryEl = $(`${prefix}-access-summary`);
+    if (!summaryEl) return;
+    const count = state.selectedAllowedUsers.length;
+    const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`;
+    summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
+    lucide.createIcons();
+  };
+
   const queryOnlineCountImmediately = async () => {
     if (!state.presenceChannel) return;
     const presState = state.presenceChannel.presenceState();
@@ -366,24 +375,15 @@ export function startChatApp(customConfig = {}) {
     if(!name) return window.toast("Name required");
     state.currentStep.create = 2;
     updateStepUI('create');
+    updateAccessSummary('create');
   };
 
-  window.prevCreateStep = () => {
-    state.currentStep.create = 1;
-    updateStepUI('create');
-  };
-  
   window.nextEditStep = () => {
     const name = $('edit-room-name').value.trim();
     if(!name) return window.toast("Name required");
     state.currentStep.edit = 2;
     updateStepUI('edit');
-    renderPickerPreview('edit-picker-preview');
-  };
-
-  window.prevEditStep = () => {
-    state.currentStep.edit = 1;
-    updateStepUI('edit');
+    updateAccessSummary('edit');
   };
 
   const updateStepUI = (context) => {
@@ -438,15 +438,23 @@ export function startChatApp(customConfig = {}) {
     $('picker-id-input').value = '';
     $('picker-id-input').focus();
   };
+    
+    renderPickerSelectedUsers();
+    
+    $('overlay-container').classList.add('active');
+    window.showOverlayView('access-manager');
+    
+    $('picker-id-input').value = '';
+    $('picker-id-input').focus();
+  };
 
   window.closeAccessManager = () => {
-    window.closeOverlay();
-    if(state.currentPickerContext === 'create') {
-        renderPickerPreview('create-picker-preview');
+    if (state.currentPickerContext === 'edit-room') {
+      window.showOverlayView('room-settings');
     } else {
-        renderPickerPreview('edit-picker-preview');
+      window.closeOverlay();
     }
-    lucide.createIcons();
+    updateAccessSummary(state.currentPickerContext);
   };
 
   const renderPickerSelectedUsers = () => {
@@ -1574,6 +1582,11 @@ export function startChatApp(customConfig = {}) {
             return { id: id, name: p?.full_name || 'Unknown' };
         });
     }
+    
+    $('overlay-container').classList.add('active');
+    window.showOverlayView('room-settings');
+    window.setLoading(false);
+  };
     
     renderPickerPreview('edit-picker-preview');
     
