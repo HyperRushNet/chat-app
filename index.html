@@ -128,7 +128,6 @@ h1.title{font-size:28px;letter-spacing:-1px;color:#000;font-weight:800;margin-bo
 input:checked+.slider{background-color:var(--accent)}
 input:checked+.slider:before{transform:translateX(20px)}
 
-/* Empty State Centering */
 #chat-messages{position:relative}
 #chat-empty-state{position:absolute;inset:0;z-index:5;pointer-events:none;display:flex;align-items:center;justify-content:center;background:var(--bg)}
 #chat-empty-state .empty-content{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;text-align:center;max-width:320px}
@@ -136,7 +135,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 .empty-title{font-size:16px;font-weight:700;color:var(--text-main)}
 .empty-subtitle{font-size:13px;color:var(--text-mute);line-height:1.45;max-width:280px}
 
-/* Account Page Specific */
 .acc-info-card{background:#f2f2f7;border-radius:var(--radius);padding:14px;margin-bottom:12px}
 .acc-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-mute);font-weight:700;margin-bottom:4px}
 .acc-value{font-size:14px;font-weight:600;color:var(--text-main);word-break:break-all}
@@ -152,7 +150,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 </div>
 <div id="overlay-container">
 <div class="panel-card">
-<!-- Removed Hub Views, Room Settings uses this container -->
 <div id="view-access-manager" class="view-content">
 <div style="display:flex;flex-direction:column;gap:12px;height:100%">
 <div style="text-align:center">
@@ -223,7 +220,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div id="toast-container"></div>
 <div id="context-tooltip"></div>
 
-<!-- START SCREEN -->
 <div id="scr-start" class="screen active center-content">
 <i data-lucide="shield" style="width:40px;height:40px;stroke-width:1.5;color:var(--accent);margin-bottom:16px"></i>
 <h1 class="title">HRN Chat</h1>
@@ -233,7 +229,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div style="position:absolute;bottom:30px;font-size:11px;color:var(--text-mute);opacity:.6;cursor:pointer" onclick="window.nav('scr-guest', 'left')">Use as Guest</div>
 </div>
 
-<!-- GUEST SCREEN -->
 <div id="scr-guest" class="screen center-content">
 <i data-lucide="user" style="width:32px;height:32px;color:var(--accent);margin-bottom:12px"></i>
 <h1 class="title">Guest Access</h1>
@@ -243,7 +238,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start', 'right')">Back</button>
 </div>
 
-<!-- LOGIN SCREEN -->
 <div id="scr-login" class="screen center-content">
 <h1 class="title">Sign In</h1><p class="subtitle">Access Secure Room</p>
 <input id="l-email" class="input-field" type="email" placeholder="Email Address">
@@ -252,7 +246,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Back</button>
 </div>
 
-<!-- REGISTER SCREEN -->
 <div id="scr-register" class="screen center-content">
 <div class="step-indicator" id="reg-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div>
 <div class="step-container">
@@ -276,7 +269,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Cancel</button>
 </div>
 
-<!-- VERIFY SCREEN -->
 <div id="scr-verify" class="screen center-content">
 <h1 class="title">Verify</h1><p class="subtitle">Confirm Identity</p>
 <input id="v-code" class="input-field" style="text-align:center;font-size:22px;letter-spacing:6px" placeholder="000000">
@@ -284,7 +276,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div id="v-timer" class="mt-24" style="color:var(--accent);font-weight:800;font-size:12px">10:00</div>
 </div>
 
-<!-- ACCOUNT SCREEN -->
 <div id="scr-account" class="screen">
     <div class="header">
         <span class="clickable" onclick="window.nav('scr-lobby', 'right')"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></span>
@@ -315,7 +306,6 @@ input:checked+.slider:before{transform:translateX(20px)}
     </div>
 </div>
 
-<!-- LOBBY SCREEN -->
 <div id="scr-lobby" class="screen">
 <div class="header">
 <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
@@ -332,7 +322,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div style="display:flex;gap:10px;padding-top:12px;border-top:1px solid var(--border)"><input id="join-id" class="input-field m-0-flex-1" placeholder="Direct ID"><button class="btn btn-accent w-80" onclick="window.joinPrivate()">Join</button></div>
 </div>
 
-<!-- CHAT SCREEN -->
 <div id="scr-chat" class="screen">
 <div class="header" style="margin-bottom:12px">
 <div class="chat-header-main">
@@ -362,7 +351,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 </div>
 </div>
 
-<!-- CREATE SCREEN -->
 <div id="scr-create" class="screen center-content">
 <div class="step-indicator" id="create-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div>
 <div class="step-container">
@@ -404,7 +392,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Cancel</button>
 </div>
 
-<!-- GATE SCREEN -->
 <div id="scr-gate" class="screen center-content">
 <h1 class="title">Encrypted</h1><p class="subtitle">Authentication Required</p>
 <input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Passkey">
@@ -412,7 +399,6 @@ input:checked+.slider:before{transform:translateX(20px)}
 <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Abort</button>
 </div>
 
-<!-- SUCCESS SCREEN -->
 <div id="scr-success" class="screen center-content">
 <i data-lucide="check-circle" class="w-48 h-48 mb-24 c-success"></i>
 <h1 class="title">Room Created</h1><p class="subtitle">Deployment Successful</p>
@@ -423,7 +409,7 @@ input:checked+.slider:before{transform:translateX(20px)}
 </div>
 <script type="module">
     import { startChatApp } from 'https://hyperrushnet.github.io/chat-app/assets/logic.js';
-    startChatApp({ maxUsers: 475, maxMessages: 15, rateLimitMs: 1000, historyLoadLimit: 10 });
+    startChatApp({ maxUsers: 0, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 });
 </script>
 </body>
 </html>
