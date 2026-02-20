@@ -17,11 +17,7 @@ export function startChatApp(customConfig = {}) {
     };
 
     const AVATARS = [
-        'https://i.pinimg.com/236x/dd/f0/11/ddf0110aa19f445687b737679eec9cb2.jpg',
-        'https://static.vecteezy.com/system/resources/previews/067/754/604/non_2x/simple-profile-picture-of-a-man-faceless-online-avatar-for-diverse-purposes-vector.jpg',
-        'https://dthezntil550i.cloudfront.net/fm/latest/fm2010061930271030011683247/1280_960/4d67dad7-0a75-44b4-80b8-6a51c28a1e4b.png',
-        'https://images.unsplash.com/photo-1457449940276-e8deed18bfff?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Nnx8cHJvZmlsZXxlbnwwfHwwfHx8MA%3D%3D',
-        'https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8cHJvZmlsZXxlbnwwfHwwfHx8MA%3D%3D'
+        'https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'
     ];
 
     lucide.createIcons();
