@@ -23,7 +23,8 @@ export function startChatApp(customConfig = {}) {
     'https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8cHJvZmlsZXxlbnwwfHwwfHx8MA%3D%3D'
   ];
 
-  lucide.createIcons();
+  // Initialize Lucide icons immediately if available
+  if (window.lucide) window.lucide.createIcons();
 
   const state = {
     user: null,
@@ -145,6 +146,7 @@ export function startChatApp(customConfig = {}) {
   window.setLoading = (s, text = null) => {
     const loader = $('loader-overlay');
     const loaderText = $('loader-text');
+    if(!loader) return;
     if (s) loader.classList.add('active');
     else loader.classList.remove('active');
     if (text) loaderText.innerText = text;
@@ -372,7 +374,7 @@ export function startChatApp(customConfig = {}) {
     const count = state.selectedAllowedUsers.length;
     const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`;
     summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
-    lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons();
   };
 
   const updateStepUI = (context) => {
@@ -394,7 +396,7 @@ export function startChatApp(customConfig = {}) {
         if(current === 2) initAvatarGrid();
     }
     
-    lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons();
   };
 
   const initAvatarGrid = () => {
@@ -527,7 +529,7 @@ export function startChatApp(customConfig = {}) {
         </button>
       </div>
     `).join('');
-    lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons();
   };
 
   window.removePickerUser = (id) => {
@@ -587,7 +589,7 @@ export function startChatApp(customConfig = {}) {
           <button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>
         `;
         overlay.classList.add('active');
-        lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons();
       }
     }
     if (ev.data.type === 'PING_MASTER') {
@@ -607,14 +609,14 @@ export function startChatApp(customConfig = {}) {
     });
   };
 
-  window.openHub = () => { $('overlay-container').classList.add('active'); window.showOverlayView('hub'); lucide.createIcons(); };
+  window.openHub = () => { $('overlay-container').classList.add('active'); window.showOverlayView('hub'); if (window.lucide) window.lucide.createIcons(); };
   window.closeOverlay = () => $('overlay-container').classList.remove('active');
   window.showOverlayView = (viewId) => {
     const panel = document.querySelector('.panel-card');
     if(!panel) return;
     panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
     const target = $(`view-${viewId}`);
-    if(target) { target.classList.add('active'); lucide.createIcons(); }
+    if(target) { target.classList.add('active'); if (window.lucide) window.lucide.createIcons(); }
   };
 
   window.prepareMyAccount = async () => {
@@ -633,7 +635,7 @@ export function startChatApp(customConfig = {}) {
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('my-account');
-    lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons();
   };
   
   window.copyMyId = () => {
@@ -1004,7 +1006,7 @@ export function startChatApp(customConfig = {}) {
         const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single();
         if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; }
         n = `DM ${profile.full_name}`;
-        isP = true; // Force private for DMs
+        isP = true; 
     } else {
         n = $('c-name').value.trim();
         avatarUrl = $('c-avatar').value.trim() || null;
@@ -1013,7 +1015,6 @@ export function startChatApp(customConfig = {}) {
         if(!n) { window.toast("Name required"); state.processingAction = false; return; }
     }
 
-    // Handle allowed_users
     let allowedUsers = ['*'];
     if (isDirect) {
         allowedUsers = [state.user.id, targetUser];
@@ -1123,7 +1124,7 @@ export function startChatApp(customConfig = {}) {
       if(!btn) return;
       if(url) btn.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
       else btn.innerHTML = `<i data-lucide="user" style="width:16px;height:16px;color:var(--text-mute)"></i>`;
-      lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons();
   };
 
   db.auth.onAuthStateChange(async (ev, ses) => {
@@ -1135,7 +1136,6 @@ export function startChatApp(customConfig = {}) {
     
     state.user = ses?.user;
     
-    // Update Header Avatar
     if(state.user) {
         const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
         updateHeaderAvatar(profile?.avatar_url);
@@ -1260,7 +1260,7 @@ export function startChatApp(customConfig = {}) {
     else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     next.classList.add('active');
-    lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons();
     const createBtn = $('icon-plus-lobby');
     if (createBtn) createBtn.style.display = state.user?.is_anonymous && id === 'scr-lobby' ? 'none' : 'flex';
   };
@@ -1314,7 +1314,7 @@ export function startChatApp(customConfig = {}) {
         </div>
       `).join('');
     }
-    lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons();
   };
 
   window.joinAttempt = async (id) => {
@@ -1395,49 +1395,58 @@ export function startChatApp(customConfig = {}) {
   };
 
   const init = async () => {
-    if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; }
-    const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
-    const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
-    if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
-    if (isSoftLoggedOut) { window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+    try {
+      if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; }
+      const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
+      const isSoftLoggedOut = localStorage.getItem(FLAG_SOFT_LOGOUT) === 'true';
+      if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+      if (isSoftLoggedOut) { window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
 
-    // Check for invite link first
-    const params = new URLSearchParams(window.location.search);
-    if(params.get('invite')) {
-        // Wait for auth state to restore
-        await new Promise(resolve => setTimeout(resolve, 500)); 
-    }
-
-    const [userRes, userErr] = await safeAwait(db.auth.getUser());
-    if (userErr) { console.error("Session validation failed:", userErr); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
-    const user = userRes?.data?.user;
-
-    if (user) {
-      state.user = user;
-      localStorage.setItem(FLAG_GUEST_ID, state.user.id);
-      if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
-      
-      // Update avatar
-      const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
-      updateHeaderAvatar(profile?.avatar_url);
-      
-      const masterExists = await checkMaster();
-      if (masterExists) {
-        const overlay = $('block-overlay'); overlay.classList.add('active'); lucide.createIcons();
-        window.nav('scr-lobby'); window.loadRooms();
-      } else {
-        window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms();
+      const params = new URLSearchParams(window.location.search);
+      if(params.get('invite')) {
+          await new Promise(resolve => setTimeout(resolve, 500)); 
       }
-      state.sessionStartTime = Date.now();
-      if(state.uptimeInterval) clearInterval(state.uptimeInterval);
-      state.uptimeInterval = setInterval(updateUptime, 1000);
-      await initPresence(true);
+
+      const [userRes, userErr] = await safeAwait(db.auth.getUser());
+      if (userErr) { console.error("Session validation failed:", userErr); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+      const user = userRes?.data?.user;
+
+      if (user) {
+        state.user = user;
+        localStorage.setItem(FLAG_GUEST_ID, state.user.id);
+        if (state.user.user_metadata?.full_name) localStorage.setItem(FLAG_GUEST_NAME, state.user.user_metadata.full_name);
+        
+        // Update avatar safely
+        try {
+          const { data: profile } = await db.from('profiles').select('avatar_url').eq('id', state.user.id).single();
+          updateHeaderAvatar(profile?.avatar_url);
+        } catch (e) {
+          console.warn("Could not fetch profile avatar", e);
+        }
+        
+        const masterExists = await checkMaster();
+        if (masterExists) {
+          const overlay = $('block-overlay'); overlay.classList.add('active'); if (window.lucide) window.lucide.createIcons();
+          window.nav('scr-lobby'); window.loadRooms();
+        } else {
+          window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms();
+        }
+        state.sessionStartTime = Date.now();
+        if(state.uptimeInterval) clearInterval(state.uptimeInterval);
+        state.uptimeInterval = setInterval(updateUptime, 1000);
+        await initPresence(true);
+      }
+      
+      if (window.lucide) window.lucide.createIcons();
+      window.setLoading(false);
+      monitorConnection();
+      
+      if(params.get('invite')) checkInviteLink();
+    } catch (err) {
+      console.error("Critical Init Error:", err);
+      window.setLoading(false);
+      window.toast("App initialization failed");
     }
-    
-    lucide.createIcons(); window.setLoading(false); monitorConnection();
-    
-    // Handle Invite
-    if(params.get('invite')) checkInviteLink();
   };
 
   init();
