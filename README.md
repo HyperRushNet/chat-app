@@ -17,7 +17,6 @@ A high-security, real-time messaging interface built with modern web technologie
 - **Connectivity Monitoring**: Detects connection loss and syncs presence automatically on reconnect.  
 - **Modern UI**: Minimalist iOS-inspired design with Plus Jakarta Sans font and Lucide icons.  
 - **Smart Date Labels**: Sticky dividers for "Today", "Yesterday", weekdays, and full dates.  
-- **Guest Access**: Anonymous login with restricted capabilities (read-only chat features).  
 
 ## Tech Stack
 
