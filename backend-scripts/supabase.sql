@@ -1,5 +1,5 @@
 -- Supabase SQL -- GH: HyperRushNet | MIT License | 2026
--- You also need to go to Authentication => Sign in / Providers and disable "Confirm email".
+-- You also need to go to Authentication => Sign in / Providers and disable "Confirm email"
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user CASCADE;
