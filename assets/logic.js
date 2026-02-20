@@ -50,7 +50,9 @@ export function startChatApp(customConfig = {}) {
     selectedAllowedUsers: [], 
     currentPickerContext: null,
     lastLobbyRefresh: 0,
-    removePasswordFlag: false
+    removePasswordFlag: false,
+    longPressTimer: null,
+    currentStep: { create: 1, edit: 1 }
   };
 
   const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -356,38 +358,62 @@ export function startChatApp(customConfig = {}) {
   window.handlePrivateToggle = () => {
     const isPrivate = $('c-private').checked;
     const passInput = $('c-pass');
-    passInput.placeholder = isPrivate ? "Passkey (Required)" : "Passkey (Optional)";
+    passInput.placeholder = isPrivate ? "Passkey (Recommended)" : "Passkey (Optional)";
   };
 
+  window.nextCreateStep = () => {
+    const name = $('c-name').value.trim();
+    if(!name) return window.toast("Name required");
+    state.currentStep.create = 2;
+    updateStepUI('create');
+  };
+
+  window.prevCreateStep = () => {
+    state.currentStep.create = 1;
+    updateStepUI('create');
+  };
   
-  window.handleAccessToggle = (prefix, type) => {
-    const btnEveryone = $(`${prefix}-access-everyone`);
-    const btnSpecific = $(`${prefix}-access-specific`);
-    const summaryEl = $(`${prefix}-access-summary`);
+  window.nextEditStep = () => {
+    const name = $('edit-room-name').value.trim();
+    if(!name) return window.toast("Name required");
+    state.currentStep.edit = 2;
+    updateStepUI('edit');
+    renderPickerPreview('edit-picker-preview');
+  };
+
+  window.prevEditStep = () => {
+    state.currentStep.edit = 1;
+    updateStepUI('edit');
+  };
+
+  const updateStepUI = (context) => {
+    const current = state.currentStep[context];
+    const indicator = $(`${context}-step-indicator`);
+    if(!indicator) return;
     
-    if (type === 'everyone') {
-      btnEveryone.classList.add('active');
-      btnSpecific.classList.remove('active');
-      summaryEl.classList.add('dn');
-      state.selectedAllowedUsers = [];
-    } else {
-      btnEveryone.classList.remove('active');
-      btnSpecific.classList.add('active');
-      summaryEl.classList.remove('dn');
-      updateAccessSummary(prefix);
-    }
+    indicator.querySelectorAll('.step-dot').forEach((dot, index) => {
+        if(index < current) dot.classList.add('active');
+        else dot.classList.remove('active');
+    });
+
+    $(`${context}-step-1`).classList.toggle('active', current === 1);
+    $(`${context}-step-2`).classList.toggle('active', current === 2);
     lucide.createIcons();
   };
 
-  const updateAccessSummary = (prefix) => {
-    const summaryEl = $(`${prefix}-access-summary`);
-    const count = state.selectedAllowedUsers.length;
-    if (count === 0) {
-      summaryEl.innerHTML = `<span class="c-danger">No users selected</span><i data-lucide="users" class="w-16 h-16"></i>`;
+  const renderPickerPreview = (id) => {
+    const container = $(id);
+    if(!container) return;
+    if(state.selectedAllowedUsers.length === 0) {
+        container.innerHTML = `<div class="picker-empty">Public Room</div>`;
     } else {
-      summaryEl.innerHTML = `<span class="c-accent">${count} user${count > 1 ? 's' : ''} selected</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;
+        container.innerHTML = state.selectedAllowedUsers.map(u => `
+            <div class="picker-user-card" style="padding:8px;border:none;border-bottom:1px solid var(--border)">
+                <div class="picker-user-avatar" style="width:24px;height:24px;font-size:10px">${u.name.charAt(0)}</div>
+                <span class="picker-user-name" style="font-size:12px">${esc(u.name)}</span>
+            </div>
+        `).join('');
     }
-    lucide.createIcons();
   };
 
   window.openAccessManager = async (prefix) => {
@@ -414,12 +440,13 @@ export function startChatApp(customConfig = {}) {
   };
 
   window.closeAccessManager = () => {
-    if (state.currentPickerContext === 'edit-room') {
-        window.showOverlayView('room-settings');
+    window.closeOverlay();
+    if(state.currentPickerContext === 'create') {
+        renderPickerPreview('create-picker-preview');
     } else {
-        window.closeOverlay();
+        renderPickerPreview('edit-picker-preview');
     }
-    updateAccessSummary(state.currentPickerContext);
+    lucide.createIcons();
   };
 
   const renderPickerSelectedUsers = () => {
@@ -427,7 +454,7 @@ export function startChatApp(customConfig = {}) {
     const displayUsers = state.selectedAllowedUsers;
     
     if (displayUsers.length === 0) {
-      container.innerHTML = `<div class="picker-empty">No users added yet.</div>`;
+      container.innerHTML = `<div class="picker-empty">No users selected (Public).</div>`;
       $('picker-count').innerText = '0';
       return;
     }
@@ -439,12 +466,12 @@ export function startChatApp(customConfig = {}) {
         <div class="picker-user-info">
             <div class="picker-user-avatar">${u.name.charAt(0)}</div>
             <div class="picker-user-text">
-                <span class="picker-user-name">${esc(u.name)} ${u.id === state.user.id ? '<span class="c-mute">(You)</span>' : ''}</span>
+                <span class="picker-user-name">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute)">(You)</span>' : ''}</span>
                 <span class="picker-user-id">${u.id}</span>
             </div>
         </div>
         <button class="picker-remove-btn" onclick="window.removePickerUser('${u.id}')">
-            <i data-lucide="x" class="w-16 h-16"></i>
+            <i data-lucide="x" style="width:16px;height:16px"></i>
         </button>
       </div>
     `).join('');
@@ -618,6 +645,15 @@ export function startChatApp(customConfig = {}) {
     const next = $(id);
     if(!next) return;
     if(id === 'scr-guest') prepareGuestScreen();
+    if(id === 'scr-create') {
+        state.currentStep.create = 1;
+        state.selectedAllowedUsers = [];
+        updateStepUI('create');
+        renderPickerPreview('create-picker-preview');
+        $('c-name').value = '';
+        $('c-pass').value = '';
+        $('c-private').checked = false;
+    }
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
     if(direction === 'left') {
       current.classList.add('slide-left');
@@ -672,12 +708,7 @@ export function startChatApp(customConfig = {}) {
     const filtered = state.allRooms.filter(r => {
         const matchSearch = r.name.toLowerCase().includes(q);
         if (!matchSearch) return false;
-
-
-        if (r.is_private && r.created_by !== uid) {
-            return false;
-        }
-
+        if (r.is_private && r.created_by !== uid) return false;
         return true;
     });
 
@@ -778,30 +809,71 @@ export function startChatApp(customConfig = {}) {
     const hasMessages = container.querySelector('.msg');
     if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex';
   };
+  
+  const showTooltip = (e, content) => {
+    const tooltip = $('context-tooltip');
+    tooltip.innerHTML = content;
+    tooltip.classList.add('active');
+    
+    const rect = e.target.getBoundingClientRect();
+    let x = e.clientX || e.touches?.[0]?.clientX;
+    let y = e.clientY || e.touches?.[0]?.clientY;
+    
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y - 40}px`;
+    
+    if (tooltip.offsetLeft < 10) tooltip.style.left = '10px';
+    if (tooltip.offsetTop < 10) tooltip.style.top = `${y + 10}px`;
+  };
 
-  const renderMsg = (m, prepend = false) => {
+  const hideTooltip = () => {
+    $('context-tooltip').classList.remove('active');
+  };
+
+  const renderMsg = (m, prevMsg) => {
     let html = "";
     const msgDateObj = new Date(m.created_at);
     const currentLabel = getDateLabel(msgDateObj);
-    if (!prepend && currentLabel !== state.lastRenderedDateLabel) {
-      html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`;
-      state.lastRenderedDateLabel = currentLabel;
-    } else if (prepend) {
+    
+    const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
+    
+    if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) {
       html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`;
       state.lastRenderedDateLabel = currentLabel;
     }
+    
     const isGuest = state.roomGuestStatus[m.user_id] || false;
-    const displayName = isGuest && m.user_name ? m.user_name : m.user_name;
+    const displayName = m.user_name || 'User';
     const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
     const processedText = processText(m.text);
+    
+    const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
+    const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me';
+    
+    const fullDate = msgDateObj.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
+    const tooltipContent = `<b>${esc(displayName)}</b><br>${fullDate}`;
+
     html += `
-      <div class="msg ${m.user_id===state.user?.id?'me':''}" data-time="${m.created_at}">
-        <span class="msg-user" onclick="window.inspectUser('${m.user_id}')">${esc(displayName)} ${guestPill}</span>
+      <div class="msg ${sideClass} ${msgClass}" data-time="${m.created_at}" data-tooltip="${esc(tooltipContent)}" oncontextmenu="event.preventDefault(); showTooltip(event, this.dataset.tooltip)" ontouchstart="window.startMsgTimer(event, this)" ontouchend="window.clearMsgTimer()" ontouchmove="window.clearMsgTimer()">
+        ${isGroupStart ? `<div class="msg-header"><span class="msg-user">${esc(displayName)} ${guestPill}</span></div>` : ''}
         <div>${processedText}</div>
         <span class="msg-time">${esc(m.time)}</span>
       </div>`;
     return html;
   };
+  
+  window.startMsgTimer = (e, el) => {
+      state.longPressTimer = setTimeout(() => {
+          showTooltip(e, el.dataset.tooltip);
+      }, 500);
+  };
+  
+  window.clearMsgTimer = () => {
+      if(state.longPressTimer) clearTimeout(state.longPressTimer);
+      state.longPressTimer = null;
+  };
+
+  document.addEventListener('click', hideTooltip);
 
   const handleScroll = () => {
     const container = $('chat-messages');
@@ -829,7 +901,7 @@ export function startChatApp(customConfig = {}) {
     state.isLoadingHistory = true;
     const container = $('chat-messages');
     const oldScrollHeight = container.scrollHeight;
-    container.insertAdjacentHTML('afterbegin', '<div id="history-loader" class="history-loader">Loading...</div>');
+    container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:12px;font-weight:600;color:var(--text-mute)">Loading...</div>');
     const { data, error } = await db
       .from('messages')
       .select('*')
@@ -850,39 +922,14 @@ export function startChatApp(customConfig = {}) {
         state.oldestMessageTimestamp = validMsgs[0].created_at;
         const ids = validMsgs.map(m => m.user_id);
         await fetchGuestStatuses(ids);
-        const lastBatchDate = getDateLabel(new Date(validMsgs[validMsgs.length - 1].created_at));
-        const firstMsgEl = container.querySelector('.msg');
-        let firstExistingDate = null;
-        if (firstMsgEl) {
-          const firstTime = firstMsgEl.getAttribute('data-time');
-          if (firstTime) firstExistingDate = getDateLabel(new Date(firstTime));
-        }
+        
         let html = "";
-        let tempLabel = null;
-        validMsgs.forEach((m, index) => {
-          const msgDate = getDateLabel(new Date(m.created_at));
-          if (msgDate !== tempLabel) {
-            if (index === validMsgs.length - 1 && msgDate === firstExistingDate) {
-            } else {
-              html += `<div class="date-divider"><span class="date-label">${msgDate}</span></div>`;
-            }
-            tempLabel = msgDate;
-          }
-          const isGuest = state.roomGuestStatus[m.user_id] || false;
-          const displayName = isGuest && m.user_name ? m.user_name : m.user_name;
-          const guestPill = isGuest ? '<span class="guest-pill">Guest</span>' : '';
-          const processedText = processText(m.text);
-          html += `
-            <div class="msg ${m.user_id===state.user?.id?'me':''}" data-time="${m.created_at}">
-              <span class="msg-user" onclick="window.inspectUser('${m.user_id}')">${esc(displayName)} ${guestPill}</span>
-              <div>${processedText}</div>
-              <span class="msg-time">${esc(m.time)}</span>
-            </div>`;
+        let prev = null;
+        validMsgs.forEach(m => {
+            html += renderMsg(m, prev);
+            prev = m;
         });
-        if (lastBatchDate === firstExistingDate) {
-          const firstDivider = container.querySelector('.date-divider');
-          if (firstDivider) firstDivider.remove();
-        }
+        
         container.insertAdjacentHTML('afterbegin', html);
         const newScrollHeight = container.scrollHeight;
         container.scrollTop = newScrollHeight - oldScrollHeight;
@@ -948,9 +995,15 @@ export function startChatApp(customConfig = {}) {
         b.innerHTML = '';
         const ids = res.results.map(m => m.user_id);
         await fetchGuestStatuses(ids);
+        
+        let prev = null;
         res.results.forEach(m => {
-          if(!m.error) b.insertAdjacentHTML('beforeend', renderMsg(m));
+          if(!m.error) {
+              b.insertAdjacentHTML('beforeend', renderMsg(m, prev));
+              prev = m;
+          }
         });
+        
         b.scrollTop = b.scrollHeight;
         checkChatEmpty();
         window.setLoading(false);
@@ -977,9 +1030,16 @@ export function startChatApp(customConfig = {}) {
           if(decRes.result) {
             await fetchGuestStatuses([m.user_id]);
             const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
-            const b = $('chat-messages');
-            b.insertAdjacentHTML('beforeend', renderMsg(msgObj));
-            b.scrollTop = b.scrollHeight;
+            const container = $('chat-messages');
+            const lastMsg = container.querySelector('.msg:last-of-type');
+            let prevMsg = null;
+            if(lastMsg) {
+                prevMsg = { user_id: lastMsg.classList.contains('me') ? state.user.id : 'other', created_at: lastMsg.dataset.time };
+            }
+            
+            const html = renderMsg(msgObj, prevMsg);
+            container.insertAdjacentHTML('beforeend', html);
+            container.scrollTop = container.scrollHeight;
             checkChatEmpty();
           }
         };
@@ -1286,17 +1346,11 @@ export function startChatApp(customConfig = {}) {
     const p = $('c-pass').value;
     const isP = $('c-private').checked;
     
-    const isEveryone = $('c-access-everyone').classList.contains('active');
     let allowedUsers = ['*'];
     
-    if (!isEveryone) {
+    if (state.selectedAllowedUsers.length > 0) {
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
-        if (allowedUsers.length === 0) {
-             window.toast("Select at least one user");
-             state.processingAction = false;
-             return;
-        }
     }
 
     if(isP && !p) {
@@ -1488,6 +1542,9 @@ export function startChatApp(customConfig = {}) {
     window.setLoading(true, "Loading room settings...");
     const room = state.currentRoomData;
     
+    state.currentStep.edit = 1;
+    updateStepUI('edit');
+    
     $('edit-room-name').value = room.name;
     $('edit-room-private').checked = room.is_private;
     $('edit-room-pass').value = '';
@@ -1509,19 +1566,16 @@ export function startChatApp(customConfig = {}) {
     
     state.selectedAllowedUsers = [];
     
-    const isEveryone = room.allowed_users.includes('*');
-    if (isEveryone) {
-        window.handleAccessToggle('edit-room', 'everyone');
-    } else {
-        window.handleAccessToggle('edit-room', 'specific');
-        const ids = room.allowed_users;
+    const ids = room.allowed_users;
+    if (ids && !ids.includes('*')) {
         const { data: profiles } = await db.from('profiles').select('id, full_name').in('id', ids);
         state.selectedAllowedUsers = ids.map(id => {
             const p = profiles?.find(pro => pro.id === id);
             return { id: id, name: p?.full_name || 'Unknown' };
         });
-        updateAccessSummary('edit-room');
     }
+    
+    renderPickerPreview('edit-picker-preview');
     
     $('overlay-container').classList.add('active');
     window.showOverlayView('room-settings');
@@ -1555,16 +1609,10 @@ export function startChatApp(customConfig = {}) {
     const isPrivate = $('edit-room-private').checked;
     const newPass = $('edit-room-pass').value;
     
-    const isEveryone = $('edit-room-access-everyone').classList.contains('active');
     let allowedUsers = ['*'];
-    if (!isEveryone) {
+    if (state.selectedAllowedUsers.length > 0) {
         allowedUsers = state.selectedAllowedUsers.map(u => u.id);
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
-        if (allowedUsers.length === 0) {
-             window.toast("Select at least one user");
-             state.processingAction = false;
-             return;
-        }
     }
 
     if (!name) {
