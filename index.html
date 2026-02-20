@@ -563,12 +563,11 @@ h1.title {
 }
 .avatar-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
   max-height: 160px;
   overflow-y: auto;
-  padding-right: 4px;
 }
 .avatar-option {
   aspect-ratio: 1;
