@@ -1,4 +1,4 @@
-// GH: HyperRushNet // 2026 // MIT License // index.html
+// GH: HyperRushNet // 2026 // MIT License // logic.js
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -1060,9 +1060,17 @@ export function startChatApp(customConfig = {}) {
         
         if (ev === 'SIGNED_IN') {
             if(state.user) {
-                const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify'];
-                if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); }
-                updateLobbyAvatar();
+                const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify', 'scr-invite'];
+                // Handle pending invite after login
+                const pendingInvite = sessionStorage.getItem('pending_invite');
+                if (pendingInvite) {
+                    sessionStorage.removeItem('pending_invite');
+                    // Wait a bit for UI to settle
+                    setTimeout(() => window.joinAttempt(pendingInvite), 500);
+                } else {
+                    if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); }
+                    updateLobbyAvatar();
+                }
             }
         }
         if (ev === 'SIGNED_OUT') {
@@ -1283,10 +1291,95 @@ export function startChatApp(customConfig = {}) {
         $('fab-menu-overlay').classList.remove('active');
     };
 
+    // --- NEW INVITE HANDLER ---
+    const handleInviteFlow = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const inviteId = params.get('invite');
+        if (!inviteId) return false;
+
+        window.setLoading(true, "Loading Invite...");
+        
+        // Fetch Room
+        const { data: room, error } = await db.from('rooms').select('*').eq('id', inviteId).single();
+        
+        if (error || !room) {
+            window.setLoading(false);
+            window.toast("Invalid or expired invite link");
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return false; // proceed to normal flow
+        }
+
+        // Fetch Creator
+        let creator = { full_name: "Unknown", id: "?", avatar_url: null };
+        if (room.created_by) {
+            const { data: profile } = await db.from('profiles').select('full_name, id, avatar_url').eq('id', room.created_by).single();
+            if (profile) creator = profile;
+        }
+
+        // Populate UI
+        const titleEl = $('invite-room-name');
+        const avatarEl = $('invite-room-avatar');
+        const creatorNameEl = $('invite-creator-name');
+        const creatorIdEl = $('invite-creator-id');
+        const creatorAvatarEl = $('invite-creator-avatar');
+        
+        if(titleEl) titleEl.innerText = room.name;
+        if(avatarEl) {
+            if(room.avatar_url) avatarEl.innerHTML = `<img src="${room.avatar_url}">`;
+            else avatarEl.innerText = room.name.charAt(0);
+        }
+        
+        if(creatorNameEl) creatorNameEl.innerText = creator.full_name;
+        if(creatorIdEl) creatorIdEl.innerText = creator.id;
+        if(creatorAvatarEl) {
+             if(creator.avatar_url) creatorAvatarEl.innerHTML = `<img src="${creator.avatar_url}">`;
+             else creatorAvatarEl.innerText = creator.full_name.charAt(0);
+        }
+
+        // Setup Join Button
+        const joinBtn = $('invite-join-btn');
+        if (joinBtn) {
+            // Clone node to remove old listeners
+            const newBtn = joinBtn.cloneNode(true);
+            joinBtn.parentNode.replaceChild(newBtn, joinBtn);
+            
+            newBtn.onclick = async () => {
+                // Check if logged in
+                const { data: { user } } = await db.auth.getUser();
+                if(!user) {
+                    window.toast("Please login to join");
+                    sessionStorage.setItem('pending_invite', inviteId);
+                    window.nav('scr-login');
+                } else {
+                    // Update state user just in case
+                    state.user = user;
+                    // Attempt join
+                    window.joinAttempt(inviteId);
+                }
+            };
+        }
+        
+        // Show Screen
+        window.setLoading(false);
+        window.nav('scr-invite');
+        
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        return true;
+    };
+
     const init = async () => {
         if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; }
         const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
         if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; }
+
+        // CHECK FOR INVITE FIRST
+        const isInvite = await handleInviteFlow();
+        if(isInvite) {
+            monitorConnection(); 
+            return; 
+        }
 
         const [userRes, userErr] = await safeAwait(db.auth.getUser());
         
