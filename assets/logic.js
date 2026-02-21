@@ -497,19 +497,16 @@ export function startChatApp(customConfig = {}) {
         cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
     };
 
-    // Unified Room Info Logic
     window.openRoomInfo = async () => {
         if (!state.currentRoomData) return;
         window.setLoading(true, "Loading info...");
         const room = state.currentRoomData;
         
         const delBtn = $('info-delete-btn');
-        const editBtn = $('info-edit-btn');
         const creatorRow = $('info-creator-row');
         
         // Reset states
         delBtn.style.display = 'none';
-        editBtn.style.display = 'none';
         delBtn.innerText = "Delete Chat";
         delBtn.classList.remove('active');
         if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout);
@@ -524,7 +521,7 @@ export function startChatApp(customConfig = {}) {
         if (room.is_direct) {
             // DM Logic
             $('info-type').innerText = "Direct Message";
-            creatorRow.style.display = 'none'; // Hide creator
+            creatorRow.style.display = 'none'; 
             
             const otherId = room.allowed_users?.find(id => id !== state.user.id);
             if (otherId) {
@@ -564,10 +561,9 @@ export function startChatApp(customConfig = {}) {
                 $('info-creator').innerText = profile?.full_name || 'Unknown';
             } else $('info-creator').innerText = 'Unknown';
             
-            // Owner privileges
+            // Owner privileges for delete
             if (room.created_by === state.user.id) {
                 delBtn.style.display = 'flex';
-                editBtn.style.display = 'flex';
             }
         }
 
@@ -592,7 +588,6 @@ export function startChatApp(customConfig = {}) {
     };
 
     window.openRoomSettings = async () => {
-        // Wrapper to close info modal and open settings
         window.closeOverlay();
         
         if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner");
@@ -677,6 +672,14 @@ export function startChatApp(customConfig = {}) {
         const avEl = $('chat-avatar-display');
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase();
         
+        // Logic fix for Settings button visibility
+        const editBtn = $('info-edit-btn');
+        if (!isDirect && room.created_by === state.user.id) {
+            editBtn.style.display = 'flex';
+        } else {
+            editBtn.style.display = 'none';
+        }
+
         lucide.createIcons();
 
         window.setLoading(true, "Fetching History...");
@@ -708,6 +711,7 @@ export function startChatApp(customConfig = {}) {
         if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false;
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null;
         setConnectionVisuals('offline');
+        if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; // Hide settings on leave
         window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false);
     };
 
