@@ -917,7 +917,14 @@ input:checked + .slider:before {
   max-width: 300px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
-      </style>
+.invite-card-bg {
+  background: #f2f2f7;
+  border-radius: 16px;
+  padding: 16px;
+  width: 100%;
+  margin-bottom: 24px;
+}
+</style>
    </head>
    <body>
       <div id="app">
@@ -1028,6 +1035,30 @@ input:checked + .slider:before {
          </div>
          <div id="toast-container"></div>
          <div id="context-tooltip"></div>
+         
+         <!-- NEW INVITE SCREEN -->
+         <div id="scr-invite" class="screen center-content">
+            <div style="margin-bottom:32px;display:flex;flex-direction:column;align-items:center">
+               <div id="invite-room-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px;margin-bottom:16px">?</div>
+               <h1 id="invite-room-name" class="title" style="margin-bottom:4px">Room Name</h1>
+               <p class="subtitle">You are invited to join</p>
+            </div>
+            
+            <div class="invite-card-bg">
+               <p style="font-size:11px;color:var(--text-mute);text-transform:uppercase;font-weight:800;margin-bottom:12px">Hosted by</p>
+               <div style="display:flex;align-items:center;gap:12px">
+                  <div id="invite-creator-avatar" class="chat-avatar" style="width:42px;height:42px">?</div>
+                  <div style="flex:1;min-width:0">
+                     <div id="invite-creator-name" style="font-weight:700;font-size:15px">User</div>
+                     <div id="invite-creator-id" style="font-size:10px;color:var(--text-mute);font-family:monospace">ID</div>
+                  </div>
+               </div>
+            </div>
+
+            <button id="invite-join-btn" class="btn btn-accent" style="margin-bottom:12px">Join Room</button>
+            <button class="btn bn" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Go to Start</button>
+         </div>
+         
          <div id="scr-start" class="screen active center-content">
             <i data-lucide="shield" style="width:40px;height:40px;stroke-width:1.5;color:var(--accent);margin-bottom:16px"></i>
             <h1 class="title">HRN Chat</h1>
@@ -1216,7 +1247,7 @@ input:checked + .slider:before {
          </div>
       </div>
       <script type="module">
-         import { startChatApp } from './assets/logic.js';
+         import { startChatApp } from 'https://hyperrushnet.github.io/chat-app/assets/logic.js';
          startChatApp({ maxUsers: 0, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 });
       </script>
    </body>
