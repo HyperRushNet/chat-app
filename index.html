@@ -158,6 +158,11 @@
          .btn-danger.active{background:var(--danger);color:#fff}
          .refresh-btn{background:none;border:none;padding:4px;color:var(--text-mute);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s}
          .refresh-btn:active{transform:rotate(90deg)}
+         
+         /* Square Send Button */
+         #chat-input-area{display:flex;gap:10px;padding-top:12px;align-items:flex-end;border-top:1px solid var(--border)}
+         #send-btn{width:50px;min-width:50px;height:50px;padding:0;border-radius:var(--radius);flex-shrink:0}
+         #chat-input{margin:0}
       </style>
    </head>
    <body>
@@ -199,7 +204,7 @@
                   <div class="step-container">
                      <div id="edit-step-1" class="wizard-step active">
                         <input id="edit-room-name" class="input-field" placeholder="Room Name">
-                        <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="edit-room-private"><span class="slider"></span></label></div>
+                        <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Visible in Lobby</span><label class="switch"><input type="checkbox" id="edit-room-visible" checked><span class="slider"></span></label></div>
                         <button class="btn btn-accent" onclick="window.nextEditStep()">Next</button>
                      </div>
                      <div id="edit-step-2" class="wizard-step">
@@ -391,9 +396,9 @@
                   </div>
                </div>
             </div>
-            <div id="chat-input-area" style="display:flex;gap:10px;padding-top:12px;align-items:flex-end;border-top:1px solid var(--border)">
-               <textarea id="chat-input" class="input-field" placeholder="Message..." style="height:44px;resize:none;min-height:44px;margin:0"></textarea>
-               <button id="send-btn" class="btn btn-accent" style="width:44px;height:44px;padding:0" onclick="window.sendMsg(event)"><i data-lucide="arrow-up" style="width:18px;height:18px"></i></button>
+            <div id="chat-input-area">
+               <textarea id="chat-input" class="input-field" placeholder="Message..." style="height:50px;resize:none;min-height:50px"></textarea>
+               <button id="send-btn" class="btn btn-accent" onclick="window.sendMsg(event)"><i data-lucide="arrow-up" style="width:20px;height:20px"></i></button>
             </div>
          </div>
          <div id="scr-create" class="screen center-content">
@@ -428,7 +433,7 @@
                      <input id="c-name" class="input-field" placeholder="Group Name">
                      <input id="c-avatar" class="input-field" placeholder="Avatar URL (optional)">
                      <input id="c-pass" type="password" class="input-field" placeholder="Password (optional)">
-                     <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="c-private"><span class="slider"></span></label></div>
+                     <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Visible in Lobby</span><label class="switch"><input type="checkbox" id="c-visible" checked><span class="slider"></span></label></div>
                   </div>
                   <div id="create-direct-fields" class="dn">
                      <input id="c-target-user" class="input-field" placeholder="Paste User ID...">
