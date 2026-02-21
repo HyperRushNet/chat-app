@@ -92,7 +92,7 @@
          .avatar-option.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,122,255,.2)}
          #overlay-container{position:absolute;background:rgba(0,0,0,.4);z-index:5000;align-items:center;justify-content:center;transition:opacity .3s;backdrop-filter:blur(16px);opacity:0;display:none;padding:20px;inset:0}
          #overlay-container.active{display:flex;opacity:1}
-         .panel-card{background:var(--bg);width:100%;max-width:340px;border-radius:20px;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.2);animation:.4s cubic-bezier(.16,1,.3,1) panelSlide;max-height:80vh;overflow-y:auto}
+         .panel-card{background:var(--bg);width:100%;max-width:340px;border-radius:20px;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.2);animation:.4s cubic-bezier(.16,1,.3,1) panelSlide;max-height:80vh;overflow:hidden}
          @keyframes panelSlide{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
          .view-content{display:none}
          .view-content.active{display:block}
@@ -263,9 +263,8 @@
                         <div class="status-legend"><div class="status-dot" style="background:var(--text-mute)"></div><span style="font-size:12px">Offline</span></div>
                      </div>
                   </div>
-                  <!-- Action Buttons Area -->
+                  <!-- Action Buttons Area: Edit button removed from here -->
                   <div style="margin-top:24px; display:flex; flex-direction:column; gap:10px">
-                     <button id="info-edit-btn" class="btn btn-outline" style="display:none" onclick="window.openRoomSettings()">Edit Settings</button>
                      <button id="info-delete-btn" class="btn btn-danger" style="display:none" onclick="window.initiateDeleteRoom()">Delete Chat</button>
                   </div>
                </div>
@@ -387,6 +386,8 @@
                   </div>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
+                  <!-- Edit Settings Icon Moved Here -->
+                  <span id="info-edit-btn" class="clickable" style="display:none" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-20 h-20"></i></span>
                   <span class="clickable" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span>
                </div>
             </div>
