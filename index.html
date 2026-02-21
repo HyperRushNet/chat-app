@@ -156,6 +156,8 @@
          .btn-danger{background:rgba(255,59,48,0.1);color:var(--danger);border:none}
          .btn-danger:hover{background:rgba(255,59,48,0.15)}
          .btn-danger.active{background:var(--danger);color:#fff}
+         .refresh-btn{background:none;border:none;padding:4px;color:var(--text-mute);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s}
+         .refresh-btn:active{transform:rotate(90deg)}
       </style>
    </head>
    <body>
@@ -221,13 +223,17 @@
                   </div>
                </div>
                <div id="view-room-info" class="view-content">
+                  <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:16px">
+                     <h3 style="margin:0;font-weight:800;font-size:16px">Room Info</h3>
+                     <button style="background:rgba(0,0,0,0.05);border:none;border-radius:8px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-main)" onclick="window.closeOverlay()"><i data-lucide="x" class="w-18 h-18"></i></button>
+                  </div>
                   <div class="info-header">
                      <div id="info-avatar" class="info-avatar">?</div>
                      <div id="info-name" class="info-title">Room Name</div>
                      <div id="info-type" class="info-subtitle">Group</div>
                   </div>
                   <div class="info-section">
-                     <div class="info-row">
+                     <div class="info-row" id="info-creator-row">
                         <span class="info-label">Created By</span>
                         <span id="info-creator" class="info-value">User</span>
                      </div>
@@ -351,7 +357,8 @@
          <div id="scr-lobby" class="screen">
             <div class="header">
                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-                  <h1 class="title" style="font-size:18px;margin:0;cursor:pointer" onclick="window.refreshLobby()">Rooms</h1>
+                  <h1 class="title" style="font-size:18px;margin:0">Rooms</h1>
+                  <button class="refresh-btn" onclick="window.refreshLobby()"><i data-lucide="refresh-cw" style="width:18px;height:18px"></i></button>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
                   <div id="lobby-avatar-btn" class="chat-avatar" style="width:32px;height:32px;cursor:pointer" onclick="window.nav('scr-account')">?</div>
