@@ -323,10 +323,26 @@ export function startChatApp(customConfig = {}) {
             });
     };
 
-    const monitorConnection = () => {
+        const monitorConnection = () => {
         window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); setConnectionVisuals('connecting'); attemptHardReconnect(); });
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         setInterval(() => { if (!navigator.onLine) { if (!$('offline-screen').classList.contains('active')) $('offline-screen').classList.add('active'); } }, 2000);
+
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                if (state.currentRoomId && navigator.onLine && !state.serverFull) {
+                    if (!state.isChatChannelReady || !state.isPresenceSubscribed) {
+                        console.log("Tab actief: Verbinding verbroken, opnieuw verbinden...");
+                        attemptHardReconnect();
+                    } else {
+                        if (state.presenceChannel && state.user) {
+                            await state.presenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() });
+                            queryOnlineCountImmediately();
+                        }
+                    }
+                }
+            }
+        });
     };
 
     window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
