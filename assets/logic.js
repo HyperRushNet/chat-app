@@ -1,4 +1,4 @@
-// GH: HyperRushNet // 2026 // MIT License // index.html
+// GH: HyperRushNet | 2026 | MIT License | logic.js
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -59,7 +59,6 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 },
         selectedAvatar: null,
         createType: 'group',
-        // NEW: State for hard reconnect
         currentRoomPassword: null, 
         reconnectTimer: null,
         isReconnecting: false
@@ -90,12 +89,19 @@ export function startChatApp(customConfig = {}) {
 
     const $ = id => document.getElementById(id);
 
-    const updateOnlineDisplay = (count) => {
-        if (typeof count === 'number') state.lastKnownOnlineCount = count;
-        const displayCount = (typeof count === 'number') ? count : '--';
-        document.querySelectorAll('.live-count').forEach(el => {
-            if (el.innerText !== displayCount.toString()) el.innerText = displayCount;
-        });
+    const setConnectionVisuals = (status) => {
+        const avatar = $('chat-avatar-display');
+        if (!avatar) return;
+        
+        avatar.classList.remove('status-connected', 'status-connecting', 'status-offline');
+        
+        if (status === 'connected') {
+            avatar.classList.add('status-connected');
+        } else if (status === 'connecting') {
+            avatar.classList.add('status-connecting');
+        } else {
+            avatar.classList.add('status-offline');
+        }
     };
 
     const processToastQueue = () => {
@@ -249,7 +255,6 @@ export function startChatApp(customConfig = {}) {
     });
 
     const cleanupChannels = async () => {
-        // Clear timers on cleanup
         if (state.reconnectTimer) {
             clearTimeout(state.reconnectTimer);
             state.reconnectTimer = null;
@@ -268,6 +273,8 @@ export function startChatApp(customConfig = {}) {
             state.chatChannel.unsubscribe();
             state.chatChannel = null;
         }
+        
+        setConnectionVisuals('offline');
     };
 
     const queryOnlineCountImmediately = async () => {
@@ -275,7 +282,6 @@ export function startChatApp(customConfig = {}) {
         const presState = state.presenceChannel.presenceState();
         const allPresences = Object.values(presState).flat();
         const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
-        updateOnlineDisplay(uniqueUserIds.size);
         if (uniqueUserIds.size > CONFIG.maxUsers) {
             if(!state.serverFull) {
                 state.serverFull = true;
@@ -288,21 +294,17 @@ export function startChatApp(customConfig = {}) {
         }
     };
 
-    // NEW: Hard Reconnect Logic
     const attemptHardReconnect = () => {
         if (!navigator.onLine || !state.currentRoomId || !state.user) return;
         
-        if (state.isReconnecting) return; // Already trying
+        if (state.isReconnecting) return;
         
-        console.log("Attempting hard reconnect...");
-        window.toast("Reconnecting...");
+        setConnectionVisuals('connecting');
         
-        // Immediate attempt
         initRoomPresence(state.currentRoomId);
         setupChatChannel(state.currentRoomId); 
     };
 
-    // Extracted Chat Channel setup to allow re-triggering
     const setupChatChannel = (id) => {
         if (state.chatChannel) state.chatChannel.unsubscribe();
 
@@ -332,14 +334,13 @@ export function startChatApp(customConfig = {}) {
             if (status === 'SUBSCRIBED') {
                 state.isReconnecting = false;
                 if(state.reconnectTimer) clearTimeout(state.reconnectTimer);
-                window.toast("Connected!");
+                setConnectionVisuals('connected');
             } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                // HARD RECONNECT TRIGGER
                 if (navigator.onLine && !state.serverFull) {
                      state.isChatChannelReady = false;
                      if(!state.isReconnecting) {
                          state.isReconnecting = true;
-                         // Retry every 1 second
+                         setConnectionVisuals('connecting');
                          state.reconnectTimer = setTimeout(attemptHardReconnect, 1000);
                      }
                 }
@@ -366,7 +367,7 @@ export function startChatApp(customConfig = {}) {
                 if (status === 'SUBSCRIBED') {
                     if (!state.presenceChannel) return;
                     state.isPresenceSubscribed = true;
-                    state.isReconnecting = false; // Flag reset
+                    state.isReconnecting = false;
                     queryOnlineCountImmediately();
                     await state.presenceChannel.track({
                         user_id: myId,
@@ -384,39 +385,30 @@ export function startChatApp(customConfig = {}) {
                     }, CONFIG.presenceHeartbeatMs);
                 } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                     state.isPresenceSubscribed = false;
-                    updateOnlineDisplay(null);
                     
-                    // HARD RECONNECT TRIGGER
                     if (navigator.onLine && !state.serverFull && !state.isReconnecting) {
                         state.isReconnecting = true;
+                        setConnectionVisuals('connecting');
                         state.reconnectTimer = setTimeout(attemptHardReconnect, 1000);
                     }
                 }
             });
-            
-            $('chat-room-indicator').style.display = 'inline-flex';
     };
 
-    // NEW: Optimized Connection Monitor
     const monitorConnection = () => {
-        // Instant detection of WiFi coming back
         window.addEventListener('online', () => {
             $('offline-screen').classList.remove('active');
-            window.toast("Network back! Reconnecting...");
+            setConnectionVisuals('connecting');
             attemptHardReconnect();
         });
 
-        // Instant detection of WiFi loss
         window.addEventListener('offline', () => {
             $('offline-screen').classList.add('active');
-            updateOnlineDisplay(null);
-            window.toast("Connection lost");
-            // Stop trying while offline to save resources
+            setConnectionVisuals('offline');
             if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
             state.isReconnecting = false;
         });
 
-        // Fallback check just in case events miss
         setInterval(() => {
             if (!navigator.onLine) {
                 if (!$('offline-screen').classList.contains('active')) {
@@ -636,7 +628,6 @@ export function startChatApp(customConfig = {}) {
                 state.heartbeatInterval = null;
                 state.isPresenceSubscribed = false;
                 state.isMasterTab = false;
-                updateOnlineDisplay(null);
                 const overlay = $('block-overlay');
                 overlay.innerHTML = `
                 <i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i>
@@ -701,6 +692,12 @@ export function startChatApp(customConfig = {}) {
         if(!state.user) return;
         navigator.clipboard.writeText(state.user.id);
         window.toast("ID Copied");
+    };
+
+    window.copyInfoId = () => {
+        if(!state.currentRoomId) return;
+        navigator.clipboard.writeText(state.currentRoomId);
+        window.toast("Room ID Copied");
     };
 
     const updateLobbyAvatar = async () => {
@@ -827,11 +824,35 @@ export function startChatApp(customConfig = {}) {
         cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
     };
 
+    window.openRoomInfo = async () => {
+        if (!state.currentRoomData) return;
+        
+        window.setLoading(true, "Loading info...");
+        const room = state.currentRoomData;
+        
+        $('info-room-name').innerText = room.name;
+        $('info-room-id').innerText = room.id;
+        
+        const date = new Date(room.created_at);
+        $('info-created-at').innerText = date.toLocaleDateString('en-GB', { dateStyle: 'full' });
+        
+        if (room.created_by) {
+            const { data: creator } = await db.from('profiles').select('full_name').eq('id', room.created_by).single();
+            $('info-creator').innerText = creator?.full_name || 'Unknown';
+        } else {
+            $('info-creator').innerText = 'Unknown';
+        }
+        
+        window.setLoading(false);
+        $('overlay-container').classList.add('active');
+        window.showOverlayView('room-info');
+        lucide.createIcons();
+    };
+
     window.openVault = async (id, n, rawPassword, roomSalt) => {
         if (!state.user) return window.toast("Please login first");
         window.setLoading(true, "Decrypting...");
         
-        // Store password for auto-reconnect
         state.currentRoomPassword = rawPassword;
 
         if (state.chatChannel) state.chatChannel.unsubscribe();
@@ -865,6 +886,7 @@ export function startChatApp(customConfig = {}) {
 
         $('chat-title').innerText = displayTitle;
         const avEl = $('chat-avatar-display');
+        
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`;
         else avEl.innerText = displayTitle.charAt(0).toUpperCase();
 
@@ -877,6 +899,8 @@ export function startChatApp(customConfig = {}) {
         $('chat-input').style.display = 'block';
         $('send-btn').style.display = 'flex';
         window.nav('scr-chat');
+        
+        setConnectionVisuals('connecting');
 
         if (data && data.length > 0) {
             data.reverse();
@@ -898,7 +922,7 @@ export function startChatApp(customConfig = {}) {
             window.setLoading(false);
         }
 
-        setupChatChannel(id); // Use extracted function
+        setupChatChannel(id);
         initRoomPresence(id);
     };
 
@@ -940,8 +964,8 @@ export function startChatApp(customConfig = {}) {
         state.heartbeatInterval = null;
         
         if ($('room-settings-icon')) $('room-settings-icon').style.display = 'none';
-        $('chat-room-indicator').style.display = 'none';
-        updateOnlineDisplay(null);
+        
+        setConnectionVisuals('offline');
         
         window.nav('scr-lobby');
         window.loadRooms();
@@ -1104,13 +1128,6 @@ export function startChatApp(customConfig = {}) {
         window.setLoading(false);
     };
 
-    window.copyId = () => {
-        navigator.clipboard.writeText(state.currentRoomId);
-        const copyIcon = $('icon-copy-chat'); const checkIcon = $('icon-check-chat');
-        copyIcon.style.display = 'none'; checkIcon.style.display = 'block';
-        setTimeout(() => { copyIcon.style.display = 'block'; checkIcon.style.display = 'none'; }, 2000);
-    };
-
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
@@ -1119,10 +1136,6 @@ export function startChatApp(customConfig = {}) {
     document.addEventListener('touchend', e => {
         touchEndX = e.changedTouches[0].screenX;
     }, false);
-
-    // Replaced with smarter event listeners below
-    // window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); window.toast("Back online"); });
-    // window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); updateOnlineDisplay(null); window.toast("Connection lost"); });
 
     db.auth.onAuthStateChange(async (ev, ses) => {
         const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true';
