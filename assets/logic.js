@@ -7,12 +7,12 @@ export function startChatApp(customConfig = {}) {
         supabaseUrl: customConfig.supabaseUrl || "https://jnhsuniduzvhkpexorqk.supabase.co",
         supabaseKey: customConfig.supabaseKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaHN1bmlkdXp2aGtwZXhvcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NjAxMDYsImV4cCI6MjA4NzEzNjEwNn0.9I5bbqskCgksUaNWYlFFo0-6Odht28pOMdxTGZECahY",
         mailApi: customConfig.mailApi || "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI",
-        maxUsers: customConfig.maxUsers || 475,
+        maxUsers: customConfig.maxUsers || 0, // 0 = Unlimited
         maxMessages: customConfig.maxMessages || 15,
         historyLoadLimit: customConfig.historyLoadLimit || 10,
         rateLimitMs: customConfig.rateLimitMs || 1000,
         verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
-        reconnectInterval: 1000 // Changed to 1000ms for 1s requirement
+        reconnectInterval: 1000
     };
 
     const AVATARS = [
@@ -25,6 +25,7 @@ export function startChatApp(customConfig = {}) {
         user: null,
         currentRoomId: null,
         chatChannel: null,
+        presenceChannel: null, // Nieuw: Global presence tracker
         allRooms: [],
         vTimer: null,
         lastRenderedDateLabel: null,
@@ -47,7 +48,8 @@ export function startChatApp(customConfig = {}) {
         selectedAvatar: null,
         createType: 'group',
         reconnectAttempts: 0,
-        isForcingReconnect: false // Flag to prevent double reconnects
+        isForcingReconnect: false,
+        capacityBlocked: false // Nieuw: flag for capacity state
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -154,6 +156,80 @@ export function startChatApp(customConfig = {}) {
         if (state.chatChannel) { state.chatChannel.unsubscribe(); state.chatChannel = null; }
     };
 
+    // --- CAPACITY LOGIC ---
+    const checkCapacity = (count) => {
+        if (CONFIG.maxUsers === 0) return; // Unlimited
+
+        if (count > CONFIG.maxUsers) {
+            if (!state.capacityBlocked) {
+                state.capacityBlocked = true;
+                $('capacity-overlay').classList.add('active');
+                window.toast("Netwerk vol, verbinding verbroken.");
+                // Disconnect active chat
+                if (state.chatChannel) {
+                    state.chatChannel.unsubscribe();
+                    state.chatChannel = null;
+                    state.isChatChannelReady = false;
+                }
+            }
+        } else {
+            if (state.capacityBlocked) {
+                state.capacityBlocked = false;
+                $('capacity-overlay').classList.remove('active');
+                window.toast("Plek vrijgekomen!");
+                // Reconnect logic could happen here automatically, but user pressed "Retry" is better UX
+            }
+        }
+    };
+
+    window.retryConnection = () => {
+        if (!state.presenceChannel) return;
+        const presenceState = state.presenceChannel.presenceState();
+        const count = Object.keys(presenceState).length;
+        
+        if (CONFIG.maxUsers > 0 && count > CONFIG.maxUsers) {
+            window.toast(`Nog steeds vol (${count}/${CONFIG.maxUsers})`);
+        } else {
+            $('capacity-overlay').classList.remove('active');
+            state.capacityBlocked = false;
+            // If we were in a room, try to rejoin
+            if (state.currentRoomId && state.currentRoomData) {
+                window.joinAttempt(state.currentRoomId);
+            } else {
+                window.nav('scr-lobby');
+            }
+        }
+    };
+
+    const setupPresence = () => {
+        if (!state.user) return;
+        
+        // Setup global presence channel
+        state.presenceChannel = db.channel('global_presence_tracker', {
+            config: { presence: { key: state.user.id } }
+        });
+
+        state.presenceChannel
+            .on('presence', { event: 'sync' }, () => {
+                const newState = state.presenceChannel.presenceState();
+                const count = Object.keys(newState).length;
+                // Optional: Update UI somewhere with "Online: X"
+                checkCapacity(count);
+            })
+            .on('presence', { event: 'join' }, ({ newPresences }) => {
+                 // console.log("User joined", newPresences);
+            })
+            .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+                 // console.log("User left", leftPresences);
+            })
+            .subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    await state.presenceChannel.track({ online_at: new Date().toISOString(), user_id: state.user.id });
+                }
+            });
+    };
+
+    // ... (Rest of helper functions like updateAccessSummary, updateStepUI, etc. remain the same) ...
     const updateAccessSummary = (prefix) => {
         const summaryEl = $(`${prefix}-access-summary`);
         if (!summaryEl) return;
@@ -231,11 +307,13 @@ export function startChatApp(customConfig = {}) {
     const handleScroll = () => { if ($('chat-messages').scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
     const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); pendingCallbacks['historyDecrypted'] = async (res) => { const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; } state.isLoadingHistory = false; }; cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } }); };
 
-    // --- CORE ROOM LOGIC (REST + LAZY AGGRESSIVE WS) ---
+    // --- CORE ROOM LOGIC ---
     
     // Pure REST Room Loader
     window.loadRooms = async () => {
         if(!state.user) return;
+        if(state.capacityBlocked) return; // Don't load if blocked
+        
         window.setLoading(true, "Fetching...");
         const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false });
         if (error) { window.toast("Failed to load rooms"); window.setLoading(false); return; }
@@ -263,6 +341,11 @@ export function startChatApp(customConfig = {}) {
     };
 
     window.joinAttempt = async (id) => {
+        if(state.capacityBlocked) {
+            $('capacity-overlay').classList.add('active');
+            return;
+        }
+
         window.setLoading(true, "Checking...");
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
         if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); }
@@ -274,9 +357,11 @@ export function startChatApp(customConfig = {}) {
         else window.openVault(data.id, data.name, null, data.salt);
     };
 
-    // Open Vault (Lazy Connect + Aggressive Reconnect)
+    // Open Vault
     window.openVault = async (id, n, rawPassword, roomSalt) => {
         if (!state.user) return window.toast("Please login first");
+        if(state.capacityBlocked) return $('capacity-overlay').classList.add('active');
+
         window.setLoading(true, "Decrypting...");
         if (state.chatChannel) state.chatChannel.unsubscribe();
         state.currentRoomId = id;
@@ -329,9 +414,8 @@ export function startChatApp(customConfig = {}) {
             cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
         } else { state.hasMoreHistory = false; checkChatEmpty(); window.setLoading(false); }
 
-        // AGGRESSIVE CONNECTION LOGIC
+        // CONNECTION LOGIC
         const setupChannel = () => {
-            // Prevent duplicate setups
             if (state.chatChannel && state.chatChannel.state === 'joined') return;
 
             state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
@@ -357,15 +441,10 @@ export function startChatApp(customConfig = {}) {
                     state.isChatChannelReady = true;
                     state.reconnectAttempts = 0;
                     state.isForcingReconnect = false;
-                    console.log("Channel connected");
                 } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                     state.isChatChannelReady = false;
-                    // AGGRESSIVE RECONNECT
-                    // Only attempt if we are still in this room
-                    if (state.currentRoomId === id) {
-                         console.log(`Connection lost (${status}), reconnecting in ${CONFIG.reconnectInterval}ms...`);
+                    if (state.currentRoomId === id && !state.isForcingReconnect) {
                          setTimeout(() => {
-                            // Check again if still relevant
                             if (state.currentRoomId === id && !state.isChatChannelReady && !state.isForcingReconnect) {
                                 setupChannel(); 
                             }
@@ -378,28 +457,20 @@ export function startChatApp(customConfig = {}) {
         setupChannel();
     };
 
-    // Global Online Listener for instant reconnect
+    // Global Online Listener
     window.addEventListener('online', () => {
         $('offline-screen').classList.remove('active');
         window.toast("Back online");
         
-        // If we are in a chat but not connected, force immediate reconnect
         if (state.currentRoomId && !state.isChatChannelReady) {
-            console.log("Wifi back, forcing reconnect...");
             state.isForcingReconnect = true;
-            // Clean up old channel
             if(state.chatChannel) state.chatChannel.unsubscribe();
             
-            // Use a small delay to let the network interface settle
             setTimeout(() => {
-                // Trigger setupChannel logic (we re-call openVault partial or replicate setup)
-                // Simplest is to re-init the channel part
                 if (state.currentRoomId && state.currentRoomData && state.user) {
-                     // Re-setup channel
                      const id = state.currentRoomId;
                      const room = state.currentRoomData;
                      
-                     // Define locally again or duplicate logic (for simplicity, duplicating core setup)
                      state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
                      state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
                         const m = payload.new;
@@ -428,11 +499,12 @@ export function startChatApp(customConfig = {}) {
                         }
                     });
                 }
-            }, 100); // 100ms settle time
+            }, 100);
         }
     });
 
     window.sendMsg = async (e) => {
+        if(state.capacityBlocked) return window.toast("Network full");
         if (!e || !e.isTrusted) return;
         if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return;
         const now = Date.now();
@@ -458,7 +530,8 @@ export function startChatApp(customConfig = {}) {
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isP = false, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = `DM ${profile.full_name}`; isP = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isP = $('c-private').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } else if (isP) allowedUsers = [state.user.id]; } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_private: isP, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
-    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); if (state.chatChannel) state.chatChannel.unsubscribe(); localStorage.setItem(FLAG_LOGOUT, 'true'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); if (state.chatChannel) state.chatChannel.unsubscribe(); if (state.presenceChannel) state.presenceChannel.unsubscribe(); // Stop tracking presence
+    localStorage.setItem(FLAG_LOGOUT, 'true'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copyId = () => { navigator.clipboard.writeText(state.currentRoomId); const copyIcon = $('icon-copy-chat'); const checkIcon = $('icon-check-chat'); copyIcon.style.display = 'none'; checkIcon.style.display = 'block'; setTimeout(() => { copyIcon.style.display = 'block'; checkIcon.style.display = 'none'; }, 2000); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
@@ -529,6 +602,7 @@ export function startChatApp(customConfig = {}) {
         const user = userRes?.data?.user;
         if (user) {
             state.user = user;
+            setupPresence(); // Start tracking presence immediately
             window.nav('scr-lobby'); 
             window.loadRooms();
         } else {
