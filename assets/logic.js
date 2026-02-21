@@ -497,37 +497,34 @@ export function startChatApp(customConfig = {}) {
         cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
     };
 
-    window.handleRoomAction = () => {
-        if (!state.currentRoomData) return;
-        if (state.currentRoomData.is_direct) window.openRoomInfo();
-        else if (state.currentRoomData.created_by === state.user.id) window.openRoomSettings();
-        else window.openRoomInfo();
-    };
-
+    // Unified Room Info Logic
     window.openRoomInfo = async () => {
         if (!state.currentRoomData) return;
         window.setLoading(true, "Loading info...");
         const room = state.currentRoomData;
         
         const delBtn = $('info-delete-btn');
+        const editBtn = $('info-edit-btn');
+        const creatorRow = $('info-creator-row');
+        
+        // Reset states
+        delBtn.style.display = 'none';
+        editBtn.style.display = 'none';
         delBtn.innerText = "Delete Chat";
         delBtn.classList.remove('active');
         if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout);
         
         $('info-id').innerText = room.id;
         const date = new Date(room.created_at);
-        // Format DD/MM/YYYY
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
         $('info-date').innerText = `${day}/${month}/${year}`;
         
-        const creatorRow = $('info-creator-row');
-        
         if (room.is_direct) {
+            // DM Logic
             $('info-type').innerText = "Direct Message";
-            $('info-danger-zone').style.display = 'block';
-            creatorRow.style.display = 'none';
+            creatorRow.style.display = 'none'; // Hide creator
             
             const otherId = room.allowed_users?.find(id => id !== state.user.id);
             if (otherId) {
@@ -545,7 +542,11 @@ export function startChatApp(customConfig = {}) {
                 $('info-name').innerText = "Chat";
                 $('info-avatar').innerText = "?";
             }
+            
+            // Both parties can delete DMs
+            delBtn.style.display = 'flex'; 
         } else {
+            // Group Logic
             $('info-type').innerText = "Group Chat";
             $('info-name').innerText = room.name;
             const avEl = $('info-avatar');
@@ -563,7 +564,11 @@ export function startChatApp(customConfig = {}) {
                 $('info-creator').innerText = profile?.full_name || 'Unknown';
             } else $('info-creator').innerText = 'Unknown';
             
-            $('info-danger-zone').style.display = (room.created_by === state.user.id) ? 'block' : 'none';
+            // Owner privileges
+            if (room.created_by === state.user.id) {
+                delBtn.style.display = 'flex';
+                editBtn.style.display = 'flex';
+            }
         }
 
         window.setLoading(false);
@@ -587,12 +592,15 @@ export function startChatApp(customConfig = {}) {
     };
 
     window.openRoomSettings = async () => {
+        // Wrapper to close info modal and open settings
+        window.closeOverlay();
+        
         if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner");
         window.setLoading(true, "Loading...");
         const room = state.currentRoomData;
         state.currentStep.edit = 1; updateStepUI('edit');
         $('edit-room-name').value = room.name;
-        $('edit-room-visible').checked = room.is_visible; // Updated variable name
+        $('edit-room-visible').checked = room.is_visible;
         $('edit-room-pass').value = '';
         const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass');
         if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; }
@@ -611,13 +619,13 @@ export function startChatApp(customConfig = {}) {
     
     window.saveRoomSettings = async (e) => {
         if (!e || !e.isTrusted) return; if (state.processingAction) return; state.processingAction = true;
-        const name = $('edit-room-name').value.trim(); const isVisible = $('edit-room-visible').checked; const newPass = $('edit-room-pass').value; // Updated variable
+        const name = $('edit-room-name').value.trim(); const isVisible = $('edit-room-visible').checked; const newPass = $('edit-room-pass').value;
         let allowedUsers = state.selectedAllowedUsers.length > 0 ? state.selectedAllowedUsers.map(u => u.id) : ['*'];
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
         if (!name) { window.toast("Name required"); state.processingAction = false; return; }
         const room = state.currentRoomData; const isChangingPass = newPass.length > 0; const isRemovingPass = state.removePasswordFlag;
         window.setLoading(true, "Saving...");
-        const updates = { name, is_visible: isVisible, allowed_users: allowedUsers }; // Updated field
+        const updates = { name, is_visible: isVisible, allowed_users: allowedUsers };
         if (isRemovingPass) updates.has_password = false; else if (isChangingPass) updates.has_password = true;
         const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId);
         if (updateError) { window.toast("Failed: " + updateError.message); window.setLoading(false); state.processingAction = false; return; }
@@ -669,13 +677,6 @@ export function startChatApp(customConfig = {}) {
         const avEl = $('chat-avatar-display');
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase();
         
-        const actionIcon = $('room-action-icon');
-        if(isDirect) {
-            actionIcon.innerHTML = '<i data-lucide="info" class="w-20 h-20"></i>';
-        } else {
-            if(room.created_by === state.user.id) actionIcon.innerHTML = '<i data-lucide="settings" class="w-20 h-20"></i>';
-            else actionIcon.innerHTML = '<i data-lucide="info" class="w-20 h-20"></i>';
-        }
         lucide.createIcons();
 
         window.setLoading(true, "Fetching History...");
@@ -761,9 +762,9 @@ export function startChatApp(customConfig = {}) {
             targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; }
             const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single();
             if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; }
-            n = "Direct Message"; isVisible = true; // DMs are always visible to participants
+            n = "Direct Message"; isVisible = true;
         } else {
-            n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; // Updated
+            n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked;
             if(!n) { window.toast("Name required"); state.processingAction = false; return; }
         }
         let allowedUsers = ['*'];
@@ -868,12 +869,9 @@ export function startChatApp(customConfig = {}) {
         const uid = state.user?.id;
 
         const filtered = state.allRooms.filter(r => {
-            // Hide non-direct rooms that are invisible
             if (!r.is_direct && !r.is_visible) return false;
-
             const name = r.display_name || r.name || '';
             if (!name.toLowerCase().includes(q)) return false;
-
             return true;
         });
 
