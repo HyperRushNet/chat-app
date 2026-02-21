@@ -156,6 +156,7 @@
          .btn-danger{background:rgba(255,59,48,0.1);color:var(--danger);border:none}
          .btn-danger:hover{background:rgba(255,59,48,0.15)}
          .btn-danger.active{background:var(--danger);color:#fff}
+         .btn-outline{background:transparent;color:var(--accent);border:1px solid var(--border)}
          .refresh-btn{background:none;border:none;padding:4px;color:var(--text-mute);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s}
          .refresh-btn:active{transform:rotate(90deg)}
          
@@ -262,8 +263,10 @@
                         <div class="status-legend"><div class="status-dot" style="background:var(--text-mute)"></div><span style="font-size:12px">Offline</span></div>
                      </div>
                   </div>
-                  <div class="danger-zone" id="info-danger-zone" style="display:none">
-                     <button id="info-delete-btn" class="btn btn-danger" onclick="window.initiateDeleteRoom()">Delete Chat</button>
+                  <!-- Action Buttons Area -->
+                  <div style="margin-top:24px; display:flex; flex-direction:column; gap:10px">
+                     <button id="info-edit-btn" class="btn btn-outline" style="display:none" onclick="window.openRoomSettings()">Edit Settings</button>
+                     <button id="info-delete-btn" class="btn btn-danger" style="display:none" onclick="window.initiateDeleteRoom()">Delete Chat</button>
                   </div>
                </div>
             </div>
@@ -384,7 +387,7 @@
                   </div>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
-                  <span class="clickable" id="room-action-icon" onclick="window.handleRoomAction()"><i data-lucide="info" class="w-20 h-20"></i></span>
+                  <span class="clickable" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span>
                </div>
             </div>
             <div id="chat-messages">
