@@ -23,7 +23,10 @@ CREATE TABLE public.rooms (
     name text NOT NULL,
     avatar_url text,
     has_password boolean NOT NULL DEFAULT false,
-    is_private boolean NOT NULL DEFAULT false,
+    -- Renamed: is_private to is_visible
+    -- Determines if the room shows up in the public lobby list.
+    -- Access is controlled strictly by allowed_users.
+    is_visible boolean NOT NULL DEFAULT true, 
     is_direct boolean NOT NULL DEFAULT false,
     salt text NOT NULL,
     created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -59,10 +62,18 @@ CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "profiles_insert_self" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "profiles_update_self" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
+-- Security Policy for Rooms:
+-- 1. Creator can always see their rooms.
+-- 2. If allowed_users contains my ID, I can see it (handles DMs securely).
+-- 3. If allowed_users contains '*' (Public), I can see it.
+-- Note: is_visible is NOT checked here. 
+-- If a room is public (allowed_users=['*']) but invisible (is_visible=false), 
+-- the database WILL return it (for direct access/secret link), 
+-- but the frontend should hide it from the list.
 CREATE POLICY "rooms_select_visible" ON public.rooms FOR SELECT USING (
     auth.uid() = created_by 
-    OR (allowed_users @> ARRAY['*'] AND NOT is_private)
-    OR (allowed_users @> ARRAY[auth.uid()::text])
+    OR allowed_users @> ARRAY[auth.uid()::text]
+    OR allowed_users @> ARRAY['*']
 );
 
 CREATE POLICY "rooms_insert_authenticated" ON public.rooms FOR INSERT WITH CHECK (
@@ -70,8 +81,15 @@ CREATE POLICY "rooms_insert_authenticated" ON public.rooms FOR INSERT WITH CHECK
     AND auth.uid() = created_by
 );
 
+-- Delete Policy:
+-- Creator can delete.
+-- In DMs (is_direct=true), any participant can delete (for themselves).
+CREATE POLICY "rooms_delete_policy" ON public.rooms FOR DELETE USING (
+    auth.uid() = created_by 
+    OR (is_direct = true AND allowed_users @> ARRAY[auth.uid()::text])
+);
+
 CREATE POLICY "rooms_update_creator" ON public.rooms FOR UPDATE USING (auth.uid() = created_by);
-CREATE POLICY "rooms_delete_creator" ON public.rooms FOR DELETE USING (auth.uid() = created_by);
 
 CREATE POLICY "room_passwords_block_direct" ON public.room_passwords FOR ALL USING (false);
 
@@ -81,8 +99,8 @@ CREATE POLICY "messages_select_room" ON public.messages FOR SELECT USING (
         WHERE rooms.id = messages.room_id 
         AND (
             rooms.created_by = auth.uid() 
-            OR (rooms.allowed_users @> ARRAY['*'] AND NOT rooms.is_private)
-            OR (rooms.allowed_users @> ARRAY[auth.uid()::text])
+            OR rooms.allowed_users @> ARRAY['*']
+            OR rooms.allowed_users @> ARRAY[auth.uid()::text]
         )
     )
 );
@@ -172,20 +190,20 @@ AS $$
 DECLARE
     r_allowed text[];
     r_creator uuid;
-    r_private boolean;
 BEGIN
-    SELECT allowed_users, created_by, is_private
-    INTO r_allowed, r_creator, r_private
+    SELECT allowed_users, created_by
+    INTO r_allowed, r_creator
     FROM public.rooms
     WHERE id = p_room_id;
 
     IF r_creator IS NULL THEN RETURN false; END IF;
-
     IF r_creator = auth.uid() THEN RETURN true; END IF;
-
-    IF r_allowed @> ARRAY['*'] AND NOT r_private THEN RETURN true; END IF;
-
+    
+    -- Check explicit access
     IF r_allowed @> ARRAY[auth.uid()::text] THEN RETURN true; END IF;
+    
+    -- Check public access
+    IF r_allowed @> ARRAY['*'] THEN RETURN true; END IF;
 
     RETURN false;
 END;
