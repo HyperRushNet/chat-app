@@ -1,6 +1,9 @@
-# HRN Chat 2026 - v1.0.2 - Security & UI Update
+# HRN Chat 2026 - v1.0.3
 
-A high-security, real-time messaging interface built with modern web technologies. This project focuses on privacy, end-to-end encryption, and a seamless user experience.
+A high-security, real-time messaging interface built with modern web technologies.  
+Focuses on privacy, end-to-end encryption, and a seamless user experience.
+
+---
 
 ## Features
 
@@ -18,17 +21,56 @@ A high-security, real-time messaging interface built with modern web technologie
 - **Modern UI**: Minimalist iOS-inspired design with Plus Jakarta Sans font and Lucide icons.  
 - **Smart Date Labels**: Sticky dividers for "Today", "Yesterday", weekdays, and full dates.  
 
+---
+
 ## Tech Stack
 
-- **Frontend**: HTML5, CSS3, JavaScript (ES6+ Modules)  
-- **Database & Auth**: Supabase (PostgreSQL, Auth, Realtime, RPC)  
+- **Frontend**: GitHub Pages (HTML5, CSS3, JavaScript ES6 Modules)  
+- **Backend / Storage**: Supabase (PostgreSQL, Auth, Realtime, RPC)  
+- **Email Verification**:
+  - API: Vercel Functions  
+  - Mail Sending: Google Apps Script (handles OTP emails)  
 - **Encryption**: Web Crypto API (PBKDF2, AES-GCM, SHA-256)  
 - **Icons**: Lucide  
 
+---
+
+## Deployment & Workflow
+
+1. **Frontend**:  
+   Push HTML/CSS/JS to GitHub Pages → serves UI to clients.
+
+2. **Email Verification**:  
+   Vercel Functions trigger Google Apps Script to send OTP verification emails.
+
+3. **Database / Backend**:  
+   Supabase handles:
+   - User accounts and authentication
+   - Rooms (public/private)
+   - Client-side encrypted messages
+   - Access control via RLS and server-side password checks
+
+4. **Realtime Messaging**:  
+   Supabase Realtime listens to Postgres Changes and updates clients instantly.
+
+5. **Security & Performance**:  
+   - End-to-end encrypted messages with AES-256-GCM  
+   - Web Worker used for heavy crypto operations  
+   - Rate limit: 1 message/sec (client-side enforced)  
+   - Single active session per browser tab (Master Tab logic)  
+
+---
+
 ## Configuration & Capacity
 
-- **User Limit**: 475 concurrent users (Presence-based check).  
-- **Room Security**: Optional password protection (SHA-256 hash + unique salt).  
-- **Message Storage**: Client-side encrypted, formatted as Base64(IV + Ciphertext).  
-- **Rate Limiting**: 1 message per second (Client-side enforced).  
-- **Performance**: Web Worker used for crypto operations to prevent UI blocking.
+- **Max Concurrent Users**: 475 (presence-based check)  
+- **Message Storage**: Base64(IV + Ciphertext), client-side encrypted  
+- **Room Security**: Optional password protection, SHA-256 + unique salt  
+- **Rate Limiting**: 1 message per second  
+- **UI Optimizations**: Minimalist iOS-style, smooth animations, sticky date labels
+
+---
+
+## License
+
+MIT License
