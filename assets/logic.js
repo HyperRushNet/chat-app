@@ -12,7 +12,7 @@ export function startChatApp(customConfig = {}) {
         historyLoadLimit: customConfig.historyLoadLimit || 10,
         rateLimitMs: customConfig.rateLimitMs || 1000,
         verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
-        reconnectInterval: customConfig.reconnectInterval || 2000 // Aggressive reconnect interval
+        reconnectInterval: 1000 // Changed to 1000ms for 1s requirement
     };
 
     const AVATARS = [
@@ -46,7 +46,8 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 },
         selectedAvatar: null,
         createType: 'group',
-        reconnectAttempts: 0
+        reconnectAttempts: 0,
+        isForcingReconnect: false // Flag to prevent double reconnects
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -193,9 +194,9 @@ export function startChatApp(customConfig = {}) {
     window.removePickerUser = (id) => { state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id); renderPickerSelectedUsers(); };
     window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Enter ID"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added"); window.setLoading(true, "Fetching..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("User not found"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Added"); };
     
-    // Tab Sync (Simplified)
+    // Tab Sync
     const tabChannel = new BroadcastChannel('hrn_tab_sync');
-    window.forceClaimMaster = () => { $('block-overlay').classList.remove('active'); }; // Simplified for REST focus
+    window.forceClaimMaster = () => { $('block-overlay').classList.remove('active'); };
     tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER') { const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active'); lucide.createIcons(); } };
     window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
 
@@ -284,6 +285,7 @@ export function startChatApp(customConfig = {}) {
         state.hasMoreHistory = true;
         state.isLoadingHistory = false;
         state.reconnectAttempts = 0;
+        state.isForcingReconnect = false;
 
         $('chat-messages').innerHTML = '<div id="chat-empty-state" style="inset:0;z-index:5;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;width:100%"><i data-lucide="message-circle" style="width:40px;height:40px;color:#d1d1d6;margin-bottom:12px"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No messages yet</div></div>';
         $('chat-messages').onscroll = handleScroll;
@@ -329,6 +331,9 @@ export function startChatApp(customConfig = {}) {
 
         // AGGRESSIVE CONNECTION LOGIC
         const setupChannel = () => {
+            // Prevent duplicate setups
+            if (state.chatChannel && state.chatChannel.state === 'joined') return;
+
             state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
             state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
                 const m = payload.new;
@@ -351,14 +356,17 @@ export function startChatApp(customConfig = {}) {
                 if (status === 'SUBSCRIBED') {
                     state.isChatChannelReady = true;
                     state.reconnectAttempts = 0;
+                    state.isForcingReconnect = false;
                     console.log("Channel connected");
                 } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                     state.isChatChannelReady = false;
                     // AGGRESSIVE RECONNECT
+                    // Only attempt if we are still in this room
                     if (state.currentRoomId === id) {
-                         console.log("Connection lost, reconnecting...");
+                         console.log(`Connection lost (${status}), reconnecting in ${CONFIG.reconnectInterval}ms...`);
                          setTimeout(() => {
-                            if (state.currentRoomId === id && (!state.chatChannel || state.chatChannel.state !== 'joined')) {
+                            // Check again if still relevant
+                            if (state.currentRoomId === id && !state.isChatChannelReady && !state.isForcingReconnect) {
                                 setupChannel(); 
                             }
                          }, CONFIG.reconnectInterval);
@@ -369,6 +377,60 @@ export function startChatApp(customConfig = {}) {
         
         setupChannel();
     };
+
+    // Global Online Listener for instant reconnect
+    window.addEventListener('online', () => {
+        $('offline-screen').classList.remove('active');
+        window.toast("Back online");
+        
+        // If we are in a chat but not connected, force immediate reconnect
+        if (state.currentRoomId && !state.isChatChannelReady) {
+            console.log("Wifi back, forcing reconnect...");
+            state.isForcingReconnect = true;
+            // Clean up old channel
+            if(state.chatChannel) state.chatChannel.unsubscribe();
+            
+            // Use a small delay to let the network interface settle
+            setTimeout(() => {
+                // Trigger setupChannel logic (we re-call openVault partial or replicate setup)
+                // Simplest is to re-init the channel part
+                if (state.currentRoomId && state.currentRoomData && state.user) {
+                     // Re-setup channel
+                     const id = state.currentRoomId;
+                     const room = state.currentRoomData;
+                     
+                     // Define locally again or duplicate logic (for simplicity, duplicating core setup)
+                     state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
+                     state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+                        const m = payload.new;
+                        if (m && state.currentRoomId) {
+                            pendingCallbacks['singleDecrypted'] = async (decRes) => {
+                                if(decRes.result) {
+                                    const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
+                                    const container = $('chat-messages');
+                                    const lastMsg = container.querySelector('.msg:last-of-type');
+                                    let prevMsg = null;
+                                    if(lastMsg) prevMsg = { user_id: lastMsg.classList.contains('me') ? state.user.id : 'other', created_at: lastMsg.dataset.time };
+                                    container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, room.is_direct));
+                                    container.scrollTop = container.scrollHeight;
+                                    checkChatEmpty();
+                                }
+                            };
+                            cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
+                        }
+                    }).subscribe((status) => {
+                        if (status === 'SUBSCRIBED') {
+                            state.isChatChannelReady = true;
+                            state.isForcingReconnect = false;
+                            window.toast("Reconnected");
+                        } else {
+                            state.isChatChannelReady = false;
+                        }
+                    });
+                }
+            }, 100); // 100ms settle time
+        }
+    });
 
     window.sendMsg = async (e) => {
         if (!e || !e.isTrusted) return;
@@ -468,7 +530,7 @@ export function startChatApp(customConfig = {}) {
         if (user) {
             state.user = user;
             window.nav('scr-lobby'); 
-            window.loadRooms(); // Load rooms via REST immediately
+            window.loadRooms();
         } else {
             window.nav('scr-start');
         }
