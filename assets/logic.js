@@ -1067,29 +1067,64 @@ export function startChatApp(customConfig = {}) {
     });
 
     window.openRoomSettings = async () => {
-        if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner");
-        window.setLoading(true, "Loading...");
-        const room = state.currentRoomData;
+    if (
+        !state.currentRoomId ||
+        !state.currentRoomData ||
+        state.currentRoomData.created_by !== state.user.id
+    ) {
+        return window.toast("Not owner");
+    }
 
-        state.currentStep.edit = 1; updateStepUI('edit');
-        $('edit-room-name').value = room.name;
-        $('edit-room-private').checked = room.is_private;
-        $('edit-room-pass').value = '';
+    window.setLoading(true, "Loading...");
 
-        const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass');
-        if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; }
-        else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute); removePassBtn.style.display = 'none'; }
-        state.removePasswordFlag = false;
+    const room = state.currentRoomData;
 
-        state.selectedAllowedUsers = [];
-        const ids = room.allowed_users;
-        if (ids && !ids.includes('*')) {
-            const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids);
-            state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; });
-        }
-        $('overlay-container').classList.add('active'); window.showOverlayView('room-settings');
-        window.setLoading(false);
-    };
+    state.currentStep.edit = 1;
+    updateStepUI('edit');
+
+    $('edit-room-name').value = room.name;
+    $('edit-room-private').checked = room.is_private;
+    $('edit-room-pass').value = '';
+
+    const passStatusLabel = $('pass-status-label');
+    const removePassBtn = $('btn-remove-pass');
+
+    if (room.has_password) {
+        passStatusLabel.innerText = "Active";
+        passStatusLabel.style.color = "var(--success)";
+        removePassBtn.style.display = 'block';
+    } else {
+        passStatusLabel.innerText = "Not Set";
+        passStatusLabel.style.color = "var(--text-mute)";
+        removePassBtn.style.display = 'none';
+    }
+
+    state.removePasswordFlag = false;
+    state.selectedAllowedUsers = [];
+
+    const ids = room.allowed_users;
+
+    if (ids && !ids.includes('*')) {
+        const { data: profiles } = await db
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', ids);
+
+        state.selectedAllowedUsers = ids.map(id => {
+            const p = profiles?.find(pro => pro.id === id);
+            return {
+                id: id,
+                name: p?.full_name || 'Unknown',
+                avatar: p?.avatar_url
+            };
+        });
+    }
+
+    $('overlay-container').classList.add('active');
+    window.showOverlayView('room-settings');
+
+    window.setLoading(false);
+};
 
     window.prepareRemovePassword = () => { state.removePasswordFlag = true; $('pass-status-label').innerText = "Will be removed"; $('pass-status-label').style.color = "var(--danger)"; $('edit-room-pass').value = ''; $('edit-room-pass').disabled = true; };
     window.undoRemovePassword = () => { state.removePasswordFlag = false; $('pass-status-label').innerText = "Active"; $('pass-status-label').style.color = "var(--success)"; $('edit-room-pass').disabled = false; };
