@@ -3,7 +3,7 @@
 A privacy-engineered real-time messaging system built on Supabase and modern Web APIs.
 
 <p align="left">
-  <img src="https://img.shields.io/badge/version-1.0.2-blue">
+  <img src="https://img.shields.io/badge/version-1.0.3-blue">
   <img src="https://img.shields.io/badge/encryption-AES--GCM-green">
   <img src="https://img.shields.io/badge/backend-Supabase + Google Apps Script + Vercel-3ECF8E">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey">
