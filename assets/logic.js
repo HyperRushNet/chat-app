@@ -7,7 +7,7 @@ export function startChatApp(customConfig = {}) {
         supabaseUrl: customConfig.supabaseUrl || "https://jnhsuniduzvhkpexorqk.supabase.co",
         supabaseKey: customConfig.supabaseKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaHN1bmlkdXp2aGtwZXhvcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NjAxMDYsImV4cCI6MjA4NzEzNjEwNn0.9I5bbqskCgksUaNWYlFFo0-6Odht28pOMdxTGZECahY",
         mailApi: customConfig.mailApi || "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI",
-        maxUsers: customConfig.maxUsers || 0, // 0 = Unlimited
+        maxUsers: customConfig.maxUsers,
         maxMessages: customConfig.maxMessages || 15,
         historyLoadLimit: customConfig.historyLoadLimit || 10,
         rateLimitMs: customConfig.rateLimitMs || 1000,
