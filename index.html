@@ -112,35 +112,6 @@ h1.title {
   margin-bottom: 16px;
   flex-shrink: 0;
 }
-.online-indicator {
-  display: inline-flex;
-  gap: 6px;
-  background: rgba(52, 199, 89, 0.12);
-  padding: 3px 8px;
-  border-radius: 20px;
-  font-size: 10px;
-  color: var(--success) !important;
-  font-weight: 700;
-  align-items: center;
-}
-.dot {
-  width: 5px;
-  height: 5px;
-  background: var(--success) !important;
-  border-radius: 50%;
-  animation: 2s ease-in-out infinite pulse;
-}
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(0.8);
-  }
-}
 .input-field {
   color: var(--text-main);
   width: 100%;
@@ -152,9 +123,6 @@ h1.title {
   outline: 0;
   margin-bottom: 12px;
   transition: 0.2s;
-}
-#scr-register .input-field {
-  margin-bottom: 8px;
 }
 .input-field:focus {
   border-color: var(--accent);
@@ -471,13 +439,6 @@ h1.title {
   text-overflow: ellipsis;
   text-align: left;
 }
-.chat-subtitle {
-  font-size: 9px;
-  color: var(--text-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
 .step-container {
   position: relative;
   overflow: hidden;
@@ -647,16 +608,6 @@ h1.title {
   transition: 0.15s;
   margin-bottom: 12px;
 }
-.flex-sb-aic-w100-p18-bg-br12-mb20 {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: 12px;
-  background: #f2f2f7;
-  border-radius: var(--radius);
-  margin-bottom: 12px;
-}
 .w-48 {
   width: 48px;
 }
@@ -705,21 +656,6 @@ h1.title {
 .flex-1 {
   flex: 1;
 }
-.flex-gap12-mt20 {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-.m-0-flex-1 {
-  margin: 0;
-  flex: 1;
-}
-.w-80 {
-  width: 80px;
-}
-.mb-16 {
-  margin-bottom: 16px;
-}
 .flex-s0 {
   flex-shrink: 0;
 }
@@ -767,9 +703,6 @@ input:checked + .slider {
 }
 input:checked + .slider:before {
   transform: translateX(20px);
-}
-#chat-messages {
-  position: relative;
 }
 #chat-empty-state {
   position: absolute;
@@ -966,7 +899,7 @@ input:checked + .slider:before {
                   <div class="step-container">
                      <div id="edit-step-1" class="wizard-step active">
                         <input id="edit-room-name" class="input-field" placeholder="Room Name">
-                        <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="edit-room-private"><span class="slider"></span></label></div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:12px;background:#f2f2f7;border-radius:var(--radius);margin-bottom:12px"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="edit-room-private"><span class="slider"></span></label></div>
                         <button class="btn btn-accent" onclick="window.nextEditStep()">Next</button>
                      </div>
                      <div id="edit-step-2" class="wizard-step">
@@ -1036,7 +969,7 @@ input:checked + .slider:before {
          <div id="toast-container"></div>
          <div id="context-tooltip"></div>
          
-         <!-- NEW INVITE SCREEN -->
+         <!-- INVITE SCREEN (No Creator Avatar) -->
          <div id="scr-invite" class="screen center-content">
             <div style="margin-bottom:32px;display:flex;flex-direction:column;align-items:center">
                <div id="invite-room-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px;margin-bottom:16px">?</div>
@@ -1045,9 +978,9 @@ input:checked + .slider:before {
             </div>
             
             <div class="invite-card-bg">
-               <p style="font-size:11px;color:var(--text-mute);text-transform:uppercase;font-weight:800;margin-bottom:12px">Hosted by</p>
+               <p style="font-size:11px;color:var(--text-mute);text-transform:uppercase;font-weight:800;margin-bottom:8px">Hosted by</p>
                <div style="display:flex;align-items:center;gap:12px">
-                  <div id="invite-creator-avatar" class="chat-avatar" style="width:42px;height:42px">?</div>
+                  <!-- Avatar removed as requested -->
                   <div style="flex:1;min-width:0">
                      <div id="invite-creator-name" style="font-weight:700;font-size:15px">User</div>
                      <div id="invite-creator-id" style="font-size:10px;color:var(--text-mute);font-family:monospace">ID</div>
@@ -1140,11 +1073,7 @@ input:checked + .slider:before {
          <div id="scr-lobby" class="screen">
             <div class="header">
                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-                  <h1 class="title" style="font-size:18px;margin:0;cursor:pointer" onclick="window.refreshLobby()">Rooms</h1>
-                  <span class="online-indicator">
-                     <div class="dot"></div>
-                     <span class="live-count">--</span>
-                  </span>
+                  <h1 class="title" style="font-size:18px;margin:0;cursor:pointer" onclick="window.loadRooms()">Rooms</h1>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
                   <div id="lobby-avatar-btn" class="chat-avatar" style="width:32px;height:32px;cursor:pointer" onclick="window.nav('scr-account')">?</div>
@@ -1213,7 +1142,7 @@ input:checked + .slider:before {
                      <input id="c-name" class="input-field" placeholder="Group Name">
                      <input id="c-avatar" class="input-field" placeholder="Avatar URL (optional)">
                      <input id="c-pass" type="password" class="input-field" placeholder="Password (optional)">
-                     <div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="c-private"><span class="slider"></span></label></div>
+                     <div style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:12px;background:#f2f2f7;border-radius:var(--radius);margin-bottom:12px"><span style="font-weight:600;font-size:13px">Private Room</span><label class="switch"><input type="checkbox" id="c-private"><span class="slider"></span></label></div>
                   </div>
                   <div id="create-direct-fields" class="dn">
                      <input id="c-target-user" class="input-field" placeholder="Paste User ID...">
@@ -1247,7 +1176,7 @@ input:checked + .slider:before {
          </div>
       </div>
       <script type="module">
-         import { startChatApp } from 'https://hyperrushnet.github.io/chat-app/assets/logic.js';
+         import { startChatApp } from './assets/logic.js';
          startChatApp({ maxUsers: 0, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 });
       </script>
    </body>
