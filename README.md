@@ -63,7 +63,7 @@ Focuses on privacy, end-to-end encryption, and a seamless user experience.
 
 ## Configuration & Capacity
 
-- **Max Concurrent Users**: 475 (presence-based check)  
+- **Max Concurrent Users**: 150 (presence-based check)  
 - **Message Storage**: Base64(IV + Ciphertext), client-side encrypted  
 - **Room Security**: Optional password protection, SHA-256 + unique salt  
 - **Rate Limiting**: 1 message per second  
