@@ -27,7 +27,7 @@ export function startChatApp(customConfig = {}) {
         currentRoomId: null,
         chatChannel: null,
         presenceChannel: null,
-        allRooms: [],
+        allRooms: [], // Holds processed room data (with resolved names/avatars)
         vTimer: null,
         lastRenderedDateLabel: null,
         lastKnownOnlineCount: null,
@@ -62,7 +62,8 @@ export function startChatApp(customConfig = {}) {
         currentRoomPassword: null, 
         reconnectTimer: null,
         isReconnecting: false,
-        deleteConfirmTimeout: null
+        deleteConfirmTimeout: null,
+        profileCache: {} // Simple in-memory cache for profiles
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -520,23 +521,32 @@ export function startChatApp(customConfig = {}) {
         const date = new Date(room.created_at);
         $('info-date').innerText = date.toLocaleDateString('en-GB', { dateStyle: 'full' });
         
+        const creatorRow = $('info-creator-row');
+        
         // Handle DM specific logic
         if (room.is_direct) {
             $('info-type').innerText = "Direct Message";
             $('info-danger-zone').style.display = 'block'; // Both parties can delete DMs
+            creatorRow.style.display = 'none'; // Hide creator for DMs
             
-            // Find other user
+            // Find other user (use cached info if available from lobby load)
             const otherId = room.allowed_users?.find(id => id !== state.user.id);
             if (otherId) {
-                const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single();
+                 // Check cache first
+                 let profile = state.profileCache[otherId];
+                 if(!profile) {
+                    const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single();
+                    profile = data;
+                    if(data) state.profileCache[otherId] = data; // Cache it
+                 }
+                 
                 $('info-name').innerText = profile?.full_name || 'User';
                 const avEl = $('info-avatar');
                 if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`;
                 else avEl.innerText = (profile?.full_name || 'U').charAt(0);
-                $('info-creator').innerText = profile?.full_name || 'User';
             } else {
                 $('info-name').innerText = "Chat";
-                $('info-creator').innerText = "Unknown";
+                $('info-avatar').innerText = "?";
             }
         } else {
             // Group logic
@@ -547,9 +557,15 @@ export function startChatApp(customConfig = {}) {
             else avEl.innerText = room.name.charAt(0);
             
             // Creator info
+            creatorRow.style.display = 'flex';
             if (room.created_by) {
-                const { data: creator } = await db.from('profiles').select('full_name').eq('id', room.created_by).single();
-                $('info-creator').innerText = creator?.full_name || 'Unknown';
+                let profile = state.profileCache[room.created_by];
+                if(!profile) {
+                    const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single();
+                    profile = data;
+                    if(data) state.profileCache[room.created_by] = data;
+                }
+                $('info-creator').innerText = profile?.full_name || 'Unknown';
             } else $('info-creator').innerText = 'Unknown';
             
             // Only owner can delete groups
@@ -641,10 +657,22 @@ export function startChatApp(customConfig = {}) {
         state.currentRoomData = room;
         const isDirect = room.is_direct;
         let displayTitle = n; let displayAvatar = room.avatar_url;
+        
+        // Reuse or Fetch Profile for DM
         if (isDirect) {
             const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id);
-            if (otherUserId) { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } }
+            if (otherUserId) {
+                // Check cache
+                let profile = state.profileCache[otherUserId];
+                if(!profile) {
+                    const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single();
+                    profile = data;
+                    if(data) state.profileCache[otherUserId] = data;
+                }
+                if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; }
+            }
         }
+        
         $('chat-title').innerText = displayTitle;
         const avEl = $('chat-avatar-display');
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase();
@@ -800,18 +828,70 @@ export function startChatApp(customConfig = {}) {
 
     window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; window.toast("Refreshing..."); await window.loadRooms(); };
 
-    window.loadRooms = async () => { if(!state.user) return; window.setLoading(true, "Fetching..."); const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); if (error) { window.toast("Failed to load rooms"); window.setLoading(false); return; } state.allRooms = rooms || []; window.filterRooms(); window.setLoading(false); updateLobbyAvatar(); };
+    // Optimized LoadRooms: Fetches once, processes, caches profiles
+    window.loadRooms = async () => {
+        if(!state.user) return;
+        window.setLoading(true, "Fetching...");
+        const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false });
+        if (error) { window.toast("Failed to load rooms"); window.setLoading(false); return; }
+        
+        // Pre-process rooms: resolve DM names and cache profiles
+        const uid = state.user.id;
+        const processedRooms = [];
 
-    window.filterRooms = async () => {
-        const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id;
-        const filtered = state.allRooms.filter(r => { const matchSearch = r.name.toLowerCase().includes(q); if (!matchSearch) return false; if (r.is_private && r.created_by !== uid && !(r.allowed_users?.includes(uid))) return false; return true; });
-        if (filtered.length === 0) { list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; }
-        else {
-            const roomsWithMeta = await Promise.all(filtered.map(async r => {
-                if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); return { ...r, display_name: data?.full_name || 'User', display_avatar: data?.avatar_url }; } }
-                return { ...r, display_name: r.name, display_avatar: r.avatar_url };
-            }));
-            list.innerHTML = roomsWithMeta.map(r => `
+        // Collect all unknown user IDs to batch fetch (optional optimization, but doing individual checks for simplicity with cache)
+        // For this implementation, we handle DMs inline but check cache first.
+
+        for(const r of rooms) {
+            if(r.is_direct && r.allowed_users) {
+                const otherId = r.allowed_users.find(id => id !== uid);
+                if(otherId) {
+                    if(state.profileCache[otherId]) {
+                        processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url });
+                    } else {
+                        const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single();
+                        if(profile) {
+                            state.profileCache[otherId] = profile; // Cache it
+                            processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url });
+                        } else {
+                            processedRooms.push({ ...r, display_name: 'User', display_avatar: null });
+                        }
+                    }
+                } else {
+                    processedRooms.push({ ...r, display_name: 'User', display_avatar: null });
+                }
+            } else {
+                processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url });
+            }
+        }
+        
+        state.allRooms = processedRooms;
+        window.filterRooms(); 
+        window.setLoading(false);
+        updateLobbyAvatar();
+    };
+
+    // Optimized FilterRooms: Client-side only, uses cached data
+    window.filterRooms = () => {
+        const q = $('search-bar').value.toLowerCase();
+        const list = $('room-list');
+        const uid = state.user?.id;
+
+        const filtered = state.allRooms.filter(r => {
+            // 1. Hide Private Rooms (invisible logic)
+            if (r.is_private) return false;
+
+            // 2. Search filter
+            const name = r.display_name || r.name || '';
+            if (!name.toLowerCase().includes(q)) return false;
+
+            return true;
+        });
+
+        if (filtered.length === 0) { 
+            list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; 
+        } else {
+            list.innerHTML = filtered.map(r => `
             <div class="room-card" onclick="window.joinAttempt('${r.id}')">
             <div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div>
             <span class="room-name">${esc(r.display_name)}</span>
