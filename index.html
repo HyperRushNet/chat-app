@@ -164,6 +164,9 @@
          #chat-input-area{display:flex;gap:10px;padding-top:12px;align-items:flex-end;border-top:1px solid var(--border)}
          #send-btn{width:50px;min-width:50px;height:50px;padding:0;border-radius:var(--radius);flex-shrink:0}
          #chat-input{margin:0}
+         
+         /* Icon Wrapper for perfect alignment */
+         .icon-wrapper{width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
       </style>
    </head>
    <body>
@@ -263,7 +266,7 @@
                         <div class="status-legend"><div class="status-dot" style="background:var(--text-mute)"></div><span style="font-size:12px">Offline</span></div>
                      </div>
                   </div>
-                  <!-- Action Buttons Area: Edit button removed from here -->
+                  <!-- Action Buttons Area -->
                   <div style="margin-top:24px; display:flex; flex-direction:column; gap:10px">
                      <button id="info-delete-btn" class="btn btn-danger" style="display:none" onclick="window.initiateDeleteRoom()">Delete Chat</button>
                   </div>
@@ -386,9 +389,10 @@
                   </div>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
-                  <!-- Edit Settings Icon Moved Here -->
-                  <span id="info-edit-btn" class="clickable" style="display:none" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-20 h-20"></i></span>
-                  <span class="clickable" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span>
+                  <!-- Edit Icon Wrapper -->
+                  <span id="info-edit-btn" class="icon-wrapper" style="display:none" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-20 h-20"></i></span>
+                  <!-- Info Icon Wrapper -->
+                  <span class="icon-wrapper" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span>
                </div>
             </div>
             <div id="chat-messages">
