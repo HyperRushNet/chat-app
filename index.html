@@ -23,9 +23,6 @@
          h1.title{font-size:28px;letter-spacing:-1px;color:#000;font-weight:800;margin-bottom:4px}
          .subtitle{text-transform:uppercase;color:var(--text-mute);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:24px;display:block}
          .header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 16px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-shrink:0}
-         .online-indicator{display:none;gap:6px;background:rgba(52,199,89,.12);padding:3px 8px;border-radius:20px;font-size:10px;color:var(--success)!important;font-weight:700;align-items:center}
-         .dot{width:5px;height:5px;background:var(--success)!important;border-radius:50%;animation:2s ease-in-out infinite pulse}
-         @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
          .input-field{color:var(--text-main);width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:var(--radius);padding:14px;font-size:15px;outline:0;margin-bottom:12px;transition:.2s}
          #scr-register .input-field{margin-bottom:8px}
          .input-field:focus{border-color:var(--accent);background:#fff}
@@ -65,8 +62,14 @@
          .msg.not-me.group-start{border-radius:16px 16px 16px 4px}
          #context-tooltip{position:fixed;background:rgba(0,0,0,.85);color:#fff;padding:6px 10px;border-radius:8px;font-size:11px;z-index:99999;pointer-events:none;opacity:0;transform:scale(.9);transition:opacity .15s,transform .15s;backdrop-filter:blur(10px)}
          #context-tooltip.active{opacity:1;transform:scale(1)}
-         .chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1}
+         .chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1;position:relative}
          .chat-avatar img{width:100%;height:100%;object-fit:cover}
+         /* Connection Status Borders */
+         .status-border{border:1px solid var(--text-mute);transition:border-color 0.3s ease}
+         .status-connected{border-color:var(--success)}
+         .status-connecting{border-color:var(--warning)}
+         .status-offline{border-color:var(--text-mute)}
+         
          .chat-header-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
          .chat-header-title-wrapper{display:flex;flex-direction:column;min-width:0}
          .chat-header-title-wrapper .title{font-size:16px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
@@ -135,6 +138,10 @@
          .acc-info-card{background:#f2f2f7;border-radius:var(--radius);padding:14px;margin-bottom:12px}
          .acc-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-mute);font-weight:700;margin-bottom:4px}
          .acc-value{font-size:14px;font-weight:600;color:var(--text-main);word-break:break-all}
+         .info-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);gap:12px}
+         .info-row:last-child{border-bottom:none}
+         .status-legend{display:flex;align-items:center;gap:8px;margin-top:4px}
+         .status-dot{width:8px;height:8px;border-radius:50%}
       </style>
    </head>
    <body>
@@ -199,6 +206,36 @@
                      </div>
                   </div>
                   <button class="btn mt-12 bn" style="background:transparent;color:var(--text-mute)" onclick="window.closeOverlay()">Cancel</button>
+               </div>
+               <div id="view-room-info" class="view-content">
+                  <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:16px">
+                     <h3 style="margin:0;font-weight:800;font-size:16px">Room Info</h3>
+                     <button style="background:rgba(0,0,0,0.05);border:none;border-radius:8px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-main)" onclick="window.closeOverlay()"><i data-lucide="x" class="w-18 h-18"></i></button>
+                  </div>
+                  <div id="info-room-name" style="font-size:18px;font-weight:800;margin-bottom:12px;text-align:center">Room Name</div>
+                  <div class="info-row">
+                     <span class="c-mute">Creator</span>
+                     <span id="info-creator" style="font-weight:600">Unknown</span>
+                  </div>
+                  <div class="info-row">
+                     <span class="c-mute">Room ID</span>
+                     <div style="display:flex;align-items:center;gap:8px">
+                        <span id="info-room-id" style="font-family:monospace;font-size:11px">ID</span>
+                        <i data-lucide="copy" style="width:14px;height:14px;color:var(--accent);cursor:pointer" onclick="window.copyInfoId()"></i>
+                     </div>
+                  </div>
+                  <div class="info-row">
+                     <span class="c-mute">Created At</span>
+                     <span id="info-created-at" style="font-size:12px">Date</span>
+                  </div>
+                  <div style="margin-top:20px">
+                     <div class="c-mute" style="font-size:11px;font-weight:700;margin-bottom:8px;text-transform:uppercase">Connection Status</div>
+                     <div style="display:flex;flex-direction:column;gap:6px;background:#f2f2f7;padding:12px;border-radius:var(--radius)">
+                        <div class="status-legend"><div class="status-dot" style="background:var(--success)"></div><span style="font-size:12px">Connected</span></div>
+                        <div class="status-legend"><div class="status-dot" style="background:var(--warning)"></div><span style="font-size:12px">Connecting...</span></div>
+                        <div class="status-legend"><div class="status-dot" style="background:var(--text-mute)"></div><span style="font-size:12px">Offline</span></div>
+                     </div>
+                  </div>
                </div>
             </div>
          </div>
@@ -315,18 +352,14 @@
             <div class="header" style="margin-bottom:12px">
                <div class="chat-header-main">
                   <span class="clickable flex-s0" onclick="window.leaveChat()"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></span>
-                  <div class="chat-avatar" id="chat-avatar-display">?</div>
+                  <div class="chat-avatar status-border" id="chat-avatar-display">?</div>
                   <div class="chat-header-title-wrapper">
                      <h2 id="chat-title" class="title">---</h2>
-                     <span class="online-indicator" id="chat-room-indicator" style="display:none">
-                        <div class="dot"></div>
-                        <span class="live-count">--</span>
-                     </span>
                   </div>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
                   <span class="clickable dn" id="room-settings-icon" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-20 h-20"></i></span>
-                  <span class="clickable" id="copy-btn-wrapper" onclick="window.copyId()"><i data-lucide="copy" id="icon-copy-chat" class="w-20 h-20"></i><i data-lucide="check" id="icon-check-chat" class="w-20 h-20 dn c-success"></i></span>
+                  <span class="clickable" id="room-info-icon" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span>
                </div>
             </div>
             <div id="chat-messages">
