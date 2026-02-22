@@ -681,38 +681,32 @@ export function startChatApp(customConfig = {}) {
     window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
 
     const init = async () => { 
-        if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; } 
-        
-        monitorConnection();
-        
-        const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
-        if (isHardLoggedOut) { 
-            state.user = null; 
-            await db.auth.signOut();
-            window.nav('scr-start'); 
-            window.setLoading(false);
-            setupGlobalPresence(null); 
-            return; 
-        } 
-        
-        const [userRes, userErr] = await safeAwait(db.auth.getUser()); 
-        if (userErr) { await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); return; } 
-        
-        const user = userRes?.data?.user; 
-        if (user) { 
-            state.user = user; 
-            setupGlobalPresence(user.id); 
-            window.nav('scr-lobby'); 
-            window.loadRooms(); 
-            window.forceClaimMaster();
-            updateLobbyAvatar();
-        } else {
-            setupGlobalPresence(null);
-            window.nav('scr-start');
-        }
-        
-        lucide.createIcons(); 
-        window.setLoading(false); 
-    };
+    if (!navigator.onLine) { 
+        $('offline-screen').classList.add('active'); 
+        return; 
+    } 
+    
+    monitorConnection();
+
+    const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
+    if (isHardLoggedOut) { 
+        state.user = null; 
+        await db.auth.signOut();
+        setupGlobalPresence(null); 
+        window.nav('scr-start'); 
+        window.setLoading(false);
+        return; 
+    } 
+
+    // 👇 Geen auto-login meer
+    await db.auth.signOut(); // Zorg dat er nooit een bestaande sessie blijft hangen
+    state.user = null;
+
+    setupGlobalPresence(null);
+    window.nav('scr-start');
+    
+    lucide.createIcons(); 
+    window.setLoading(false); 
+};
     init();
 }
