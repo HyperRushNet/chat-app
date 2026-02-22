@@ -9,7 +9,7 @@
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <script src="https://unpkg.com/lucide@latest"></script>
       <style>
-         :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#262626;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px;--shadow-soft:0 2px 8px rgba(0,0,0,0.04);--shadow-medium:0 4px 12px rgba(0,0,0,0.08)}
+         :root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#262626;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}
          *{margin:0;padding:0;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent; -webkit-user-select: none; user-select: none;}
          input, textarea { -webkit-user-select: text; user-select: text; }
          ::-webkit-scrollbar{width:0;height:0}
@@ -26,7 +26,7 @@
          .header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 16px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-shrink:0}
          .input-field{color:var(--text-main);width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:var(--radius);padding:14px;font-size:15px;outline:0;margin-bottom:12px;transition:.2s}
          #scr-register .input-field{margin-bottom:8px}
-         .input-field:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(38,38,38,0.05)}
+         .input-field:focus{border-color:var(--accent);background:#fff}
          .btn{color:var(--text-main);width:100%;height:50px;border-radius:var(--radius);border:1px solid var(--border);background:0 0;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;transition:.15s;cursor:pointer}
          .btn-accent{background:var(--accent);color:#fff;border:none}
          .btn:active{transform:scale(.98);opacity:.8}
@@ -44,39 +44,37 @@
          .room-card:active{transform:scale(.99);background:#f9f9f9}
          .room-name{flex:1;min-width:0;font-weight:700;font-size:14px;margin-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
          .room-icon{flex-shrink:0;color:var(--text-mute)}
-         #chat-messages{flex:1;display:flex;flex-direction:column;position:relative;overflow-y:auto;background:var(--bg);padding-bottom:15px}
+         #chat-messages{flex:1;display:flex;flex-direction:column;position:relative;overflow-y:auto;background:var(--bg);padding-bottom:10px}
          .date-divider{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;margin:16px auto 4px;width:25%;padding:2px 6px;background:#fff;border:1px solid #ddd;border-radius:999px;text-align:center;color:#333;box-sizing:border-box;font-size:.875rem;} 
          .date-label{font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:0 auto;background:var(--bg);padding:4px 0;font-size:9px;text-align:center;color:var(--text-mute)}
-         .msg{position:relative;max-width:82%;padding:10px 14px;border-radius:18px;background:#f2f2f7;font-size:14px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word;width:fit-content;margin-top:2px;box-shadow:var(--shadow-soft)}
+         .msg{position:relative;max-width:82%;padding:8px 12px;border-radius:16px;background:#f2f2f7;font-size:14px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word;width:fit-content;margin-top:2px}
          .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
          .msg.not-me{align-self:flex-start;border-bottom-left-radius:4px}
          .msg.group-start{margin-top:14px}
-         .msg-header{display:flex;align-items:center;gap:4px;margin-bottom:4px}
-         .msg-user{font-size:11px;color:var(--accent);cursor:pointer;font-weight:700}
-         .msg.me .msg-user{color:rgba(255,255,255,.8)}
-         .msg-footer{display:flex;align-items:flex-end;justify-content:flex-end;gap:4px;margin-top:2px}
-         .msg-time{font-size:9px;opacity:.5;text-align:right}
-         .msg-edited{font-size:9px;opacity:.6;font-style:italic}
+         .msg-header{display:flex;align-items:center;gap:4px;margin-bottom:2px}
+         .msg-user{font-size:10px;color:var(--accent);cursor:pointer;font-weight:700}
+         .msg.me .msg-user{color:rgba(255,255,255,.7)}
+         .msg-time{font-size:8px;opacity:.4;text-align:right;margin-top:1px;align-self:flex-end;display:flex;align-items:center;gap:4px}
          .msg-continuation .msg-header{display:none}
          .msg-continuation{margin-top:1px}
-         .msg-continuation.msg.me{border-radius:18px 4px 4px 18px}
-         .msg-continuation.msg.not-me{border-radius:4px 18px 18px 4px}
-         .msg.me.group-start{border-radius:18px 18px 4px 18px}
-         .msg.not-me.group-start{border-radius:18px 18px 18px 4px}
+         .msg-continuation.msg.me{border-radius:16px 4px 4px 16px}
+         .msg-continuation.msg.not-me{border-radius:4px 16px 16px 4px}
+         .msg.me.group-start{border-radius:16px 16px 4px 16px}
+         .msg.not-me.group-start{border-radius:16px 16px 16px 4px}
+         .edited-tag{font-size:8px;opacity:0.6;font-weight:600}
          
-         /* Context Menu & Deletion Styles */
          #context-menu{position:fixed;background:rgba(255,255,255,0.98);backdrop-filter:blur(20px);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,0.15);z-index:99999;padding:6px;min-width:140px;display:flex;flex-direction:column;gap:2px;opacity:0;transform:scale(0.95);pointer-events:none;transition:opacity 0.15s,transform 0.15s;}
          #context-menu.active{opacity:1;transform:scale(1);pointer-events:auto;}
          .ctx-item{background:none;border:none;width:100%;padding:10px 12px;text-align:left;font-size:13px;font-weight:600;color:var(--text-main);cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:8px;}
          .ctx-item:active{background:#f2f2f7;}
          .ctx-item.danger{color:var(--danger);}
          .ctx-item i{width:16px;height:16px;}
-         .msg-deleted-body{display:flex;align-items:center;gap:6px;opacity:0.65;font-style:italic;}
-         .msg-deleted-body i{width:14px;height:14px;stroke-width:2;}
+         .msg-deleted-content{display:flex;align-items:center;gap:4px;opacity:0.5;font-style:italic;}
+         .msg-deleted-content i{width:14px;height:14px;}
 
-         .chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1;position:relative;box-shadow:var(--shadow-soft)}
+         .chat-avatar{width:32px;height:32px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1;position:relative}
          .chat-avatar img{width:100%;height:100%;object-fit:cover}
-         .status-border{border:2px solid var(--text-mute);transition:border-color 0.3s ease}
+         .status-border{border:1px solid var(--text-mute);transition:border-color 0.3s ease}
          .status-connected{border-color:var(--success)}
          .status-connecting{border-color:var(--warning)}
          .status-offline{border-color:var(--text-mute)}
@@ -98,10 +96,16 @@
          .type-icon{width:36px;height:36px;border-radius:10px;background:#f2f2f7;display:flex;align-items:center;justify-content:center;color:var(--accent)}
          .type-info h4{font-size:14px;margin-bottom:1px;font-weight:700}
          .type-info p{font-size:11px;color:var(--text-mute)}
-         .avatar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
-         .avatar-option{aspect-ratio:1;border-radius:var(--radius);border:2px solid var(--border);cursor:pointer;overflow:hidden;background:#f2f2f7;display:flex;align-items:center;justify-content:center;transition:.15s}
-         .avatar-option img{width:100%;height:100%;object-fit:cover}
-         .avatar-option.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,122,255,.2)}
+         
+         .avatar-carousel-container{display:flex;flex-direction:column;align-items:center;gap:16px;margin-bottom:12px}
+         .carousel-wrapper{display:flex;align-items:center;gap:12px;width:100%;justify-content:center}
+         .carousel-btn{width:40px;height:40px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:0.2s}
+         .carousel-btn:active{transform:scale(0.95);background:#f2f2f7}
+         .carousel-preview{width:100px;height:100px;border-radius:50%;background:#f2f2f7;border:2px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.05)}
+         .carousel-preview img{width:100%;height:100%;object-fit:cover}
+         .upload-btn-wrapper{width:100%;margin-top:8px}
+         .upload-btn{width:100%;height:44px;border-radius:var(--radius);border:1px dashed var(--accent);background:transparent;color:var(--accent);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+         
          #overlay-container{position:absolute;background:rgba(0,0,0,.4);z-index:5000;align-items:center;justify-content:center;transition:opacity .3s;backdrop-filter:blur(16px);opacity:0;display:none;padding:20px;inset:0}
          #overlay-container.active{display:flex;opacity:1}
          .panel-card{background:var(--bg);width:100%;max-width:340px;border-radius:20px;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.2);animation:.4s cubic-bezier(.16,1,.3,1) panelSlide;max-height:80vh;overflow:hidden}
@@ -200,7 +204,50 @@
 
          <div id="scr-start" class="screen active center-content"><i data-lucide="shield" style="width:40px;height:40px;stroke-width:1.5;color:var(--accent);margin-bottom:16px"></i><h1 class="title">HRN Chat</h1><p class="subtitle">Secure Network</p><button class="btn btn-accent" onclick="window.nav('scr-login')">Sign In</button><button class="btn mt-12" onclick="window.nav('scr-register')">Create Account</button></div>
          <div id="scr-login" class="screen center-content"><h1 class="title">Sign In</h1><p class="subtitle">Access Secure Room</p><input id="l-email" class="input-field" type="email" placeholder="Email Address"><input id="l-pass" type="password" class="input-field" placeholder="Password"><button class="btn btn-accent" onclick="window.handleLogin(event)">Access</button><button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Back</button></div>
-         <div id="scr-register" class="screen center-content"><div class="step-indicator" id="reg-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div><div class="step-container"><div id="reg-step-1" class="wizard-step active"><h1 class="title">Sign Up</h1><p class="subtitle">Step 1 of 2</p><input id="r-name" class="input-field" placeholder="Full Name"><input id="r-email" class="input-field" type="email" placeholder="Email Address"><input id="r-pass" class="input-field" type="password" placeholder="Password (min. 8 chars)"><button class="btn btn-accent" onclick="window.nextRegStep()">Next</button></div><div id="reg-step-2" class="wizard-step"><h1 class="title">Profile</h1><p class="subtitle">Choose Avatar</p><div class="avatar-grid" id="avatar-grid"></div><input id="r-avatar-url" class="input-field" placeholder="Or paste Image URL..."><div style="display:flex;gap:8px"><button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button><button class="btn btn-accent" style="flex:1" onclick="window.handleRegister(event)">Verify</button></div></div></div><button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Cancel</button></div>
+         
+         <div id="scr-register" class="screen center-content">
+            <div class="step-indicator" id="reg-step-indicator">
+               <div class="step-dot active"></div><div class="step-dot"></div><div class="step-dot"></div>
+            </div>
+            <div class="step-container">
+               <div id="reg-step-1" class="wizard-step active">
+                  <h1 class="title">Sign Up</h1><p class="subtitle">Step 1 of 3</p>
+                  <input id="r-email" class="input-field" type="email" placeholder="Email Address">
+                  <input id="r-pass" class="input-field" type="password" placeholder="Password (min. 8 chars)">
+                  <button class="btn btn-accent" onclick="window.nextRegStep()">Next</button>
+               </div>
+               <div id="reg-step-2" class="wizard-step">
+                  <h1 class="title">Profile</h1><p class="subtitle">Step 2 of 3</p>
+                  <input id="r-name" class="input-field" placeholder="Full Name">
+                  <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
+                  <button class="btn btn-accent" onclick="window.nextRegStep()">Next</button>
+               </div>
+               <div id="reg-step-3" class="wizard-step">
+                  <h1 class="title">Avatar</h1><p class="subtitle">Step 3 of 3</p>
+                  <div class="avatar-carousel-container">
+                     <div class="carousel-wrapper">
+                        <button class="carousel-btn" onclick="window.carouselNav(-1)"><i data-lucide="chevron-left"></i></button>
+                        <div class="carousel-preview" id="avatar-preview-el"></div>
+                        <button class="carousel-btn" onclick="window.carouselNav(1)"><i data-lucide="chevron-right"></i></button>
+                     </div>
+                     <div class="upload-btn-wrapper">
+                        <label class="upload-btn">
+                           <i data-lucide="upload" style="width:16px;height:16px"></i>
+                           <span>Upload Custom</span>
+                           <input type="file" id="avatar-upload-input" accept="image/*" style="display:none" onchange="window.handleAvatarUpload(event)">
+                        </label>
+                     </div>
+                  </div>
+                  <input id="r-avatar-url" class="input-field" placeholder="Or paste Image URL..." style="margin-top:8px">
+                  <div style="display:flex;gap:8px;margin-top:4px">
+                     <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
+                     <button class="btn btn-accent" style="flex:1" onclick="window.handleRegister(event)">Verify</button>
+                  </div>
+               </div>
+            </div>
+            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Cancel</button>
+         </div>
+
          <div id="scr-verify" class="screen center-content"><h1 class="title">Verify</h1><p class="subtitle">Confirm Identity</p><input id="v-code" class="input-field" style="text-align:center;font-size:22px;letter-spacing:6px" placeholder="000000"><button class="btn btn-accent" onclick="window.handleVerify(event)">Confirm</button><div id="v-timer" class="mt-24" style="color:var(--accent);font-weight:800;font-size:12px">10:00</div></div>
          <div id="scr-account" class="screen"><div class="header"><span class="clickable" onclick="window.nav('scr-lobby', 'right')"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></span><h1 class="title" style="font-size:18px;margin:0;flex:1;text-align:center">My Account</h1><div style="width:22px"></div></div><div class="center-content" style="padding-top: 20px; margin-bottom: 30px"><div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto"></div><h1 id="acc-page-name" class="title" style="font-size:22px">User Name</h1><p id="acc-page-type" class="subtitle">Account Type</p></div><div style="padding: 0 10px"><div class="acc-info-card"><div class="acc-label">User ID</div><div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()"></div></div><div id="acc-email-wrapper" class="acc-info-card"><div class="acc-label">Email Address</div><div id="acc-page-email" class="acc-value" style="font-size:12px"></div></div></div><div style="padding: 20px; margin-top:auto"><button class="btn" style="background:transparent;border:1px dotted var(--accent);color:var(--accent)" onclick="window.handleLogout(event)">Log Out</button></div></div>
          <div id="scr-lobby" class="screen"><div class="header"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><h1 class="title" style="font-size:18px;margin:0">HRN Chat</h1><button class="refresh-btn" onclick="window.refreshLobby()"><i data-lucide="refresh-cw" style="width:18px;height:18px"></i></button></div><div style="display:flex;gap:12px;align-items:center;flex-shrink:0"><div id="lobby-avatar-btn" class="chat-avatar" style="width:32px;height:32px;cursor:pointer" onclick="window.nav('scr-account')">?</div><span class="clickable" id="icon-plus-lobby" onclick="window.nav('scr-create')"><i data-lucide="plus" class="w-20 h-20"></i></span></div></div><input id="search-bar" class="input-field" placeholder="Search..." oninput="window.filterRooms()"><div id="room-list" class="flex-1" style="overflow-y:auto"></div><div style="display:flex;gap:10px;padding-top:12px;border-top:1px solid var(--border)"><input id="join-id" class="input-field m-0-flex-1" placeholder="Direct ID"><button class="btn btn-accent w-80" onclick="window.joinPrivate()">Join</button></div></div>
