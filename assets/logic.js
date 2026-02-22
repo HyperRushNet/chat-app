@@ -21,8 +21,8 @@ export function startChatApp(customConfig = {}) {
     lucide.createIcons();
 
     const state = {
-        user: null, currentRoomId: null, chatChannel: null, presenceChannel: null,
-        allRooms: [], vTimer: null, lastRenderedDateLabel: null, lastKnownOnlineCount: null,
+        user: null, currentRoomId: null, chatChannel: null, presenceChannel: null, globalPresenceChannel: null,
+        allRooms: [], vTimer: null, lastRenderedDateLabel: null, lastKnownOnlineCount: null, globalOnlineCount: 0,
         heartbeatInterval: null, uptimeInterval: null, sessionStartTime: null, isPresenceSubscribed: false,
         lastReconnectAttempt: 0, pending: null, lastCreated: null, lastCreatedPass: null, isMasterTab: false,
         tabId: sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id')),
@@ -43,6 +43,7 @@ export function startChatApp(customConfig = {}) {
     const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
     const truncateText = (text, maxLength = 20) => !text ? "" : text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
     const $ = id => document.getElementById(id);
+    const getTimeFromDate = (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
     const setConnectionVisuals = (status) => {
         const avatar = $('chat-avatar-display'); if (!avatar) return;
@@ -50,6 +51,24 @@ export function startChatApp(customConfig = {}) {
         if (status === 'connected') avatar.classList.add('status-connected');
         else if (status === 'connecting') avatar.classList.add('status-connecting');
         else avatar.classList.add('status-offline');
+    };
+
+    const updatePresenceUI = () => {
+        const roomCountEl = $('room-user-count');
+        const infoRoomEl = $('info-room-count');
+        const infoGlobalEl = $('info-global-count');
+        
+        if (roomCountEl) {
+            const count = state.lastKnownOnlineCount || 0;
+            roomCountEl.innerText = `${count}/${CONFIG.maxUsers}`;
+        }
+        if (infoRoomEl) {
+             const count = state.lastKnownOnlineCount || 0;
+             infoRoomEl.innerText = `${count}/${CONFIG.maxUsers}`;
+        }
+        if (infoGlobalEl) {
+            infoGlobalEl.innerText = state.globalOnlineCount;
+        }
     };
 
     const processToastQueue = () => {
@@ -85,7 +104,7 @@ export function startChatApp(customConfig = {}) {
                 if (!self.cryptoKey) throw new Error("Key not derived"); const results = [];
                 for (const m of payload.messages) {
                     try {
-                        if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at }); continue; }
+                        if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; }
                         const binary = atob(m.content); const bytes = new Uint8Array(binary.length);
                         for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
                         const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12);
@@ -140,10 +159,40 @@ export function startChatApp(customConfig = {}) {
     };
 
     const queryOnlineCountImmediately = async () => {
-        if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat();
+        if (!state.presenceChannel) return; 
+        const presState = state.presenceChannel.presenceState(); 
+        const allPresences = Object.values(presState).flat();
         const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
-        if (uniqueUserIds.size > CONFIG.maxUsers) { if(!state.serverFull) { state.serverFull = true; $('capacity-overlay').classList.add('active'); cleanupChannels(); } }
-        else { state.serverFull = false; $('capacity-overlay').classList.remove('active'); }
+        
+        state.lastKnownOnlineCount = uniqueUserIds.size;
+        updatePresenceUI();
+
+        if (uniqueUserIds.size > CONFIG.maxUsers) { 
+            if(!state.serverFull) { 
+                state.serverFull = true; 
+                $('capacity-overlay').classList.add('active'); 
+                cleanupChannels(); 
+            } 
+        } else { 
+            state.serverFull = false; 
+            $('capacity-overlay').classList.remove('active'); 
+        }
+    };
+    
+    const setupGlobalPresence = async () => {
+        if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
+        if(!state.user) return;
+        
+        state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: state.user.id } } });
+        state.globalPresenceChannel.on('presence', { event: 'sync' }, () => {
+            const presState = state.globalPresenceChannel.presenceState();
+            state.globalOnlineCount = Object.keys(presState).length;
+            updatePresenceUI();
+        }).subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await state.globalPresenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() });
+            }
+        });
     };
 
     const attemptHardReconnect = () => {
@@ -171,14 +220,33 @@ export function startChatApp(customConfig = {}) {
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new; if (m && state.currentRoomId) {
                 pendingCallbacks['singleDecrypted'] = async (decRes) => {
-                    if(decRes.result) { const msgObj = { ...m, ...decRes.result }; const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time }; container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); container.scrollTop = container.scrollHeight; checkChatEmpty(); lucide.createIcons(); }
+                    if(decRes.result) { 
+                        const msgObj = { ...m, ...decRes.result }; 
+                        const container = $('chat-messages'); 
+                        const lastMsg = container.querySelector('.msg:last-of-type'); 
+                        let prevMsg = null; 
+                        if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time }; 
+                        container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); 
+                        container.scrollTop = container.scrollHeight; 
+                        checkChatEmpty(); 
+                        lucide.createIcons(); 
+                    }
                 }; cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
             }
         }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
                 pendingCallbacks['singleDecrypted'] = (decRes) => {
-                     const deleted = m.content === '/'; if(deleted) { msgEl.outerHTML = renderMsg({ ...m, deleted: true }, null, isDirect); window.toast("Message deleted"); lucide.createIcons(); }
-                     else if (decRes.result) { const updatedHtml = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, null, isDirect); msgEl.outerHTML = updatedHtml; lucide.createIcons(); }
+                     const deleted = m.content === '/'; 
+                     if(deleted) { 
+                         msgEl.outerHTML = renderMsg({ ...m, deleted: true }, null, isDirect); 
+                         window.toast("Message deleted"); 
+                         lucide.createIcons(); 
+                     }
+                     else if (decRes.result) { 
+                         const updatedHtml = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, null, isDirect); 
+                         msgEl.outerHTML = updatedHtml; 
+                         lucide.createIcons(); 
+                     }
                 }; cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
             }
         }).subscribe((status) => {
@@ -262,20 +330,14 @@ export function startChatApp(customConfig = {}) {
         state.contextTarget = null; 
     };
     
-    window.cancelEdit = () => { 
-        state.editingMessage = null; 
-        $('chat-input').value = ''; 
-        $('editing-header').style.display = 'none'; 
-        $('chat-input').focus(); 
-    };
-
     $('ctx-edit').onclick = () => { 
         if(!state.contextTarget) return; 
-        state.editingMessage = state.contextTarget; 
-        $('chat-input').value = state.contextTarget.text; 
-        $('editing-header').style.display = 'flex'; 
-        $('chat-input').focus(); 
-        hideContextMenu(); 
+        state.editingMessage = state.contextTarget;
+        $('edit-msg-input').value = state.contextTarget.text;
+        window.showOverlayView('edit-message');
+        $('overlay-container').classList.add('active');
+        hideContextMenu();
+        lucide.createIcons();
     };
     
     $('ctx-copy').onclick = () => { 
@@ -296,12 +358,40 @@ export function startChatApp(customConfig = {}) {
         window.setLoading(false); 
     };
     
+    window.saveEditMessage = async () => {
+        if(!state.editingMessage) return;
+        const v = $('edit-msg-input').value.trim();
+        if(!v) return window.toast("Message cannot be empty");
+        
+        const msgDate = new Date(state.editingMessage.created_at);
+        const now = new Date();
+        if((now - msgDate) / 60000 >= 15) {
+             window.toast("Edit time expired");
+             window.closeOverlay();
+             state.editingMessage = null;
+             return;
+        }
+        
+        window.setLoading(true, "Saving...");
+        try {
+            const enc = await encryptMessage(v);
+            const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id);
+            if (error) window.toast("Failed to edit: " + error.message);
+            else window.toast("Message updated");
+        } catch(e) {
+            window.toast("Encryption failed");
+        }
+        
+        state.editingMessage = null;
+        window.setLoading(false);
+        window.closeOverlay();
+    };
+    
     document.addEventListener('click', (e) => { 
         if (state.preventNextClose) {
             state.preventNextClose = false;
             return;
         }
-        
         if (!$('context-menu').contains(e.target)) {
             hideContextMenu(); 
         }
@@ -411,13 +501,15 @@ export function startChatApp(customConfig = {}) {
         const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
         const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me';
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${esc(m.text || '')}"`;
-        html += `<div class="msg ${sideClass} ${msgClass}" ${dataAttrs}>`;
+        const timeString = m.time || getTimeFromDate(m.created_at);
+        
+        html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''}" ${dataAttrs}>`;
         
         if (isDeleted) {
-             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="msg-deleted-content"><i data-lucide="ban"></i> <span>Deleted</span></div><span class="msg-time">${esc(m.time || '??')}</span>`;
+             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Deleted message</div><span class="msg-time">${timeString}</span>`;
         } else {
             const processedText = processText(m.text);
-            html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${esc(m.time)}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`;
+            html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`;
         }
         html += `</div>`;
         return html;
@@ -426,7 +518,7 @@ export function startChatApp(customConfig = {}) {
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
     const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); pendingCallbacks['historyDecrypted'] = async (res) => { const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); } state.isLoadingHistory = false; }; cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } }); };
 
-    window.openRoomInfo = async () => { if (!state.currentRoomData) return; window.setLoading(true, "Loading info..."); const room = state.currentRoomData; const delBtn = $('info-delete-btn'); const creatorRow = $('info-creator-row'); delBtn.style.display = 'none'; delBtn.innerText = "Delete Chat"; delBtn.classList.remove('active'); if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); $('info-id').innerText = room.id; const date = new Date(room.created_at); $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; if (room.is_direct) { $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); };
+    window.openRoomInfo = async () => { if (!state.currentRoomData) return; window.setLoading(true, "Loading info..."); const room = state.currentRoomData; const delBtn = $('info-delete-btn'); const creatorRow = $('info-creator-row'); delBtn.style.display = 'none'; delBtn.innerText = "Delete Chat"; delBtn.classList.remove('active'); if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); $('info-id').innerText = room.id; const date = new Date(room.created_at); $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; if (room.is_direct) { $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); };
     window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
     window.openRoomSettings = async () => { window.closeOverlay(); if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); window.setLoading(true, "Loading..."); const room = state.currentRoomData; state.currentStep.edit = 1; updateStepUI('edit'); $('edit-room-name').value = room.name; $('edit-room-visible').checked = room.is_visible; $('edit-room-pass').value = ''; const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass'); if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; } else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute)"; removePassBtn.style.display = 'none'; } state.removePasswordFlag = false; state.selectedAllowedUsers = []; const ids = room.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } $('overlay-container').classList.add('active'); window.showOverlayView('room-settings'); window.setLoading(false); };
     window.prepareRemovePassword = () => { state.removePasswordFlag = true; $('pass-status-label').innerText = "Will be removed"; $('pass-status-label').style.color = "var(--danger)"; $('edit-room-pass').value = ''; $('edit-room-pass').disabled = true; };
@@ -436,19 +528,7 @@ export function startChatApp(customConfig = {}) {
     window.openVault = async (id, n, rawPassword, roomSalt) => { if (!state.user) return window.toast("Please login first"); window.setLoading(true, "Decrypting..."); state.currentRoomPassword = rawPassword; if (state.chatChannel) state.chatChannel.unsubscribe(); state.currentRoomId = id; state.lastRenderedDateLabel = null; state.oldestMessageTimestamp = null; state.hasMoreHistory = true; state.isLoadingHistory = false; $('chat-messages').innerHTML = ''; $('chat-messages').onscroll = handleScroll; const keySource = rawPassword ? (rawPassword + id) : id; try { await deriveKey(keySource, roomSalt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); } const { data: room } = await db.from('rooms').select('*').eq('id', id).single(); state.currentRoomData = room; const isDirect = room.is_direct; let displayTitle = n; let displayAvatar = room.avatar_url; if (isDirect) { const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id); if (otherUserId) { let profile = state.profileCache[otherUserId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); profile = data; if(data) state.profileCache[otherUserId] = data; } if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } } } $('chat-title').innerText = displayTitle; const avEl = $('chat-avatar-display'); if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); const editBtn = $('info-edit-btn'); if (!isDirect && room.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; lucide.createIcons(); window.setLoading(true, "Fetching History..."); const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; window.nav('scr-chat'); setConnectionVisuals('connecting'); if (data && data.length > 0) { data.reverse(); if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; window.setLoading(true, "Decrypting..."); pendingCallbacks['historyDecrypted'] = async (res) => { const b = $('chat-messages'); b.innerHTML = ''; let prev = null; res.results.forEach(m => { if(!m.error) { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; } }); b.scrollTop = b.scrollHeight; checkChatEmpty(); lucide.createIcons(); window.setLoading(false); }; cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } }); } else { state.hasMoreHistory = false; checkChatEmpty(); window.setLoading(false); } setupChatChannel(id); initRoomPresence(id); };
     const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
     
-    const checkEditTimeout = () => {
-        if(state.editingMessage) {
-            const msgDate = new Date(state.editingMessage.created_at);
-            const now = new Date();
-            const diffMinutes = (now - msgDate) / 60000;
-            if(diffMinutes >= 15) {
-                window.cancelEdit();
-                window.toast("Edit time expired");
-            }
-        }
-    };
-    
-    window.sendMsg = async (e) => { if (!e || !e.isTrusted) return; if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return; if (!applyRateLimit()) return; state.processingAction = true; const v = $('chat-input').value.trim(); if(!v) { state.processingAction = false; return; } $('chat-input').value = ''; state.lastMessageTime = Date.now(); if (state.editingMessage) { checkEditTimeout(); if(!state.editingMessage) { state.processingAction = false; return; } try { const enc = await encryptMessage(v); const { error } = await db.from('messages').update({ content: enc, updated_at: new Date().toISOString() }).eq('id', state.editingMessage.id); if (error) window.toast("Failed to edit: " + error.message); else window.toast("Message updated"); state.editingMessage = null; $('editing-header').style.display = 'none'; } catch(e) { window.toast("Failed to encrypt edit"); } } else { try { const enc = await encryptMessage(v); await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); } catch(e) { window.toast("Failed to send"); } } state.processingAction = false; };
+    window.sendMsg = async (e) => { if (!e || !e.isTrusted) return; if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return; if (!applyRateLimit()) return; state.processingAction = true; const v = $('chat-input').value.trim(); if(!v) { state.processingAction = false; return; } $('chat-input').value = ''; state.lastMessageTime = Date.now(); try { const enc = await encryptMessage(v); await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); } catch(e) { window.toast("Failed to send"); } state.processingAction = false; };
     window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
     window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); localStorage.removeItem(FLAG_LOGOUT); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); } else { window.nav('scr-lobby'); window.loadRooms(); } state.processingAction = false; };
@@ -464,11 +544,11 @@ export function startChatApp(customConfig = {}) {
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
-    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); localStorage.setItem(FLAG_LOGOUT, 'true'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); localStorage.setItem(FLAG_LOGOUT, 'true'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
-    db.auth.onAuthStateChange(async (ev, ses) => { const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true'; if (isFlaggedLogout) { state.user = null; return; } state.user = ses?.user; const createBtn = $('icon-plus-lobby'); const activeScreenId = document.querySelector('.screen.active')?.id; if (createBtn) createBtn.style.display = 'flex'; if (ev === 'SIGNED_IN') { if(state.user) { const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify']; if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); } updateLobbyAvatar(); } } if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); localStorage.removeItem(FLAG_LOGOUT); window.nav('scr-start'); } });
+    db.auth.onAuthStateChange(async (ev, ses) => { const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true'; if (isFlaggedLogout) { state.user = null; return; } state.user = ses?.user; const createBtn = $('icon-plus-lobby'); const activeScreenId = document.querySelector('.screen.active')?.id; if (createBtn) createBtn.style.display = 'flex'; if (ev === 'SIGNED_IN') { if(state.user) { const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify']; if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); } updateLobbyAvatar(); setupGlobalPresence(); } } if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); localStorage.removeItem(FLAG_LOGOUT); window.nav('scr-start'); } });
 
     window.nav = (id, direction = null) => { const current = document.querySelector('.screen.active'); const next = $(id); if(!next) return; if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); } if(id === 'scr-register') { state.currentStep.reg = 1; state.selectedAvatar = null; $('r-name').value = ''; $('r-email').value = ''; $('r-pass').value = ''; $('r-avatar-url').value = ''; updateStepUI('reg'); } if(id === 'scr-account') window.prepareAccountPage(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right')); if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); } else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); } else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); next.classList.add('active'); lucide.createIcons(); const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; if(id === 'scr-lobby') updateLobbyAvatar(); };
     window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; window.toast("Refreshing..."); await window.loadRooms(); };
