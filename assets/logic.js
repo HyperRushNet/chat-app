@@ -65,7 +65,10 @@ export function startChatApp(customConfig = {}) {
         
         const startStatus = $('start-server-status');
         if (startStatus) {
-            if (state.globalOnlineCount >= CONFIG.maxUsers) {
+            if (!state.globalPresenceReady) {
+                 startStatus.innerText = "Connecting...";
+                 startStatus.style.color = "var(--text-mute)";
+            } else if (state.globalOnlineCount >= CONFIG.maxUsers) {
                 startStatus.innerText = `Server Full (${state.globalOnlineCount}/${CONFIG.maxUsers})`;
                 startStatus.style.color = "var(--danger)";
             } else {
@@ -174,11 +177,10 @@ export function startChatApp(customConfig = {}) {
         updatePresenceUI();
     };
     
-    const setupGlobalPresence = async () => {
+    const setupGlobalPresence = async (userId) => {
         if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
-        if(!state.user) return;
         
-        state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: state.user.id } } });
+        state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId || 'anonymous' } } });
         
         state.globalPresenceChannel.on('presence', { event: 'sync' }, () => {
             const presState = state.globalPresenceChannel.presenceState();
@@ -211,7 +213,7 @@ export function startChatApp(customConfig = {}) {
             }
         }).subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                await state.globalPresenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() });
+                if(userId) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() });
             }
         });
     };
@@ -318,11 +320,7 @@ export function startChatApp(customConfig = {}) {
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         
         document.addEventListener('visibilitychange', async () => {
-            // Do nothing on visibility change - keep Global Presence alive
-            // Only handle UI visual state if needed
-            if (document.visibilityState === 'visible' && state.currentRoomId && state.isChatChannelReady) {
-                 // Quick sync check if needed
-            }
+            // Keep global presence alive always
         });
     };
 
@@ -604,7 +602,11 @@ export function startChatApp(customConfig = {}) {
         if (!e || !e.isTrusted) return;
         if(state.processingAction) return;
         
-        if (state.globalOnlineCount >= CONFIG.maxUsers) {
+        localStorage.removeItem(FLAG_LOGOUT); // Clear flag on manual login attempt
+
+        // Check if full based on current global count
+        // If user is already set (session restore), we don't block ourselves.
+        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers) {
              return window.toast("Server is full. Please try again later.");
         }
 
@@ -612,7 +614,6 @@ export function startChatApp(customConfig = {}) {
         const em = $('l-email').value, p = $('l-pass').value; 
         if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
         window.setLoading(true, "Signing In..."); 
-        localStorage.removeItem(FLAG_LOGOUT); 
         const {error} = await db.auth.signInWithPassword({email:em, password:p});
         if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { state.processingAction = false; } 
     };
@@ -629,17 +630,22 @@ export function startChatApp(customConfig = {}) {
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
-    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); localStorage.setItem(FLAG_LOGOUT, 'true'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); localStorage.setItem(FLAG_LOGOUT, 'true'); await cleanupChannels(); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
     db.auth.onAuthStateChange(async (ev, ses) => { 
         const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
-        if (isFlaggedLogout) { state.user = null; return; } 
+        if (isFlaggedLogout) { 
+            state.user = null; 
+            // Force sign out on the client to ensure session is dead
+            if(ses) await db.auth.signOut();
+            return; 
+        } 
         state.user = ses?.user; 
         
         if (state.user) {
-             setupGlobalPresence();
+             setupGlobalPresence(state.user.id);
         }
 
         const activeScreenId = document.querySelector('.screen.active')?.id;
@@ -680,7 +686,15 @@ export function startChatApp(customConfig = {}) {
         monitorConnection();
         
         const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
-        if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); return; } 
+        if (isHardLoggedOut) { 
+            state.user = null; 
+            await db.auth.signOut(); // Ensure session is cleared
+            window.nav('scr-start'); 
+            window.setLoading(false);
+            // Still setup global presence for count
+            setupGlobalPresence(null); 
+            return; 
+        } 
         
         const [userRes, userErr] = await safeAwait(db.auth.getUser()); 
         if (userErr) { await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); return; } 
@@ -688,10 +702,12 @@ export function startChatApp(customConfig = {}) {
         const user = userRes?.data?.user; 
         if (user) { 
             state.user = user; 
-            setupGlobalPresence(); // Start Global Presence immediately
-            // Do NOT navigate to lobby automatically
+            setupGlobalPresence(user.id); 
+            // DO NOT AUTO NAVIGATE. User must click login.
             window.nav('scr-start'); 
         } else {
+            // No user, just setup global presence for count
+            setupGlobalPresence(null);
             window.nav('scr-start');
         }
         
