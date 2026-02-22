@@ -7,7 +7,7 @@ export function startChatApp(customConfig = {}) {
         supabaseUrl: customConfig.supabaseUrl || "https://jnhsuniduzvhkpexorqk.supabase.co",
         supabaseKey: customConfig.supabaseKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaHN1bmlkdXp2aGtwZXhvcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NjAxMDYsImV4cCI6MjA4NzEzNjEwNn0.9I5bbqskCgksUaNWYlFFo0-6Odht28pOMdxTGZECahY",
         mailApi: customConfig.mailApi || "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI",
-        maxUsers: customConfig.maxUsers,
+        maxUsers: customConfig.maxUsers || 150,
         maxMessages: customConfig.maxMessages || 15,
         historyLoadLimit: customConfig.historyLoadLimit || 10,
         rateLimitMs: customConfig.rateLimitMs || 1000,
@@ -33,7 +33,7 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
-        isBackgrounded: false
+        isBackgrounded: false, isWaitingForSlot: false
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -142,16 +142,16 @@ export function startChatApp(customConfig = {}) {
         return 8000;
     };
 
-    const cleanupChannels = async () => {
+    const cleanupChannels = async (keepGlobal = false) => {
         if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
         if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
         if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
         if (state.presenceChannel) { state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; }
         if (state.chatChannel) { state.chatChannel.unsubscribe(); state.chatChannel = null; }
-        if (state.globalPresenceChannel) { state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = null; }
+        if (!keepGlobal && state.globalPresenceChannel) { state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = null; }
         state.isChatChannelReady = false;
         state.isReconnecting = false;
-        setConnectionVisuals('offline');
+        if (!state.isWaitingForSlot) setConnectionVisuals('offline');
     };
 
     const queryOnlineCountImmediately = async () => {
@@ -164,23 +164,38 @@ export function startChatApp(customConfig = {}) {
     };
     
     const setupGlobalPresence = async () => {
-        if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
         if(!state.user) return;
+        if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
         
         state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: state.user.id } } });
+        
         state.globalPresenceChannel.on('presence', { event: 'sync' }, () => {
             const presState = state.globalPresenceChannel.presenceState();
             state.globalOnlineCount = Object.keys(presState).length;
             updatePresenceUI();
-            if (state.globalOnlineCount >= CONFIG.maxUsers) { 
-                if(!state.serverFull) { 
-                    state.serverFull = true; 
-                    $('capacity-overlay').classList.add('active'); 
-                    cleanupChannels(); 
-                } 
-            } else { 
-                state.serverFull = false; 
-                $('capacity-overlay').classList.remove('active'); 
+
+            if (state.globalOnlineCount > CONFIG.maxUsers) {
+                if (!state.serverFull) {
+                    state.serverFull = true;
+                    $('capacity-overlay').classList.add('active');
+                    const capText = $('capacity-text');
+                    if(capText) capText.innerText = "Server Overloaded";
+                    cleanupChannels(true); 
+                }
+            } else if (state.globalOnlineCount <= CONFIG.maxUsers) {
+                if (state.serverFull && !state.isWaitingForSlot) {
+                     state.serverFull = false;
+                     $('capacity-overlay').classList.remove('active');
+                }
+                
+                if (state.isWaitingForSlot) {
+                    if (state.globalOnlineCount < CONFIG.maxUsers) {
+                        state.isWaitingForSlot = false;
+                        $('capacity-overlay').classList.remove('active');
+                        window.toast("Slot available, reconnecting...");
+                        attemptHardReconnect();
+                    }
+                }
             }
         }).subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
@@ -191,14 +206,26 @@ export function startChatApp(customConfig = {}) {
 
     const attemptHardReconnect = () => {
         if (!navigator.onLine || !state.user || state.isBackgrounded) return; 
-        
-        cleanupChannels(); 
+
+        cleanupChannels(true); 
         state.isReconnecting = !!state.currentRoomId; 
         setConnectionVisuals('connecting');
 
-        setupGlobalPresence();
+        if (!state.globalPresenceChannel) setupGlobalPresence();
 
         if (state.currentRoomId) {
+            if (state.globalOnlineCount >= CONFIG.maxUsers) {
+                state.isWaitingForSlot = true;
+                state.serverFull = true;
+                const overlay = $('capacity-overlay');
+                const text = $('capacity-text');
+                if(text) text.innerText = "Room Full - Waiting for slot...";
+                overlay.classList.add('active');
+                state.isReconnecting = false;
+                setConnectionVisuals('offline');
+                return;
+            }
+            
             const timeout = getConnectionTimeout();
             state.connectionTimeoutTimer = setTimeout(() => { 
                 state.isReconnecting = false; 
@@ -285,24 +312,20 @@ export function startChatApp(customConfig = {}) {
                 state.isBackgrounded = true;
                 if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
                 state.heartbeatInterval = null;
-                if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
                 if (state.presenceChannel) await state.presenceChannel.unsubscribe();
                 if (state.chatChannel) await state.chatChannel.unsubscribe();
+                if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
                 setConnectionVisuals('offline');
             } else if (document.visibilityState === 'visible') {
                 state.isBackgrounded = false;
                 if (state.user && navigator.onLine) {
-                    setupGlobalPresence();
-                    if (state.currentRoomId) {
-                        initRoomPresence(state.currentRoomId);
-                        setupChatChannel(state.currentRoomId);
-                    }
+                     attemptHardReconnect();
                 }
             }
         });
     };
 
-    window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
+    window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; state.isWaitingForSlot = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
 
     state.preventNextClose = false;
 
