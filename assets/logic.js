@@ -57,18 +57,10 @@ export function startChatApp(customConfig = {}) {
         const roomCountEl = $('room-user-count');
         const infoRoomEl = $('info-room-count');
         const infoGlobalEl = $('info-global-count');
-        
-        if (roomCountEl) {
-            const count = state.lastKnownOnlineCount || 0;
-            roomCountEl.innerText = `${count}/${CONFIG.maxUsers}`;
-        }
-        if (infoRoomEl) {
-             const count = state.lastKnownOnlineCount || 0;
-             infoRoomEl.innerText = `${count}/${CONFIG.maxUsers}`;
-        }
-        if (infoGlobalEl) {
-            infoGlobalEl.innerText = state.globalOnlineCount;
-        }
+        const roomCount = state.lastKnownOnlineCount || 0;
+        if (roomCountEl) roomCountEl.innerText = roomCount;
+        if (infoRoomEl) infoRoomEl.innerText = roomCount;
+        if (infoGlobalEl) infoGlobalEl.innerText = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
     };
 
     const processToastQueue = () => {
@@ -163,20 +155,8 @@ export function startChatApp(customConfig = {}) {
         const presState = state.presenceChannel.presenceState(); 
         const allPresences = Object.values(presState).flat();
         const uniqueUserIds = new Set(allPresences.map(p => p.user_id));
-        
         state.lastKnownOnlineCount = uniqueUserIds.size;
         updatePresenceUI();
-
-        if (uniqueUserIds.size > CONFIG.maxUsers) { 
-            if(!state.serverFull) { 
-                state.serverFull = true; 
-                $('capacity-overlay').classList.add('active'); 
-                cleanupChannels(); 
-            } 
-        } else { 
-            state.serverFull = false; 
-            $('capacity-overlay').classList.remove('active'); 
-        }
     };
     
     const setupGlobalPresence = async () => {
@@ -188,6 +168,16 @@ export function startChatApp(customConfig = {}) {
             const presState = state.globalPresenceChannel.presenceState();
             state.globalOnlineCount = Object.keys(presState).length;
             updatePresenceUI();
+            if (state.globalOnlineCount >= CONFIG.maxUsers) { 
+                if(!state.serverFull) { 
+                    state.serverFull = true; 
+                    $('capacity-overlay').classList.add('active'); 
+                    cleanupChannels(); 
+                } 
+            } else { 
+                state.serverFull = false; 
+                $('capacity-overlay').classList.remove('active'); 
+            }
         }).subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 await state.globalPresenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() });
@@ -238,13 +228,26 @@ export function startChatApp(customConfig = {}) {
                 pendingCallbacks['singleDecrypted'] = (decRes) => {
                      const deleted = m.content === '/'; 
                      if(deleted) { 
-                         msgEl.outerHTML = renderMsg({ ...m, deleted: true }, null, isDirect); 
+                         msgEl.classList.add('msg-deleted');
+                         const contentDiv = msgEl.querySelector('div:not(.msg-header)');
+                         if(contentDiv) {
+                             contentDiv.className = 'deleted-text';
+                             contentDiv.innerText = "Message deleted";
+                         }
+                         const timeSpan = msgEl.querySelector('.msg-time');
+                         if(timeSpan) {
+                             const editedTag = timeSpan.querySelector('.edited-tag');
+                             if(editedTag) editedTag.remove();
+                         }
+                         msgEl.dataset.text = "";
                          window.toast("Message deleted"); 
                          lucide.createIcons(); 
                      }
                      else if (decRes.result) { 
-                         const updatedHtml = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, null, isDirect); 
-                         msgEl.outerHTML = updatedHtml; 
+                         const prevEl = msgEl.previousElementSibling;
+                         let prevData = null;
+                         if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                         msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, prevData, isDirect); 
                          lucide.createIcons(); 
                      }
                 }; cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
@@ -281,6 +284,7 @@ export function startChatApp(customConfig = {}) {
         if(!msgEl || !state.user) return;
         e.preventDefault();
         
+        const isDeleted = msgEl.classList.contains('msg-deleted');
         const msgData = {
             id: msgEl.dataset.id,
             user_id: msgEl.dataset.uid,
@@ -291,19 +295,20 @@ export function startChatApp(customConfig = {}) {
         const menu = $('context-menu'); 
         const editBtn = $('ctx-edit'); 
         const deleteBtn = $('ctx-delete');
+        const copyBtn = $('ctx-copy');
         
         const isOwner = msgData.user_id === state.user.id; 
         const msgDate = new Date(msgData.created_at); 
         const now = new Date(); 
         const diffMinutes = (now - msgDate) / 60000;
         
-        const isDeleted = msgEl.classList.contains('msg-deleted');
-        
         const canEdit = isOwner && diffMinutes < 15 && !isDeleted; 
         const canDelete = isOwner && !isDeleted;
+        const canCopy = !isDeleted;
         
         editBtn.style.display = canEdit ? 'flex' : 'none'; 
         deleteBtn.style.display = canDelete ? 'flex' : 'none';
+        copyBtn.style.display = canCopy ? 'flex' : 'none';
         
         state.contextTarget = msgData;
         
@@ -354,7 +359,6 @@ export function startChatApp(customConfig = {}) {
         window.setLoading(true, "Deleting..."); 
         const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete);
         if(error) window.toast("Failed: " + error.message); 
-        else window.toast("Message deleted"); 
         window.setLoading(false); 
     };
     
@@ -500,13 +504,14 @@ export function startChatApp(customConfig = {}) {
         const displayName = truncateText(m.user_name || 'User', 18); 
         const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
         const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me';
-        const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${esc(m.text || '')}"`;
+        const safeText = isDeleted ? '' : esc(m.text || '');
+        const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`;
         const timeString = m.time || getTimeFromDate(m.created_at);
         
         html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''}" ${dataAttrs}>`;
         
         if (isDeleted) {
-             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Deleted message</div><span class="msg-time">${timeString}</span>`;
+             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
         } else {
             const processedText = processText(m.text);
             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`;
