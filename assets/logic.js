@@ -147,6 +147,8 @@ export function startChatApp(customConfig = {}) {
         if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
         if (state.presenceChannel) { state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; }
         if (state.chatChannel) { state.chatChannel.unsubscribe(); state.chatChannel = null; }
+        if (state.globalPresenceChannel) { state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = null; }
+        state.isChatChannelReady = false;
         setConnectionVisuals('offline');
     };
 
@@ -186,21 +188,30 @@ export function startChatApp(customConfig = {}) {
     };
 
     const attemptHardReconnect = () => {
-        if (!navigator.onLine || !state.currentRoomId || !state.user) return; 
-        if (state.isReconnecting && !state.connectionTimeoutTimer) return;
+        if (!navigator.onLine || !state.user) return; 
+        
+        if (state.currentRoomId) {
+            if (state.isReconnecting && !state.connectionTimeoutTimer) return;
+        }
 
         cleanupChannels(); 
-        state.isReconnecting = true; 
+        state.isReconnecting = !!state.currentRoomId; 
         setConnectionVisuals('connecting');
 
-        const timeout = getConnectionTimeout();
-        state.connectionTimeoutTimer = setTimeout(() => { 
-            state.isReconnecting = false; 
-            attemptHardReconnect(); 
-        }, timeout);
+        setupGlobalPresence();
 
-        initRoomPresence(state.currentRoomId); 
-        setupChatChannel(state.currentRoomId);
+        if (state.currentRoomId) {
+            const timeout = getConnectionTimeout();
+            state.connectionTimeoutTimer = setTimeout(() => { 
+                state.isReconnecting = false; 
+                attemptHardReconnect(); 
+            }, timeout);
+
+            initRoomPresence(state.currentRoomId); 
+            setupChatChannel(state.currentRoomId);
+        } else {
+            setConnectionVisuals('connected');
+        }
     };
 
     const setupChatChannel = (id) => {
@@ -271,36 +282,13 @@ export function startChatApp(customConfig = {}) {
         window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); setConnectionVisuals('connecting'); attemptHardReconnect(); });
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         setInterval(() => { if (!navigator.onLine) { if (!$('offline-screen').classList.contains('active')) $('offline-screen').classList.add('active'); } }, 2000);
-        document.addEventListener('visibilitychange', async () => {
+        document.addEventListener('visibilitychange', async () => { 
             if (document.visibilityState === 'hidden') {
-                if (state.user && state.currentRoomId) {
-                    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-                    if (state.presenceChannel) await state.presenceChannel.unsubscribe();
-                    if (state.chatChannel) await state.chatChannel.unsubscribe();
-                    if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
-                    state.isPresenceSubscribed = false;
-                    state.isChatChannelReady = false;
-                    setConnectionVisuals('offline');
-                }
+                if (state.user) cleanupChannels();
             }
             else if (document.visibilityState === 'visible') {
-                if (state.currentRoomId && navigator.onLine && !state.serverFull) { 
-                    if (!state.isChatChannelReady) attemptHardReconnect(); 
-                    else { if (state.presenceChannel && state.user) { await state.presenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); } } 
-                }
-                
-                if (!state.user && !state.isReconnecting) {
-                    const isLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
-                    if (!isLoggedOut) {
-                         const { data: { user } } = await db.auth.getUser();
-                         if (user) {
-                             state.user = user;
-                             window.nav('scr-lobby');
-                             window.loadRooms();
-                             setupGlobalPresence();
-                             updateLobbyAvatar();
-                         }
-                    }
+                if (state.user && navigator.onLine && !state.serverFull) { 
+                    attemptHardReconnect(); 
                 }
             } 
         });
