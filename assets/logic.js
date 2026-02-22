@@ -228,6 +228,10 @@ export function startChatApp(customConfig = {}) {
     });
 
     const cleanupChannels = async () => {
+        if (state.connectionTimeoutTimer) { 
+            clearTimeout(state.connectionTimeoutTimer); 
+            state.connectionTimeoutTimer = null; 
+        }
         if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
         if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
         if (state.presenceChannel) { state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; }
@@ -247,8 +251,19 @@ export function startChatApp(customConfig = {}) {
 
     const attemptHardReconnect = () => {
         if (!navigator.onLine || !state.currentRoomId || !state.user) return;
-        if (state.isReconnecting) return;
+        if (state.isReconnecting && !state.connectionTimeoutTimer) return;
+
+        cleanupChannels(); 
+        
+        state.isReconnecting = true;
         setConnectionVisuals('connecting');
+
+        state.connectionTimeoutTimer = setTimeout(() => {
+            console.warn("Connection attempt timed out. Forcing cleanup and retry...");
+            state.isReconnecting = false;
+            attemptHardReconnect();
+        }, 10000);
+
         initRoomPresence(state.currentRoomId);
         setupChatChannel(state.currentRoomId); 
     };
@@ -276,11 +291,14 @@ export function startChatApp(customConfig = {}) {
             }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
+            
             if (status === 'SUBSCRIBED') {
+                if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
                 state.isReconnecting = false;
                 if(state.reconnectTimer) clearTimeout(state.reconnectTimer);
                 setConnectionVisuals('connected');
             } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
                 if (navigator.onLine && !state.serverFull) {
                      state.isChatChannelReady = false;
                      if(!state.isReconnecting) {
@@ -324,21 +342,29 @@ export function startChatApp(customConfig = {}) {
     };
 
         const monitorConnection = () => {
-        window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); setConnectionVisuals('connecting'); attemptHardReconnect(); });
-        window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
+        window.addEventListener('online', () => { 
+            $('offline-screen').classList.remove('active'); 
+            setConnectionVisuals('connecting'); 
+            attemptHardReconnect(); 
+        });
+        window.addEventListener('offline', () => { 
+            $('offline-screen').classList.add('active'); 
+            setConnectionVisuals('offline'); 
+            if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
+            if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
+            state.isReconnecting = false; 
+        });
         setInterval(() => { if (!navigator.onLine) { if (!$('offline-screen').classList.contains('active')) $('offline-screen').classList.add('active'); } }, 2000);
-
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'visible') {
                 if (state.currentRoomId && navigator.onLine && !state.serverFull) {
-                    if (!state.isChatChannelReady || !state.isPresenceSubscribed) {
-                        console.log("Tab actief: Verbinding verbroken, opnieuw verbinden...");
-                        attemptHardReconnect();
+                    if (!state.isChatChannelReady) {
+                         attemptHardReconnect();
                     } else {
-                        if (state.presenceChannel && state.user) {
+                         if (state.presenceChannel && state.user) {
                             await state.presenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() });
                             queryOnlineCountImmediately();
-                        }
+                         }
                     }
                 }
             }
