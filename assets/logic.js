@@ -33,7 +33,7 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
-        isBackgrounded: false, isWaitingForSlot: false
+        isBackgrounded: false, isWaitingForSlot: false, globalPresenceReady: false
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -62,6 +62,17 @@ export function startChatApp(customConfig = {}) {
         if (roomCountEl) roomCountEl.innerText = roomCount;
         if (infoRoomEl) infoRoomEl.innerText = roomCount;
         if (infoGlobalEl) infoGlobalEl.innerText = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
+        
+        const startStatus = $('start-server-status');
+        if (startStatus) {
+            if (state.globalOnlineCount >= CONFIG.maxUsers) {
+                startStatus.innerText = `Server Full (${state.globalOnlineCount}/${CONFIG.maxUsers})`;
+                startStatus.style.color = "var(--danger)";
+            } else {
+                startStatus.innerText = `Online: ${state.globalOnlineCount}/${CONFIG.maxUsers}`;
+                startStatus.style.color = "var(--success)";
+            }
+        }
     };
 
     const processToastQueue = () => {
@@ -164,14 +175,15 @@ export function startChatApp(customConfig = {}) {
     };
     
     const setupGlobalPresence = async () => {
-        if(!state.user) return;
         if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
+        if(!state.user) return;
         
         state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: state.user.id } } });
         
         state.globalPresenceChannel.on('presence', { event: 'sync' }, () => {
             const presState = state.globalPresenceChannel.presenceState();
             state.globalOnlineCount = Object.keys(presState).length;
+            state.globalPresenceReady = true;
             updatePresenceUI();
 
             if (state.globalOnlineCount > CONFIG.maxUsers) {
@@ -205,27 +217,25 @@ export function startChatApp(customConfig = {}) {
     };
 
     const attemptHardReconnect = () => {
-        if (!navigator.onLine || !state.user || state.isBackgrounded) return; 
+        if (!navigator.onLine || !state.user) return; 
 
         cleanupChannels(true); 
         state.isReconnecting = !!state.currentRoomId; 
         setConnectionVisuals('connecting');
 
-        if (!state.globalPresenceChannel) setupGlobalPresence();
+        if (state.globalOnlineCount >= CONFIG.maxUsers) {
+             state.isWaitingForSlot = true;
+             state.serverFull = true;
+             const overlay = $('capacity-overlay');
+             const text = $('capacity-text');
+             if(text) text.innerText = "Room Full - Waiting for slot...";
+             overlay.classList.add('active');
+             state.isReconnecting = false;
+             setConnectionVisuals('offline');
+             return;
+        }
 
         if (state.currentRoomId) {
-            if (state.globalOnlineCount >= CONFIG.maxUsers) {
-                state.isWaitingForSlot = true;
-                state.serverFull = true;
-                const overlay = $('capacity-overlay');
-                const text = $('capacity-text');
-                if(text) text.innerText = "Room Full - Waiting for slot...";
-                overlay.classList.add('active');
-                state.isReconnecting = false;
-                setConnectionVisuals('offline');
-                return;
-            }
-            
             const timeout = getConnectionTimeout();
             state.connectionTimeoutTimer = setTimeout(() => { 
                 state.isReconnecting = false; 
@@ -289,7 +299,7 @@ export function startChatApp(customConfig = {}) {
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
             if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); }
-            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine && !state.serverFull && !state.isBackgrounded) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine && !state.serverFull) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
 
@@ -299,7 +309,7 @@ export function startChatApp(customConfig = {}) {
         state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); })
         .subscribe(async (status, err) => {
             if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel && !state.serverFull) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); }
-            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.serverFull && !state.isReconnecting && !state.isBackgrounded) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.serverFull && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } }
         });
     };
 
@@ -308,19 +318,10 @@ export function startChatApp(customConfig = {}) {
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         
         document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'hidden') {
-                state.isBackgrounded = true;
-                if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-                state.heartbeatInterval = null;
-                if (state.presenceChannel) await state.presenceChannel.unsubscribe();
-                if (state.chatChannel) await state.chatChannel.unsubscribe();
-                if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
-                setConnectionVisuals('offline');
-            } else if (document.visibilityState === 'visible') {
-                state.isBackgrounded = false;
-                if (state.user && navigator.onLine) {
-                     attemptHardReconnect();
-                }
+            // Do nothing on visibility change - keep Global Presence alive
+            // Only handle UI visual state if needed
+            if (document.visibilityState === 'visible' && state.currentRoomId && state.isChatChannelReady) {
+                 // Quick sync check if needed
             }
         });
     };
@@ -599,7 +600,23 @@ export function startChatApp(customConfig = {}) {
     window.sendMsg = async (e) => { if (!e || !e.isTrusted) return; if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return; if (!applyRateLimit()) return; state.processingAction = true; const v = $('chat-input').value.trim(); if(!v) { state.processingAction = false; return; } $('chat-input').value = ''; state.lastMessageTime = Date.now(); try { const enc = await encryptMessage(v); await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); } catch(e) { window.toast("Failed to send"); } state.processingAction = false; };
     window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
-    window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); localStorage.removeItem(FLAG_LOGOUT); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { state.processingAction = false; } };
+    window.handleLogin = async (e) => { 
+        if (!e || !e.isTrusted) return;
+        if(state.processingAction) return;
+        
+        if (state.globalOnlineCount >= CONFIG.maxUsers) {
+             return window.toast("Server is full. Please try again later.");
+        }
+
+        state.processingAction = true; 
+        const em = $('l-email').value, p = $('l-pass').value; 
+        if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
+        window.setLoading(true, "Signing In..."); 
+        localStorage.removeItem(FLAG_LOGOUT); 
+        const {error} = await db.auth.signInWithPassword({email:em, password:p});
+        if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { state.processingAction = false; } 
+    };
+
     window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
     const startVTimer = () => { let left = CONFIG.verificationCodeExpiry; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
     window.handleVerify = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); if(!temp) { window.toast("Session expired"); state.processingAction = false; return; } window.setLoading(true, "Verifying..."); try { const r = await fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.em, code: code }) }); if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Verified") { await finishReg(temp); } else { window.toast(j.message || "Wrong code"); window.setLoading(false); } } catch(err) { window.toast("API Fallback: Auto-verifying (Dev Mode)"); await finishReg(temp); } state.processingAction = false; };
@@ -616,7 +633,39 @@ export function startChatApp(customConfig = {}) {
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
-    db.auth.onAuthStateChange(async (ev, ses) => { const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true'; if (isFlaggedLogout) { state.user = null; return; } state.user = ses?.user; const createBtn = $('icon-plus-lobby'); const activeScreenId = document.querySelector('.screen.active')?.id; if (createBtn) createBtn.style.display = 'flex'; if (ev === 'SIGNED_IN') { if(state.user) { const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify']; if (authScreens.includes(activeScreenId)) { window.nav('scr-lobby'); window.loadRooms(); window.forceClaimMaster(); } updateLobbyAvatar(); setupGlobalPresence(); } } if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); localStorage.removeItem(FLAG_LOGOUT); window.nav('scr-start'); } });
+    db.auth.onAuthStateChange(async (ev, ses) => { 
+        const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
+        if (isFlaggedLogout) { state.user = null; return; } 
+        state.user = ses?.user; 
+        
+        if (state.user) {
+             setupGlobalPresence();
+        }
+
+        const activeScreenId = document.querySelector('.screen.active')?.id;
+        const createBtn = $('icon-plus-lobby');
+        if (createBtn) createBtn.style.display = 'flex'; 
+        
+        if (ev === 'SIGNED_IN') {
+            if(state.user) { 
+                const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify']; 
+                if (authScreens.includes(activeScreenId)) { 
+                    window.nav('scr-lobby'); 
+                    window.loadRooms(); 
+                    window.forceClaimMaster(); 
+                } 
+                updateLobbyAvatar(); 
+            } 
+        } 
+        if (ev === 'SIGNED_OUT') { 
+            if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
+            if (state.presenceChannel) state.presenceChannel.unsubscribe(); 
+            if (state.chatChannel) state.chatChannel.unsubscribe(); 
+            if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); 
+            localStorage.removeItem(FLAG_LOGOUT); 
+            window.nav('scr-start'); 
+        } 
+    });
 
     window.nav = (id, direction = null) => { const current = document.querySelector('.screen.active'); const next = $(id); if(!next) return; if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); } if(id === 'scr-register') { state.currentStep.reg = 1; state.selectedAvatar = null; $('r-name').value = ''; $('r-email').value = ''; $('r-pass').value = ''; $('r-avatar-url').value = ''; updateStepUI('reg'); } if(id === 'scr-account') window.prepareAccountPage(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right')); if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); } else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); } else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); next.classList.add('active'); lucide.createIcons(); const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; if(id === 'scr-lobby') updateLobbyAvatar(); };
     window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
@@ -625,6 +674,29 @@ export function startChatApp(customConfig = {}) {
     window.joinAttempt = async (id) => { window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); } const { data, error } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("Not found"); state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); };
     window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
 
-    const init = async () => { if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; } const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; } const [userRes, userErr] = await safeAwait(db.auth.getUser()); if (userErr) { await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; } const user = userRes?.data?.user; if (user) { state.user = user; const masterExists = await checkMaster(); if (masterExists) { const overlay = $('block-overlay'); overlay.classList.add('active'); lucide.createIcons(); window.nav('scr-lobby'); window.loadRooms(); } else { window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms(); } } lucide.createIcons(); window.setLoading(false); monitorConnection(); };
+    const init = async () => { 
+        if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; } 
+        
+        monitorConnection();
+        
+        const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
+        if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); return; } 
+        
+        const [userRes, userErr] = await safeAwait(db.auth.getUser()); 
+        if (userErr) { await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); return; } 
+        
+        const user = userRes?.data?.user; 
+        if (user) { 
+            state.user = user; 
+            setupGlobalPresence(); // Start Global Presence immediately
+            // Do NOT navigate to lobby automatically
+            window.nav('scr-start'); 
+        } else {
+            window.nav('scr-start');
+        }
+        
+        lucide.createIcons(); 
+        window.setLoading(false); 
+    };
     init();
 }
