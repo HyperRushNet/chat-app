@@ -273,7 +273,28 @@ export function startChatApp(customConfig = {}) {
         window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); setConnectionVisuals('connecting'); attemptHardReconnect(); });
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         setInterval(() => { if (!navigator.onLine) { if (!$('offline-screen').classList.contains('active')) $('offline-screen').classList.add('active'); } }, 2000);
-        document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible') { if (state.currentRoomId && navigator.onLine && !state.serverFull) { if (!state.isChatChannelReady) attemptHardReconnect(); else { if (state.presenceChannel && state.user) { await state.presenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); } } } } });
+        document.addEventListener('visibilitychange', async () => { 
+            if (document.visibilityState === 'visible') {
+                if (state.currentRoomId && navigator.onLine && !state.serverFull) { 
+                    if (!state.isChatChannelReady) attemptHardReconnect(); 
+                    else { if (state.presenceChannel && state.user) { await state.presenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); } } 
+                }
+                
+                if (!state.user && !state.isReconnecting) {
+                    const isLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true';
+                    if (!isLoggedOut) {
+                         const { data: { user } } = await db.auth.getUser();
+                         if (user) {
+                             state.user = user;
+                             window.nav('scr-lobby');
+                             window.loadRooms();
+                             setupGlobalPresence();
+                             updateLobbyAvatar();
+                         }
+                    }
+                }
+            } 
+        });
     };
 
     window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
