@@ -26,7 +26,7 @@
          .header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 16px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-shrink:0}
          .input-field{color:var(--text-main);width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:var(--radius);padding:14px;font-size:15px;outline:0;margin-bottom:10px;transition:.2s}
          .input-field:focus{border-color:var(--accent);background:#fff}
-         .btn{color:var(--text-main);width:100%;height:50px;border-radius:var(--radius);border:1px solid var(--border);background:0 0;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;transition:.15s;cursor:pointer}
+         .btn{color:var(--text-main);width:100%;height:50px;border-radius:var(--radius);border:1px solid var(--border);background:0 0;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;transition:.15s;cursor:pointer;padding:0 20px;}
          .btn-accent{background:var(--accent);color:#fff;border:none}
          .btn:active{transform:scale(.98);opacity:.8}
          #toast-container{position:absolute;top:30px;left:50%;transform:translateX(-50%);z-index:999999;width:85%;pointer-events:none;display:flex;flex-direction:column;align-items:center}
@@ -230,8 +230,10 @@
                <div id="reg-step-2" class="wizard-step">
                   <h1 class="title">Profile</h1><p class="subtitle">Step 2 of 3</p>
                   <input id="r-name" class="input-field" placeholder="Full Name">
-                  <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
-                  <button class="btn btn-accent" onclick="window.nextRegStep()">Next</button>
+                  <div style="display:flex;gap:8px;margin-top:4px">
+                     <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
+                     <button class="btn btn-accent" style="flex:1" onclick="window.nextRegStep()">Next</button>
+                  </div>
                </div>
                <div id="reg-step-3" class="wizard-step">
                   <h1 class="title">Avatar</h1><p class="subtitle">Step 3 of 3</p>
