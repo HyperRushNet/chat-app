@@ -271,8 +271,19 @@ export function startChatApp(customConfig = {}) {
         window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); setConnectionVisuals('connecting'); attemptHardReconnect(); });
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         setInterval(() => { if (!navigator.onLine) { if (!$('offline-screen').classList.contains('active')) $('offline-screen').classList.add('active'); } }, 2000);
-        document.addEventListener('visibilitychange', async () => { 
-            if (document.visibilityState === 'visible') {
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'hidden') {
+                if (state.user && state.currentRoomId) {
+                    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+                    if (state.presenceChannel) await state.presenceChannel.unsubscribe();
+                    if (state.chatChannel) await state.chatChannel.unsubscribe();
+                    if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
+                    state.isPresenceSubscribed = false;
+                    state.isChatChannelReady = false;
+                    setConnectionVisuals('offline');
+                }
+            }
+            else if (document.visibilityState === 'visible') {
                 if (state.currentRoomId && navigator.onLine && !state.serverFull) { 
                     if (!state.isChatChannelReady) attemptHardReconnect(); 
                     else { if (state.presenceChannel && state.user) { await state.presenceChannel.track({ user_id: state.user.id, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); } } 
@@ -529,7 +540,7 @@ export function startChatApp(customConfig = {}) {
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
     const renderMsg = (m, prevMsg, isDirect) => {
-        const isDeleted = m.deleted === true; // Only check the deleted flag from raw content check
+        const isDeleted = m.deleted === true;
         const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000;
         let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
