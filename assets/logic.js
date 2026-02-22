@@ -32,7 +32,8 @@ export function startChatApp(customConfig = {}) {
         lastLobbyRefresh: 0, removePasswordFlag: false, longPressTimer: null,
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
-        profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g'
+        profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
+        isBackgrounded: false
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -189,7 +190,7 @@ export function startChatApp(customConfig = {}) {
     };
 
     const attemptHardReconnect = () => {
-        if (!navigator.onLine || !state.user) return; 
+        if (!navigator.onLine || !state.user || state.isBackgrounded) return; 
         
         cleanupChannels(); 
         state.isReconnecting = !!state.currentRoomId; 
@@ -261,7 +262,7 @@ export function startChatApp(customConfig = {}) {
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
             if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); }
-            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine && !state.serverFull) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine && !state.serverFull && !state.isBackgrounded) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
 
@@ -271,7 +272,7 @@ export function startChatApp(customConfig = {}) {
         state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); })
         .subscribe(async (status, err) => {
             if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel && !state.serverFull) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); }
-            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.serverFull && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.serverFull && !state.isReconnecting && !state.isBackgrounded) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } }
         });
     };
 
@@ -281,6 +282,7 @@ export function startChatApp(customConfig = {}) {
         
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'hidden') {
+                state.isBackgrounded = true;
                 if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
                 state.heartbeatInterval = null;
                 if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
@@ -288,6 +290,7 @@ export function startChatApp(customConfig = {}) {
                 if (state.chatChannel) await state.chatChannel.unsubscribe();
                 setConnectionVisuals('offline');
             } else if (document.visibilityState === 'visible') {
+                state.isBackgrounded = false;
                 if (state.user && navigator.onLine) {
                     setupGlobalPresence();
                     if (state.currentRoomId) {
