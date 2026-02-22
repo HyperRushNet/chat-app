@@ -63,7 +63,9 @@ export function startChatApp(customConfig = {}) {
         reconnectTimer: null,
         isReconnecting: false,
         deleteConfirmTimeout: null,
-        profileCache: {}
+        profileCache: {},
+        editingMessage: null, // { id, content }
+        contextTarget: null // The message element being long-pressed
     };
 
     const FLAG_LOGOUT = 'hrn_flag_force_logout';
@@ -162,6 +164,11 @@ export function startChatApp(customConfig = {}) {
                 const results = [];
                 for (const m of payload.messages) {
                     try {
+                        // Handle Deleted Message Marker
+                        if (m.content === '/') {
+                            results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at });
+                            continue;
+                        }
                         const binary = atob(m.content);
                         const bytes = new Uint8Array(binary.length);
                         for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -176,6 +183,11 @@ export function startChatApp(customConfig = {}) {
                 self.postMessage({ type: 'historyDecrypted', results });
             } else if (type === 'decryptSingle') {
                 if (!self.cryptoKey) throw new Error("Key not derived");
+                // Handle Deleted Message Marker
+                if (payload.content === '/') {
+                     self.postMessage({ type: 'singleDecrypted', result: { deleted: true } });
+                     return;
+                }
                 try {
                     const binary = atob(payload.content);
                     const bytes = new Uint8Array(binary.length);
@@ -277,15 +289,32 @@ export function startChatApp(customConfig = {}) {
             if (m && state.currentRoomId) {
                 pendingCallbacks['singleDecrypted'] = async (decRes) => {
                     if(decRes.result) {
-                        const msgObj = { ...m, time: decRes.result.time, text: decRes.result.text };
+                        const msgObj = { ...m, ...decRes.result };
                         const container = $('chat-messages');
                         const lastMsg = container.querySelector('.msg:last-of-type');
                         let prevMsg = null;
-                        if(lastMsg) prevMsg = { user_id: lastMsg.classList.contains('me') ? state.user.id : 'other', created_at: lastMsg.dataset.time };
+                        if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
                         container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect));
                         container.scrollTop = container.scrollHeight;
                         checkChatEmpty();
                     }
+                };
+                cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
+            }
+        }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+            const m = payload.new;
+            const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`);
+            if (msgEl) {
+                pendingCallbacks['singleDecrypted'] = (decRes) => {
+                     // Handle deleted or edited content
+                     const deleted = m.content === '/';
+                     if(deleted) {
+                         msgEl.outerHTML = renderMsg({ ...m, deleted: true }, null, isDirect);
+                         window.toast("Message deleted");
+                     } else if (decRes.result) {
+                         const updatedHtml = renderMsg({ ...m, ...decRes.result }, null, isDirect);
+                         msgEl.outerHTML = updatedHtml;
+                     }
                 };
                 cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
             }
@@ -341,7 +370,7 @@ export function startChatApp(customConfig = {}) {
             });
     };
 
-        const monitorConnection = () => {
+    const monitorConnection = () => {
         window.addEventListener('online', () => { 
             $('offline-screen').classList.remove('active'); 
             setConnectionVisuals('connecting'); 
@@ -373,6 +402,89 @@ export function startChatApp(customConfig = {}) {
 
     window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
 
+    // Context Menu Logic
+    const showContextMenu = (e, msgData) => {
+        e.preventDefault();
+        hideContextMenu(); // Close any open ones
+        const menu = $('context-menu');
+        const editBtn = $('ctx-edit');
+        const deleteBtn = $('ctx-delete');
+        
+        // Logic checks
+        const isOwner = msgData.user_id === state.user.id;
+        const msgDate = new Date(msgData.created_at);
+        const now = new Date();
+        const diffMinutes = (now - msgDate) / 60000;
+        const canEdit = isOwner && diffMinutes < 15 && !msgData.deleted;
+        const canDelete = isOwner && !msgData.deleted;
+        
+        editBtn.style.display = canEdit ? 'flex' : 'none';
+        deleteBtn.style.display = canDelete ? 'flex' : 'none';
+        
+        // Store target info
+        state.contextTarget = msgData;
+        
+        // Position
+        let x = e.clientX || e.touches?.[0]?.clientX;
+        let y = e.clientY || e.touches?.[0]?.clientY;
+        
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+        
+        // Adjust if off screen
+        setTimeout(() => {
+            const rect = menu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`;
+            if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`;
+            menu.classList.add('active');
+        }, 10);
+    };
+
+    const hideContextMenu = () => {
+        const menu = $('context-menu');
+        menu.classList.remove('active');
+        state.contextTarget = null;
+    };
+    
+    window.cancelEdit = () => {
+        state.editingMessage = null;
+        $('chat-input').value = '';
+        $('editing-header').style.display = 'none';
+        $('chat-input').focus();
+    };
+
+    $('ctx-edit').onclick = () => {
+        if(!state.contextTarget) return;
+        state.editingMessage = state.contextTarget;
+        $('chat-input').value = state.contextTarget.text; // Original text stored in dataset
+        $('editing-header').style.display = 'flex';
+        $('chat-input').focus();
+        hideContextMenu();
+    };
+
+    $('ctx-copy').onclick = () => {
+        if(!state.contextTarget) return;
+        navigator.clipboard.writeText(state.contextTarget.text);
+        window.toast("Copied to clipboard");
+        hideContextMenu();
+    };
+
+    $('ctx-delete').onclick = async () => {
+        if(!state.contextTarget || !state.user) return;
+        hideContextMenu();
+        window.setLoading(true, "Deleting...");
+        // Soft delete: set content to '/'
+        const { error } = await db.from('messages').update({ content: '/' }).eq('id', state.contextTarget.id);
+        if(error) window.toast("Failed: " + error.message);
+        else window.toast("Message deleted");
+        window.setLoading(false);
+    };
+
+    document.addEventListener('click', (e) => {
+        if (!$('context-menu').contains(e.target)) hideContextMenu();
+    });
+
+    // Helper Classes & UI functions
     const updateAccessSummary = (prefix) => {
         const summaryEl = $(`${prefix}-access-summary`);
         if (!summaryEl) return;
@@ -505,33 +617,63 @@ export function startChatApp(customConfig = {}) {
     const processText = (text) => { let t = esc(text); const urlRegex = /(https?:\/\/[^\s]+)/g; t = t.replace(urlRegex, (url) => { const safeUrl = url.replace(/[<>"']/g, ''); return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${safeUrl}</a>`; }); return t; };
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
-    window.showTooltip = (e, content) => {
-        const tooltip = $('context-tooltip');
-        tooltip.innerHTML = content;
-        tooltip.classList.add('active');
-        let x = e.clientX || e.touches?.[0]?.clientX;
-        let y = e.clientY || e.touches?.[0]?.clientY;
-        tooltip.style.left = `${x}px`;
-        tooltip.style.top = `${y - 40}px`;
-        if (tooltip.offsetLeft < 10) tooltip.style.left = '10px';
-        if (tooltip.offsetTop < 10) tooltip.style.top = `${y + 10}px`;
-    };    
-    
-    const hideTooltip = () => $('context-tooltip').classList.remove('active');
-
     const renderMsg = (m, prevMsg, isDirect) => {
-        let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
+        // Handle Deleted Message
+        if (m.deleted || m.text === '/') {
+            return `<div class="msg ${m.user_id === state.user?.id ? 'me' : 'not-me'}" data-id="${m.id}" style="opacity:0.6">
+                <span class="msg-deleted"><i data-lucide="ban"></i> Deleted</span>
+            </div>`;
+        }
+
+        let html = ""; 
+        const msgDateObj = new Date(m.created_at); 
+        const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
+        
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
-        const displayName = truncateText(m.user_name || 'User', 18); const processedText = processText(m.text); const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
-        const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; const fullDate = msgDateObj.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }); const tooltipContent = `<b>${esc(m.user_name || 'User')}</b><br>${fullDate}`;
-        html += `<div class="msg ${sideClass} ${msgClass}" data-time="${m.created_at}" data-tooltip="${esc(tooltipContent)}" oncontextmenu="event.preventDefault(); showTooltip(event, this.dataset.tooltip)" ontouchstart="window.startMsgTimer(event, this)" ontouchend="window.clearMsgTimer()" ontouchmove="window.clearMsgTimer()">${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${esc(m.time)}</span></div>`;
+        
+        const displayName = truncateText(m.user_name || 'User', 18); 
+        const processedText = processText(m.text); 
+        const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
+        const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
+        
+        // Store necessary data for context menu
+        const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${esc(m.text)}"`;
+        
+        html += `<div class="msg ${sideClass} ${msgClass}" ${dataAttrs} oncontextmenu="event.preventDefault()">`;
+        
+        // Long press event listeners
+        html += `<script>
+            (function() {
+                let timer;
+                const el = document.currentScript.parentElement;
+                el.addEventListener('touchstart', (e) => { 
+                    timer = setTimeout(() => window.showMsgContext(e, el), 500); 
+                }, {passive: true});
+                el.addEventListener('touchend', () => clearTimeout(timer));
+                el.addEventListener('touchmove', () => clearTimeout(timer));
+                el.addEventListener('mousedown', (e) => { 
+                    timer = setTimeout(() => window.showMsgContext(e, el), 500); 
+                });
+                el.addEventListener('mouseup', () => clearTimeout(timer));
+                el.addEventListener('mouseleave', () => clearTimeout(timer));
+            })();
+        <\/script>`;
+
+        html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${esc(m.time)}</span></div>`;
         return html;
     };
-
-    window.startMsgTimer = (e, el) => { state.longPressTimer = setTimeout(() => window.showTooltip(e, el.dataset.tooltip), 500); };
-    window.clearMsgTimer = () => { if(state.longPressTimer) clearTimeout(state.longPressTimer); state.longPressTimer = null; };
-    document.addEventListener('click', hideTooltip);
+    
+    // Global bridge for events inside innerHTML
+    window.showMsgContext = (e, el) => {
+        const msgData = {
+            id: el.dataset.id,
+            user_id: el.dataset.uid,
+            created_at: el.dataset.time,
+            text: el.dataset.text
+        };
+        showContextMenu(e, msgData);
+    };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
 
@@ -544,7 +686,7 @@ export function startChatApp(customConfig = {}) {
         data.reverse();
         pendingCallbacks['historyDecrypted'] = async (res) => {
             const validMsgs = res.results.filter(m => !m.error);
-            if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; }
+            if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); }
             state.isLoadingHistory = false;
         };
         cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
@@ -572,7 +714,6 @@ export function startChatApp(customConfig = {}) {
         $('info-date').innerText = `${day}/${month}/${year}`;
         
         if (room.is_direct) {
-            // DM Logic
             $('info-type').innerText = "Direct Message";
             creatorRow.style.display = 'none'; 
             
@@ -588,15 +729,9 @@ export function startChatApp(customConfig = {}) {
                 const avEl = $('info-avatar');
                 if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`;
                 else avEl.innerText = (profile?.full_name || 'U').charAt(0);
-            } else {
-                $('info-name').innerText = "Chat";
-                $('info-avatar').innerText = "?";
             }
-            
-            // Both parties can delete DMs
             delBtn.style.display = 'flex'; 
         } else {
-            // Group Logic
             $('info-type').innerText = "Group Chat";
             $('info-name').innerText = room.name;
             const avEl = $('info-avatar');
@@ -614,7 +749,6 @@ export function startChatApp(customConfig = {}) {
                 $('info-creator').innerText = profile?.full_name || 'Unknown';
             } else $('info-creator').innerText = 'Unknown';
             
-            // Owner privileges for delete
             if (room.created_by === state.user.id) {
                 delBtn.style.display = 'flex';
             }
@@ -642,7 +776,6 @@ export function startChatApp(customConfig = {}) {
 
     window.openRoomSettings = async () => {
         window.closeOverlay();
-        
         if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner");
         window.setLoading(true, "Loading...");
         const room = state.currentRoomData;
@@ -699,7 +832,7 @@ export function startChatApp(customConfig = {}) {
         state.currentRoomPassword = rawPassword;
         if (state.chatChannel) state.chatChannel.unsubscribe();
         state.currentRoomId = id; state.lastRenderedDateLabel = null; state.oldestMessageTimestamp = null; state.hasMoreHistory = true; state.isLoadingHistory = false;
-        $('chat-messages').innerHTML = '<div id="chat-empty-state" style="inset:0;z-index:5;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;width:100%"><i data-lucide="message-circle" style="width:40px;height:40px;color:#d1d1d6;margin-bottom:12px"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No messages yet</div></div>';
+        $('chat-messages').innerHTML = '';
         $('chat-messages').onscroll = handleScroll;
         const keySource = rawPassword ? (rawPassword + id) : id;
         try { await deriveKey(keySource, roomSalt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); }
@@ -725,7 +858,6 @@ export function startChatApp(customConfig = {}) {
         const avEl = $('chat-avatar-display');
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase();
         
-        // Logic fix for Settings button visibility
         const editBtn = $('info-edit-btn');
         if (!isDirect && room.created_by === state.user.id) {
             editBtn.style.display = 'flex';
@@ -742,19 +874,37 @@ export function startChatApp(customConfig = {}) {
         if (data && data.length > 0) {
             data.reverse(); if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at;
             window.setLoading(true, "Decrypting...");
-            pendingCallbacks['historyDecrypted'] = async (res) => { const b = $('chat-messages'); b.innerHTML = ''; let prev = null; res.results.forEach(m => { if(!m.error) { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; } }); b.scrollTop = b.scrollHeight; checkChatEmpty(); window.setLoading(false); };
+            pendingCallbacks['historyDecrypted'] = async (res) => { const b = $('chat-messages'); b.innerHTML = ''; let prev = null; res.results.forEach(m => { if(!m.error) { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; } }); b.scrollTop = b.scrollHeight; checkChatEmpty(); lucide.createIcons(); window.setLoading(false); };
             cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } });
         } else { state.hasMoreHistory = false; checkChatEmpty(); window.setLoading(false); }
         setupChatChannel(id); initRoomPresence(id);
     };
 
-    const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) { const wait = CONFIG.rateLimitMs - (now - state.lastMessageTime); $('chat-input-area').classList.add('rate-limited'); setTimeout(() => $('chat-input-area').classList.remove('rate-limited'), wait); return false; } return true; };
+    const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) { const wait = CONFIG.rateLimitMs - (now - state.lastMessageTime); return false; } return true; };
 
     window.sendMsg = async (e) => {
         if (!e || !e.isTrusted) return; if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return; if (!applyRateLimit()) return; state.processingAction = true;
         const v = $('chat-input').value.trim(); if(!v) { state.processingAction = false; return; }
+        
         $('chat-input').value = ''; state.lastMessageTime = Date.now();
-        try { const enc = await encryptMessage(v); await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); } catch(e) { window.toast("Failed to send"); }
+        
+        // Check if editing
+        if (state.editingMessage) {
+            try {
+                const enc = await encryptMessage(v);
+                const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id);
+                if (error) window.toast("Failed to edit: " + error.message);
+                else window.toast("Message updated");
+                state.editingMessage = null;
+                $('editing-header').style.display = 'none';
+            } catch(e) { window.toast("Failed to encrypt edit"); }
+        } else {
+            // Normal Send
+            try { 
+                const enc = await encryptMessage(v); 
+                await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); 
+            } catch(e) { window.toast("Failed to send"); }
+        }
         state.processingAction = false;
     };
 
@@ -764,7 +914,7 @@ export function startChatApp(customConfig = {}) {
         if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false;
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null;
         setConnectionVisuals('offline');
-        if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; // Hide settings on leave
+        if($('info-edit-btn')) $('info-edit-btn').style.display = 'none';
         window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false);
     };
 
