@@ -688,10 +688,9 @@ export function startChatApp(customConfig = {}) {
         const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
         if (isHardLoggedOut) { 
             state.user = null; 
-            await db.auth.signOut(); // Ensure session is cleared
+            await db.auth.signOut();
             window.nav('scr-start'); 
             window.setLoading(false);
-            // Still setup global presence for count
             setupGlobalPresence(null); 
             return; 
         } 
@@ -703,10 +702,11 @@ export function startChatApp(customConfig = {}) {
         if (user) { 
             state.user = user; 
             setupGlobalPresence(user.id); 
-            // DO NOT AUTO NAVIGATE. User must click login.
-            window.nav('scr-start'); 
+            window.nav('scr-lobby'); 
+            window.loadRooms(); 
+            window.forceClaimMaster();
+            updateLobbyAvatar();
         } else {
-            // No user, just setup global presence for count
             setupGlobalPresence(null);
             window.nav('scr-start');
         }
