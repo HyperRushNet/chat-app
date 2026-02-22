@@ -301,7 +301,7 @@ export function startChatApp(customConfig = {}) {
 
     const showContextMenu = (e, msgEl) => {
         if(!msgEl || !state.user) return;
-        if(msgEl.classList.contains('msg-deleted')) return; // Security: Do not open modal for deleted messages
+        if(msgEl.classList.contains('msg-deleted')) return; 
         e.preventDefault();
         
         const msgData = {
@@ -344,8 +344,6 @@ export function startChatApp(customConfig = {}) {
             menu.classList.add('active'); 
             lucide.createIcons();
         }, 10);
-
-        state.preventNextClose = true;
     };
     
     const hideContextMenu = () => { 
@@ -415,9 +413,7 @@ export function startChatApp(customConfig = {}) {
             state.preventNextClose = false;
             return;
         }
-        if (!$('context-menu').contains(e.target)) {
-            hideContextMenu(); 
-        }
+        hideContextMenu(); 
     });
     
     const chatContainer = $('chat-messages');
@@ -425,7 +421,10 @@ export function startChatApp(customConfig = {}) {
     chatContainer.addEventListener('touchstart', (e) => {
         const msg = e.target.closest('.msg');
         if (!msg) return;
-        state.longPressTimer = setTimeout(() => showContextMenu(e, msg), 500);
+        state.longPressTimer = setTimeout(() => {
+            showContextMenu(e, msg);
+            state.preventNextClose = true;
+        }, 500);
     }, {passive: true});
     
     chatContainer.addEventListener('touchend', () => clearTimeout(state.longPressTimer));
@@ -530,7 +529,7 @@ export function startChatApp(customConfig = {}) {
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
     const renderMsg = (m, prevMsg, isDirect) => {
-        const isDeleted = m.deleted || m.text === '/';
+        const isDeleted = m.deleted === true; // Only check the deleted flag from raw content check
         const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000;
         let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
