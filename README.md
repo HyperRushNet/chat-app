@@ -1,4 +1,4 @@
-# HRN Chat 2026 - v1.0.3
+# HRN Chat 2026 - v1.0.4
 
 A high-security, real-time messaging interface built with modern web technologies.  
 Focuses on privacy, end-to-end encryption, and a seamless user experience.
@@ -20,6 +20,8 @@ Focuses on privacy, end-to-end encryption, and a seamless user experience.
 - **Connectivity Monitoring**: Detects connection loss and syncs presence automatically on reconnect.  
 - **Modern UI**: Minimalist iOS-inspired design with Plus Jakarta Sans font and Lucide icons.  
 - **Smart Date Labels**: Sticky dividers for "Today", "Yesterday", weekdays, and full dates.  
+- **Live Presence Count**: Shows online users per room and globally.  
+- **Message Actions**: Delete, edit, copy messages securely.
 
 ---
 
