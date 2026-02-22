@@ -1,9 +1,11 @@
 -- GH: HyperRushNet | MIT License | 2026
 -- Execute this in your Supabase SQL Editor
 
--- 1. Drop existing policies and tables if they exist to ensure a clean slate
+-- 1. Clean Slate
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS on_message_update ON public.messages;
 DROP FUNCTION IF EXISTS public.handle_new_user CASCADE;
+DROP FUNCTION IF EXISTS public.handle_updated_at CASCADE;
 DROP FUNCTION IF EXISTS public.verify_room_password CASCADE;
 DROP FUNCTION IF EXISTS public.set_room_password CASCADE;
 DROP FUNCTION IF EXISTS public.can_access_room CASCADE;
@@ -30,7 +32,8 @@ CREATE TABLE public.rooms (
     salt text NOT NULL,
     created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     allowed_users text[] NOT NULL DEFAULT '{*}',
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE public.room_passwords (
@@ -44,7 +47,8 @@ CREATE TABLE public.messages (
     user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     user_name text NOT NULL,
     content text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz
 );
 
 -- 3. Create Indexes
@@ -112,7 +116,7 @@ WITH CHECK (
     )
 );
 
--- 6. Create Functions
+-- 6. Create Functions & Triggers
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -136,10 +140,24 @@ BEGIN
 END;
  $$;
 
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$ BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+ $$;
+
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT OR UPDATE OF raw_user_meta_data ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user();
+
+CREATE TRIGGER on_message_update
+BEFORE UPDATE ON public.messages
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE OR REPLACE FUNCTION public.set_room_password(p_room_id uuid, p_hash text)
 RETURNS void
@@ -209,4 +227,5 @@ BEGIN
 END;
  $$;
 
+-- 7. Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
