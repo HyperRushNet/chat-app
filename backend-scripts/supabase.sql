@@ -1,6 +1,7 @@
--- Supabase SQL -- GH: HyperRushNet | MIT License | 2026
--- You also need to go to Authentication => Sign in / Providers and disable "Confirm email"
+-- GH: HyperRushNet | MIT License | 2026
+-- Execute this in your Supabase SQL Editor
 
+-- 1. Drop existing policies and tables if they exist to ensure a clean slate
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user CASCADE;
 DROP FUNCTION IF EXISTS public.verify_room_password CASCADE;
@@ -11,6 +12,7 @@ DROP TABLE IF EXISTS public.room_passwords CASCADE;
 DROP TABLE IF EXISTS public.rooms CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 
+-- 2. Create Tables
 CREATE TABLE public.profiles (
     id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text NOT NULL DEFAULT 'User',
@@ -45,16 +47,19 @@ CREATE TABLE public.messages (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- 3. Create Indexes
 CREATE INDEX idx_messages_room_id_created_at ON public.messages(room_id, created_at DESC);
 CREATE INDEX idx_rooms_created_by ON public.rooms(created_by);
 CREATE INDEX idx_profiles_id ON public.profiles(id);
 CREATE INDEX idx_rooms_allowed_users ON public.rooms USING GIN (allowed_users);
 
+-- 4. Enable RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.room_passwords ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
+-- 5. Create Policies
 CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "profiles_insert_self" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "profiles_update_self" ON public.profiles FOR UPDATE USING (auth.uid() = id);
@@ -96,6 +101,18 @@ CREATE POLICY "messages_insert_authenticated" ON public.messages FOR INSERT WITH
     AND auth.uid() = user_id
 );
 
+-- UPDATE POLICY: Allow editing within 15 mins OR setting content to '/' for deletion anytime
+CREATE POLICY "messages_update_own" ON public.messages FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (
+    auth.uid() = user_id 
+    AND (
+        content = '/' 
+        OR created_at > now() - interval '15 minutes'
+    )
+);
+
+-- 6. Create Functions
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -172,8 +189,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
 SET search_path = public
-AS $$ 
-DECLARE
+AS $$ DECLARE
     r_allowed text[];
     r_creator uuid;
 BEGIN
