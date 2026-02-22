@@ -149,6 +149,7 @@ export function startChatApp(customConfig = {}) {
         if (state.chatChannel) { state.chatChannel.unsubscribe(); state.chatChannel = null; }
         if (state.globalPresenceChannel) { state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = null; }
         state.isChatChannelReady = false;
+        state.isReconnecting = false;
         setConnectionVisuals('offline');
     };
 
@@ -190,10 +191,6 @@ export function startChatApp(customConfig = {}) {
     const attemptHardReconnect = () => {
         if (!navigator.onLine || !state.user) return; 
         
-        if (state.currentRoomId) {
-            if (state.isReconnecting && !state.connectionTimeoutTimer) return;
-        }
-
         cleanupChannels(); 
         state.isReconnecting = !!state.currentRoomId; 
         setConnectionVisuals('connecting');
@@ -281,16 +278,24 @@ export function startChatApp(customConfig = {}) {
     const monitorConnection = () => {
         window.addEventListener('online', () => { $('offline-screen').classList.remove('active'); setConnectionVisuals('connecting'); attemptHardReconnect(); });
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
-        setInterval(() => { if (!navigator.onLine) { if (!$('offline-screen').classList.contains('active')) $('offline-screen').classList.add('active'); } }, 2000);
-        document.addEventListener('visibilitychange', async () => { 
+        
+        document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'hidden') {
-                if (state.user) cleanupChannels();
-            }
-            else if (document.visibilityState === 'visible') {
-                if (state.user && navigator.onLine && !state.serverFull) { 
-                    attemptHardReconnect(); 
+                if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+                state.heartbeatInterval = null;
+                if (state.globalPresenceChannel) await state.globalPresenceChannel.unsubscribe();
+                if (state.presenceChannel) await state.presenceChannel.unsubscribe();
+                if (state.chatChannel) await state.chatChannel.unsubscribe();
+                setConnectionVisuals('offline');
+            } else if (document.visibilityState === 'visible') {
+                if (state.user && navigator.onLine) {
+                    setupGlobalPresence();
+                    if (state.currentRoomId) {
+                        initRoomPresence(state.currentRoomId);
+                        setupChatChannel(state.currentRoomId);
+                    }
                 }
-            } 
+            }
         });
     };
 
