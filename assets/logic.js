@@ -320,7 +320,6 @@ export function startChatApp(customConfig = {}) {
         window.addEventListener('offline', () => { $('offline-screen').classList.add('active'); setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; });
         
         document.addEventListener('visibilitychange', async () => {
-            // Keep global presence alive always
         });
     };
 
@@ -602,10 +601,9 @@ export function startChatApp(customConfig = {}) {
         if (!e || !e.isTrusted) return;
         if(state.processingAction) return;
         
-        localStorage.removeItem(FLAG_LOGOUT); // Clear flag on manual login attempt
+        localStorage.removeItem(FLAG_LOGOUT);
 
-        // Check if full based on current global count
-        // If user is already set (session restore), we don't block ourselves.
+
         if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers) {
              return window.toast("Server is full. Please try again later.");
         }
@@ -638,7 +636,6 @@ export function startChatApp(customConfig = {}) {
         const isFlaggedLogout = localStorage.getItem(FLAG_LOGOUT) === 'true'; 
         if (isFlaggedLogout) { 
             state.user = null; 
-            // Force sign out on the client to ensure session is dead
             if(ses) await db.auth.signOut();
             return; 
         } 
@@ -698,8 +695,7 @@ export function startChatApp(customConfig = {}) {
         return; 
     } 
 
-    // 👇 Geen auto-login meer
-    await db.auth.signOut(); // Zorg dat er nooit een bestaande sessie blijft hangen
+    await db.auth.signOut();
     state.user = null;
 
     setupGlobalPresence(null);
