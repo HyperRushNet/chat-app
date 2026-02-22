@@ -184,25 +184,92 @@ export function startChatApp(customConfig = {}) {
 
     window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
 
-    // Context Menu
-    const showContextMenu = (e, msgData) => {
-        e.preventDefault(); hideContextMenu();
-        const menu = $('context-menu'); const editBtn = $('ctx-edit'); const deleteBtn = $('ctx-delete');
-        const isOwner = msgData.user_id === state.user.id; const msgDate = new Date(msgData.created_at); const now = new Date(); const diffMinutes = (now - msgDate) / 60000;
-        const canEdit = isOwner && diffMinutes < 15 && !msgData.deleted; const canDelete = isOwner && !msgData.deleted;
-        editBtn.style.display = canEdit ? 'flex' : 'none'; deleteBtn.style.display = canDelete ? 'flex' : 'none';
+    // Context Menu Logic (Fixed)
+    const showContextMenu = (e, msgEl) => {
+        if(!msgEl || !state.user) return;
+        e.preventDefault();
+        hideContextMenu();
+        
+        const msgData = {
+            id: msgEl.dataset.id,
+            user_id: msgEl.dataset.uid,
+            created_at: msgEl.dataset.time,
+            text: msgEl.dataset.text
+        };
+
+        const menu = $('context-menu'); 
+        const editBtn = $('ctx-edit'); 
+        const deleteBtn = $('ctx-delete');
+        
+        const isOwner = msgData.user_id === state.user.id; 
+        const msgDate = new Date(msgData.created_at); 
+        const now = new Date(); 
+        const diffMinutes = (now - msgDate) / 60000;
+        
+        const isDeleted = msgEl.classList.contains('msg-deleted'); // Check if already deleted
+        
+        const canEdit = isOwner && diffMinutes < 15 && !isDeleted; 
+        const canDelete = isOwner && !isDeleted;
+        
+        editBtn.style.display = canEdit ? 'flex' : 'none'; 
+        deleteBtn.style.display = canDelete ? 'flex' : 'none';
+        
         state.contextTarget = msgData;
-        let x = e.clientX || e.touches?.[0]?.clientX; let y = e.clientY || e.touches?.[0]?.clientY;
-        menu.style.left = `${x}px`; menu.style.top = `${y}px`;
-        setTimeout(() => { const rect = menu.getBoundingClientRect(); if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`; if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`; menu.classList.add('active'); lucide.createIcons(); }, 10);
+        
+        let x = e.clientX || e.touches?.[0]?.clientX; 
+        let y = e.clientY || e.touches?.[0]?.clientY;
+        
+        menu.style.left = `${x}px`; 
+        menu.style.top = `${y}px`;
+        
+        setTimeout(() => {
+            const rect = menu.getBoundingClientRect(); 
+            if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`; 
+            if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`; 
+            menu.classList.add('active'); 
+            lucide.createIcons();
+        }, 10);
     };
+    
     const hideContextMenu = () => { const menu = $('context-menu'); menu.classList.remove('active'); state.contextTarget = null; };
+    
     window.cancelEdit = () => { state.editingMessage = null; $('chat-input').value = ''; $('editing-header').style.display = 'none'; $('chat-input').focus(); };
 
     $('ctx-edit').onclick = () => { if(!state.contextTarget) return; state.editingMessage = state.contextTarget; $('chat-input').value = state.contextTarget.text; $('editing-header').style.display = 'flex'; $('chat-input').focus(); hideContextMenu(); };
     $('ctx-copy').onclick = () => { if(!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Copied to clipboard"); hideContextMenu(); };
     $('ctx-delete').onclick = async () => { if(!state.contextTarget || !state.user) return; hideContextMenu(); window.setLoading(true, "Deleting..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', state.contextTarget.id); if(error) window.toast("Failed: " + error.message); else window.toast("Message deleted"); window.setLoading(false); };
+    
+    // Global Listeners for Context Menu
     document.addEventListener('click', (e) => { if (!$('context-menu').contains(e.target)) hideContextMenu(); });
+    
+    // Long Press Logic on Chat Container
+    const chatContainer = $('chat-messages');
+    chatContainer.addEventListener('touchstart', (e) => {
+        const msg = e.target.closest('.msg');
+        if (!msg) return;
+        state.longPressTimer = setTimeout(() => showContextMenu(e, msg), 500);
+    }, {passive: true});
+    chatContainer.addEventListener('touchend', () => clearTimeout(state.longPressTimer));
+    chatContainer.addEventListener('touchmove', () => clearTimeout(state.longPressTimer));
+    
+    chatContainer.addEventListener('mousedown', (e) => {
+        const msg = e.target.closest('.msg');
+        if (!msg) return;
+        // Only left click
+        if (e.button !== 0) return;
+        state.longPressTimer = setTimeout(() => showContextMenu(e, msg), 500);
+    });
+    chatContainer.addEventListener('mouseup', () => clearTimeout(state.longPressTimer));
+    chatContainer.addEventListener('mouseleave', () => clearTimeout(state.longPressTimer));
+    
+    // Context menu on right click (desktop)
+    chatContainer.addEventListener('contextmenu', (e) => {
+        const msg = e.target.closest('.msg');
+        if (msg) {
+            e.preventDefault();
+            showContextMenu(e, msg);
+        }
+    });
 
     // UI Helpers
     const updateAccessSummary = (prefix) => { const summaryEl = $(`${prefix}-access-summary`); if (!summaryEl) return; const count = state.selectedAllowedUsers.length; const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`; summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`; lucide.createIcons(); };
@@ -236,19 +303,18 @@ export function startChatApp(customConfig = {}) {
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
     const renderMsg = (m, prevMsg, isDirect) => {
-        if (m.deleted || m.text === '/') return `<div class="msg ${m.user_id === state.user?.id ? 'me' : 'not-me'}" data-id="${m.id}" style="opacity:0.6"><span class="msg-deleted"><i data-lucide="ban"></i> Deleted</span></div>`;
+        if (m.deleted || m.text === '/') return `<div class="msg ${m.user_id === state.user?.id ? 'me' : 'not-me'} msg-deleted" data-id="${m.id}"><i data-lucide="ban"></i> Deleted</div>`;
         let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
         const displayName = truncateText(m.user_name || 'User', 18); const processedText = processText(m.text); const msgClass = isGroupStart ? 'group-start' : 'msg-continuation';
         const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me';
+        // Data attributes are crucial for event delegation
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${esc(m.text)}"`;
-        html += `<div class="msg ${sideClass} ${msgClass}" ${dataAttrs} oncontextmenu="event.preventDefault()">`;
-        html += `<script>(function() { let timer; const el = document.currentScript.parentElement; el.addEventListener('touchstart', (e) => { timer = setTimeout(() => window.showMsgContext(e, el), 500); }, {passive: true}); el.addEventListener('touchend', () => clearTimeout(timer)); el.addEventListener('touchmove', () => clearTimeout(timer)); el.addEventListener('mousedown', (e) => { timer = setTimeout(() => window.showMsgContext(e, el), 500); }); el.addEventListener('mouseup', () => clearTimeout(timer)); el.addEventListener('mouseleave', () => clearTimeout(timer)); })();<\/script>`;
+        html += `<div class="msg ${sideClass} ${msgClass}" ${dataAttrs}>`;
         html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${esc(m.time)}</span></div>`;
         return html;
     };
-    window.showMsgContext = (e, el) => { const msgData = { id: el.dataset.id, user_id: el.dataset.uid, created_at: el.dataset.time, text: el.dataset.text }; showContextMenu(e, msgData); };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
     const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); pendingCallbacks['historyDecrypted'] = async (res) => { const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); } state.isLoadingHistory = false; }; cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } }); };
