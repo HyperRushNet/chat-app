@@ -1,4 +1,4 @@
-// GH: HyperRushNet | 2026 | MIT License | logic.js
+maak // GH: HyperRushNet | 2026 | MIT License | logic.js
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -195,7 +195,6 @@ export function startChatApp(customConfig = {}) {
 
         const timeout = getConnectionTimeout();
         state.connectionTimeoutTimer = setTimeout(() => { 
-            console.warn(`Connection attempt timed out after ${timeout}ms...`); 
             state.isReconnecting = false; 
             attemptHardReconnect(); 
         }, timeout);
@@ -302,9 +301,9 @@ export function startChatApp(customConfig = {}) {
 
     const showContextMenu = (e, msgEl) => {
         if(!msgEl || !state.user) return;
+        if(msgEl.classList.contains('msg-deleted')) return; // Security: Do not open modal for deleted messages
         e.preventDefault();
         
-        const isDeleted = msgEl.classList.contains('msg-deleted');
         const msgData = {
             id: msgEl.dataset.id,
             user_id: msgEl.dataset.uid,
@@ -322,9 +321,9 @@ export function startChatApp(customConfig = {}) {
         const now = new Date(); 
         const diffMinutes = (now - msgDate) / 60000;
         
-        const canEdit = isOwner && diffMinutes < 15 && !isDeleted; 
-        const canDelete = isOwner && !isDeleted;
-        const canCopy = !isDeleted;
+        const canEdit = isOwner && diffMinutes < 15; 
+        const canDelete = isOwner;
+        const canCopy = true;
         
         editBtn.style.display = canEdit ? 'flex' : 'none'; 
         deleteBtn.style.display = canDelete ? 'flex' : 'none';
@@ -470,9 +469,24 @@ export function startChatApp(customConfig = {}) {
         if(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                state.selectedAvatar = e.target.result;
-                $('r-avatar-url').value = '';
-                updateCarouselPreview();
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    const max = 250;
+                    if (w > h) { if (w > max) { h *= max / w; w = max; } }
+                    else { if (h > max) { w *= max / h; h = max; } }
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    state.selectedAvatar = dataUrl;
+                    AVATARS.push(dataUrl); 
+                    $('r-avatar-url').value = ''; 
+                    updateCarouselPreview();
+                    window.toast("Avatar added to carousel");
+                };
+                img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
@@ -582,6 +596,6 @@ export function startChatApp(customConfig = {}) {
     window.joinAttempt = async (id) => { window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); } const { data, error } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("Not found"); state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); };
     window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
 
-    const init = async () => { if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; } const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; } const [userRes, userErr] = await safeAwait(db.auth.getUser()); if (userErr) { console.error("Session validation failed:", userErr); await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; } const user = userRes?.data?.user; if (user) { state.user = user; const masterExists = await checkMaster(); if (masterExists) { const overlay = $('block-overlay'); overlay.classList.add('active'); lucide.createIcons(); window.nav('scr-lobby'); window.loadRooms(); } else { window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms(); } } lucide.createIcons(); window.setLoading(false); monitorConnection(); };
+    const init = async () => { if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; } const isHardLoggedOut = localStorage.getItem(FLAG_LOGOUT) === 'true'; if (isHardLoggedOut) { state.user = null; window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; } const [userRes, userErr] = await safeAwait(db.auth.getUser()); if (userErr) { await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); monitorConnection(); return; } const user = userRes?.data?.user; if (user) { state.user = user; const masterExists = await checkMaster(); if (masterExists) { const overlay = $('block-overlay'); overlay.classList.add('active'); lucide.createIcons(); window.nav('scr-lobby'); window.loadRooms(); } else { window.forceClaimMaster(); window.nav('scr-lobby'); window.loadRooms(); } } lucide.createIcons(); window.setLoading(false); monitorConnection(); };
     init();
 }
