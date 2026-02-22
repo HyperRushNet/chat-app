@@ -184,11 +184,15 @@ export function startChatApp(customConfig = {}) {
 
     window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
 
-    // Context Menu Logic (Fixed)
+        // Context Menu Logic (Fixed)
     const showContextMenu = (e, msgEl) => {
         if(!msgEl || !state.user) return;
         e.preventDefault();
-        hideContextMenu();
+        // If clicking same message, just close
+        if ($('context-menu').classList.contains('active') && state.contextTarget?.id === msgEl.dataset.id) {
+            hideContextMenu();
+            return;
+        }
         
         const msgData = {
             id: msgEl.dataset.id,
@@ -206,7 +210,7 @@ export function startChatApp(customConfig = {}) {
         const now = new Date(); 
         const diffMinutes = (now - msgDate) / 60000;
         
-        const isDeleted = msgEl.classList.contains('msg-deleted'); // Check if already deleted
+        const isDeleted = msgEl.classList.contains('msg-deleted');
         
         const canEdit = isOwner && diffMinutes < 15 && !isDeleted; 
         const canDelete = isOwner && !isDeleted;
@@ -235,9 +239,32 @@ export function startChatApp(customConfig = {}) {
     
     window.cancelEdit = () => { state.editingMessage = null; $('chat-input').value = ''; $('editing-header').style.display = 'none'; $('chat-input').focus(); };
 
-    $('ctx-edit').onclick = () => { if(!state.contextTarget) return; state.editingMessage = state.contextTarget; $('chat-input').value = state.contextTarget.text; $('editing-header').style.display = 'flex'; $('chat-input').focus(); hideContextMenu(); };
-    $('ctx-copy').onclick = () => { if(!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Copied to clipboard"); hideContextMenu(); };
-    $('ctx-delete').onclick = async () => { if(!state.contextTarget || !state.user) return; hideContextMenu(); window.setLoading(true, "Deleting..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', state.contextTarget.id); if(error) window.toast("Failed: " + error.message); else window.toast("Message deleted"); window.setLoading(false); };
+    $('ctx-edit').onclick = () => { 
+        if(!state.contextTarget) return; 
+        state.editingMessage = state.contextTarget; 
+        $('chat-input').value = state.contextTarget.text; 
+        $('editing-header').style.display = 'flex'; 
+        $('chat-input').focus(); 
+        hideContextMenu(); 
+    };
+    
+    $('ctx-copy').onclick = () => { 
+        if(!state.contextTarget) return; 
+        navigator.clipboard.writeText(state.contextTarget.text); 
+        window.toast("Copied to clipboard"); 
+        hideContextMenu(); 
+    };
+    
+    $('ctx-delete').onclick = async () => { 
+        if(!state.contextTarget || !state.user) return; 
+        const idToDelete = state.contextTarget.id; // 1. Sla ID op
+        hideContextMenu(); // 2. Verberg menu (zet contextTarget op null)
+        window.setLoading(true, "Deleting..."); 
+        const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); // 3. Gebruik opgeslagen ID
+        if(error) window.toast("Failed: " + error.message); 
+        else window.toast("Message deleted"); 
+        window.setLoading(false); 
+    };
     
     // Global Listeners for Context Menu
     document.addEventListener('click', (e) => { if (!$('context-menu').contains(e.target)) hideContextMenu(); });
