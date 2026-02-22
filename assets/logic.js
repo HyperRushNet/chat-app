@@ -258,11 +258,23 @@ export function startChatApp(customConfig = {}) {
         state.isReconnecting = true;
         setConnectionVisuals('connecting');
 
+        let timeoutDuration = 20000;
+
+        if (navigator.connection) {
+            const type = navigator.connection.effectiveType;
+            if (type === '2g' || type === 'slow-2g') {
+                timeoutDuration = 45000; 
+            } 
+            else if (type === '3g') {
+                timeoutDuration = 30000;
+            }
+        }
+
         state.connectionTimeoutTimer = setTimeout(() => {
-            console.warn("Connection attempt timed out. Forcing cleanup and retry...");
+            console.warn(`Connection attempt timed out after ${timeoutDuration/1000}s. Forcing cleanup...`);
             state.isReconnecting = false;
             attemptHardReconnect();
-        }, 10000);
+        }, timeoutDuration);
 
         initRoomPresence(state.currentRoomId);
         setupChatChannel(state.currentRoomId); 
