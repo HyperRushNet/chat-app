@@ -505,7 +505,18 @@ export function startChatApp(customConfig = {}) {
     const processText = (text) => { let t = esc(text); const urlRegex = /(https?:\/\/[^\s]+)/g; t = t.replace(urlRegex, (url) => { const safeUrl = url.replace(/[<>"']/g, ''); return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${safeUrl}</a>`; }); return t; };
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
-    const showTooltip = (e, content) => { const tooltip = $('context-tooltip'); tooltip.innerHTML = content; tooltip.classList.add('active'); let x = e.clientX || e.touches?.[0]?.clientX; let y = e.clientY || e.touches?.[0]?.clientY; tooltip.style.left = `${x}px`; tooltip.style.top = `${y - 40}px`; if (tooltip.offsetLeft < 10) tooltip.style.left = '10px'; if (tooltip.offsetTop < 10) tooltip.style.top = `${y + 10}px`; };
+    window.showTooltip = (e, content) => {
+        const tooltip = $('context-tooltip');
+        tooltip.innerHTML = content;
+        tooltip.classList.add('active');
+        let x = e.clientX || e.touches?.[0]?.clientX;
+        let y = e.clientY || e.touches?.[0]?.clientY;
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y - 40}px`;
+        if (tooltip.offsetLeft < 10) tooltip.style.left = '10px';
+        if (tooltip.offsetTop < 10) tooltip.style.top = `${y + 10}px`;
+    };    
+    
     const hideTooltip = () => $('context-tooltip').classList.remove('active');
 
     const renderMsg = (m, prevMsg, isDirect) => {
@@ -518,7 +529,7 @@ export function startChatApp(customConfig = {}) {
         return html;
     };
 
-    window.startMsgTimer = (e, el) => { state.longPressTimer = setTimeout(() => showTooltip(e, el.dataset.tooltip), 500); };
+    window.startMsgTimer = (e, el) => { state.longPressTimer = setTimeout(() => window.showTooltip(e, el.dataset.tooltip), 500); };
     window.clearMsgTimer = () => { if(state.longPressTimer) clearTimeout(state.longPressTimer); state.longPressTimer = null; };
     document.addEventListener('click', hideTooltip);
 
