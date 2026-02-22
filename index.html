@@ -266,7 +266,6 @@
                         <div class="status-legend"><div class="status-dot" style="background:var(--text-mute)"></div><span style="font-size:12px">Offline</span></div>
                      </div>
                   </div>
-                  <!-- Action Buttons Area -->
                   <div style="margin-top:24px; display:flex; flex-direction:column; gap:10px">
                      <button id="info-delete-btn" class="btn btn-danger" style="display:none" onclick="window.initiateDeleteRoom()">Delete Chat</button>
                   </div>
@@ -346,18 +345,18 @@
                <div style="width:22px"></div>
             </div>
             <div class="center-content" style="padding-top: 20px; margin-bottom: 30px">
-               <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto">?</div>
+               <div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto"></div>
                <h1 id="acc-page-name" class="title" style="font-size:22px">User Name</h1>
                <p id="acc-page-type" class="subtitle">Account Type</p>
             </div>
             <div style="padding: 0 10px">
                <div class="acc-info-card">
                   <div class="acc-label">User ID</div>
-                  <div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()">Tap to copy</div>
+                  <div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()"></div>
                </div>
                <div id="acc-email-wrapper" class="acc-info-card">
                   <div class="acc-label">Email Address</div>
-                  <div id="acc-page-email" class="acc-value" style="font-size:12px">email@example.com</div>
+                  <div id="acc-page-email" class="acc-value" style="font-size:12px"></div>
                </div>
             </div>
             <div style="padding: 20px; margin-top:auto">
@@ -367,7 +366,7 @@
          <div id="scr-lobby" class="screen">
             <div class="header">
                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-                  <h1 class="title" style="font-size:18px;margin:0">Rooms</h1>
+                  <h1 class="title" style="font-size:18px;margin:0">HRN Chat</h1>
                   <button class="refresh-btn" onclick="window.refreshLobby()"><i data-lucide="refresh-cw" style="width:18px;height:18px"></i></button>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
@@ -389,9 +388,7 @@
                   </div>
                </div>
                <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
-                  <!-- Edit Icon Wrapper -->
                   <span id="info-edit-btn" class="icon-wrapper" style="display:none" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-20 h-20"></i></span>
-                  <!-- Info Icon Wrapper -->
                   <span class="icon-wrapper" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span>
                </div>
             </div>
