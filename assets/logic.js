@@ -184,15 +184,12 @@ export function startChatApp(customConfig = {}) {
 
     window.retryConnection = () => { $('capacity-overlay').classList.remove('active'); state.serverFull = false; if(state.currentRoomId) initRoomPresence(state.currentRoomId); };
 
-        // Context Menu Logic (Fixed)
+        // Context Menu Logic
+    state.preventNextClose = false; // Flag to prevent immediate closing on release
+
     const showContextMenu = (e, msgEl) => {
         if(!msgEl || !state.user) return;
-        e.preventDefault();
-        // If clicking same message, just close
-        if ($('context-menu').classList.contains('active') && state.contextTarget?.id === msgEl.dataset.id) {
-            hideContextMenu();
-            return;
-        }
+        e.preventDefault(); // Prevent default text selection/context menu
         
         const msgData = {
             id: msgEl.dataset.id,
@@ -233,11 +230,23 @@ export function startChatApp(customConfig = {}) {
             menu.classList.add('active'); 
             lucide.createIcons();
         }, 10);
+
+        // Set flag to ignore the 'click' event that fires immediately after touchend
+        state.preventNextClose = true;
     };
     
-    const hideContextMenu = () => { const menu = $('context-menu'); menu.classList.remove('active'); state.contextTarget = null; };
+    const hideContextMenu = () => { 
+        const menu = $('context-menu'); 
+        menu.classList.remove('active'); 
+        state.contextTarget = null; 
+    };
     
-    window.cancelEdit = () => { state.editingMessage = null; $('chat-input').value = ''; $('editing-header').style.display = 'none'; $('chat-input').focus(); };
+    window.cancelEdit = () => { 
+        state.editingMessage = null; 
+        $('chat-input').value = ''; 
+        $('editing-header').style.display = 'none'; 
+        $('chat-input').focus(); 
+    };
 
     $('ctx-edit').onclick = () => { 
         if(!state.contextTarget) return; 
@@ -258,38 +267,42 @@ export function startChatApp(customConfig = {}) {
     $('ctx-delete').onclick = async () => { 
         if(!state.contextTarget || !state.user) return; 
         const idToDelete = state.contextTarget.id; // 1. Sla ID op
-        hideContextMenu(); // 2. Verberg menu (zet contextTarget op null)
+        hideContextMenu(); // 2. Verberg menu
         window.setLoading(true, "Deleting..."); 
-        const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); // 3. Gebruik opgeslagen ID
+        const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete);
         if(error) window.toast("Failed: " + error.message); 
         else window.toast("Message deleted"); 
         window.setLoading(false); 
     };
     
     // Global Listeners for Context Menu
-    document.addEventListener('click', (e) => { if (!$('context-menu').contains(e.target)) hideContextMenu(); });
+    document.addEventListener('click', (e) => { 
+        // If the menu just opened via touch, ignore this first click event
+        if (state.preventNextClose) {
+            state.preventNextClose = false;
+            return;
+        }
+        
+        // Close if clicking outside the menu
+        if (!$('context-menu').contains(e.target)) {
+            hideContextMenu(); 
+        }
+    });
     
     // Long Press Logic on Chat Container
     const chatContainer = $('chat-messages');
+    
     chatContainer.addEventListener('touchstart', (e) => {
         const msg = e.target.closest('.msg');
         if (!msg) return;
+        // Start timer for long press
         state.longPressTimer = setTimeout(() => showContextMenu(e, msg), 500);
     }, {passive: true});
+    
     chatContainer.addEventListener('touchend', () => clearTimeout(state.longPressTimer));
     chatContainer.addEventListener('touchmove', () => clearTimeout(state.longPressTimer));
     
-    chatContainer.addEventListener('mousedown', (e) => {
-        const msg = e.target.closest('.msg');
-        if (!msg) return;
-        // Only left click
-        if (e.button !== 0) return;
-        state.longPressTimer = setTimeout(() => showContextMenu(e, msg), 500);
-    });
-    chatContainer.addEventListener('mouseup', () => clearTimeout(state.longPressTimer));
-    chatContainer.addEventListener('mouseleave', () => clearTimeout(state.longPressTimer));
-    
-    // Context menu on right click (desktop)
+    // Mouse logic (right click desktop)
     chatContainer.addEventListener('contextmenu', (e) => {
         const msg = e.target.closest('.msg');
         if (msg) {
