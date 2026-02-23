@@ -1,0 +1,868 @@
+<!-- GH: HyperRushNet | 2026 | MIT License | index.html -->
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+      <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/5962/5962463.png">
+      <title>HyperRush Chat</title>
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+      <script src="https://unpkg.com/lucide@latest"></script>
+      <style>
+:root{--bg:#fff;--surface:#fff;--border:#e5e5ea;--text-main:#1c1c1e;--text-mute:#8e8e93;--accent:#262626;--danger:#ff3b30;--success:#34c759;--warning:#ff9500;--radius:14px}*{margin:0;padding:0;box-sizing:border-box;font-family:Plus Jakarta Sans,sans-serif;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}input,textarea{-webkit-user-select:text;user-select:text}::-webkit-scrollbar{width:0;height:0}body{height:100dvh;background:#f2f2f7;color:var(--text-main);display:flex;justify-content:center;align-items:center}#app{width:100%;max-width:440px;height:100%;position:relative;display:flex;box-shadow:0 0 60px rgba(0,0,0,.05);overflow:hidden;background:var(--bg)}.screen{display:none;padding:20px;inset:0;position:absolute;will-change:transform,opacity;flex-direction:column;background:var(--bg)}.screen.active{display:flex;animation:fadeInScreen .4s cubic-bezier(.16,1,.3,1) forwards}@keyframes fadeInScreen{0%{opacity:0;transform:scale(.98)}100%{opacity:1;transform:scale(1)}}.center-content{justify-content:center;align-items:center;text-align:center}h1.title{font-size:28px;letter-spacing:-1px;color:#000;font-weight:800;margin-bottom:4px}.subtitle{text-transform:uppercase;color:var(--text-mute);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:24px;display:block}.header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 16px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-shrink:0}.input-field{color:var(--text-main);width:100%;background:#f2f2f7;border:1px solid transparent;border-radius:var(--radius);padding:14px;font-size:15px;outline:0;margin-bottom:10px;transition:.2s}.input-field:focus{border-color:var(--accent);background:#fff}.btn{color:var(--text-main);width:100%;height:50px;border-radius:var(--radius);border:1px solid var(--border);background:0 0;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;transition:.15s;cursor:pointer;padding:0 20px}.btn-accent{background:var(--accent);color:#fff;border:none}.btn:active{transform:scale(.98);opacity:.8}#toast-container{position:absolute;top:30px;left:50%;transform:translateX(-50%);z-index:999999;width:85%;pointer-events:none;display:flex;flex-direction:column;align-items:center}.toast-item{background:#fff;color:var(--text-main);padding:12px 18px;border-radius:40px;font-weight:600;font-size:12px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.15);animation:slideUp .25s cubic-bezier(.2,1,.3,1);pointer-events:auto;cursor:pointer;width:100%;margin-bottom:8px;border:1px solid var(--text-mute)}@keyframes slideUp{0%{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}#block-overlay,#offline-screen{position:absolute;inset:0;background:var(--bg);z-index:6000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}#block-overlay.active,#offline-screen.active{display:flex}#loader-overlay{position:absolute;inset:0;background:hsla(0,0%,100%,.98);z-index:3500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;opacity:0;transition:opacity 0.3s ease}#loader-overlay.active{display:flex;opacity:1}.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .5s linear infinite}@keyframes spin{to{transform:rotate(1turn)}}.loader-text{font-size:11px;font-weight:700;margin-top:6px;color:var(--text-mute)}.room-card{padding:14px;border-radius:var(--radius);background:#fff;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);margin-bottom:8px;width:100%;transition:.15s;cursor:pointer}.room-card:active{transform:scale(.99);background:#f9f9f9}.room-name{flex:1;min-width:0;font-weight:700;font-size:14px;margin-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.room-icon{flex-shrink:0;color:var(--text-mute)}#chat-messages{flex:1;display:flex;flex-direction:column;overflow-y:auto;background:var(--bg);padding-bottom:10px;opacity:0;transition:opacity 0.5s ease}#chat-messages.ready{opacity:1}.date-divider{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;margin:16px auto 4px;width:25%;padding:2px 6px;background:#fff;border:1px solid #ddd;border-radius:999px;text-align:center;color:#333;box-sizing:border-box;font-size:.875rem}.date-label{font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:0 auto;background:var(--bg);padding:4px 0;font-size:9px;text-align:center;color:var(--text-mute)}.msg{position:relative;max-width:82%;padding:8px 12px;border-radius:16px;background:#f2f2f7;font-size:14px;line-height:1.4;display:flex;flex-direction:column;white-space:pre-wrap;word-break:break-word;width:fit-content;margin-top:2px;transition: transform 0.2s ease, opacity 0.2s ease}.msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}.msg.not-me{align-self:flex-start;border-bottom-left-radius:4px}.msg.group-start{margin-top:14px}.msg-header{display:flex;align-items:center;gap:4px;margin-bottom:2px}.msg-user{font-size:10px;color:var(--accent);cursor:pointer;font-weight:700}.msg.me .msg-user{color:hsla(0,0%,100%,.7)}.msg-time{font-size:8px;opacity:.4;text-align:right;margin-top:1px;align-self:flex-end;display:flex;align-items:center;gap:4px}.msg-continuation .msg-header{display:none}.msg-continuation{margin-top:1px}.msg-continuation.msg.me{border-radius:16px 4px 4px 16px}.msg-continuation.msg.not-me{border-radius:4px 16px 16px 4px}.msg.me.group-start{border-radius:16px 16px 4px 16px}.msg.not-me.group-start{border-radius:16px 16px 16px 4px}.edited-tag{font-size:8px;opacity:.6;font-weight:600}.deleted-text{opacity:.5;font-style:italic;font-size:13px}#context-menu{position:fixed;background:hsla(0,0%,100%,.98);backdrop-filter:blur(20px);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.15);z-index:99999;padding:6px;min-width:140px;display:flex;flex-direction:column;gap:2px;opacity:0;transform:scale(.95);pointer-events:none;transition:opacity .15s,transform .15s}#context-menu.active{opacity:1;transform:scale(1);pointer-events:auto}.ctx-item{background:none;border:none;width:100%;padding:10px 12px;text-align:left;font-size:13px;font-weight:600;color:var(--text-main);cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:8px}.ctx-item:active{background:#f2f2f7}.ctx-item.danger{color:var(--danger)}.ctx-item i{width:16px;height:16px}.chat-avatar{width:36px;height:36px;border-radius:50%;background:#f2f2f7;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:12px;line-height:1;position:relative;padding:2px}.chat-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}.status-border{border:2px solid var(--text-mute);transition:border-color .3s ease}.status-connected{border-color:var(--success)}.status-connecting{border-color:var(--warning)}.status-offline{border-color:var(--text-mute)}.chat-header-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0}.chat-header-title-wrapper{display:flex;flex-direction:column;min-width:0}.chat-header-title-wrapper .title{font-size:16px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}.chat-header-subtitle{display:flex;align-items:center;gap:4px}.chat-header-subtitle,.chat-subtitle{font-size:9px;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;font-weight:600}.step-container{position:relative;overflow:hidden;width:100%}.wizard-step{display:none;flex-direction:column;gap:12px;width:100%;animation:stepFade .3s ease}.wizard-step.active{display:flex}@keyframes stepFade{0%{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}.step-indicator{display:flex;justify-content:center;gap:6px;margin-bottom:20px}.step-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .2s}.step-dot.active{background:var(--accent);width:20px;border-radius:4px}.type-card{padding:16px;border-radius:var(--radius);background:#fff;border:1px solid var(--border);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin-bottom:8px}.type-card:active{transform:scale(.99)}.type-card.selected{border-color:var(--accent);background:rgba(0,122,255,.03)}.type-icon{width:36px;height:36px;border-radius:10px;background:#f2f2f7;display:flex;align-items:center;justify-content:center;color:var(--accent)}.type-info h4{font-size:14px;margin-bottom:1px;font-weight:700}.type-info p{font-size:11px;color:var(--text-mute)}.avatar-carousel-container{display:flex;flex-direction:column;align-items:center;gap:16px;margin-bottom:12px}.carousel-wrapper{gap:12px;width:100%}.carousel-btn,.carousel-wrapper{display:flex;align-items:center;justify-content:center}.carousel-btn{width:40px;height:40px;border-radius:50%;background:var(--bg);border:1px solid var(--border);cursor:pointer;transition:.2s}.carousel-btn:active{transform:scale(.95);background:#f2f2f7}.carousel-preview{width:100px;height:100px;border-radius:50%;background:#f2f2f7;border:2px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.05)}.carousel-preview img{width:100%;height:100%;object-fit:cover}.upload-btn-wrapper{width:100%;margin-top:8px}.upload-btn{width:100%;height:44px;border-radius:var(--radius);border:1px dashed var(--accent);background:transparent;color:var(--accent);font-weight:600;display:flex;gap:8px;cursor:pointer}#overlay-container,.upload-btn{align-items:center;justify-content:center}#overlay-container{position:absolute;background:rgba(0,0,0,.4);z-index:5000;transition:opacity .3s;backdrop-filter:blur(16px);opacity:0;display:none;padding:20px;inset:0}#overlay-container.active{display:flex;opacity:1}.panel-card{background:var(--bg);width:100%;max-width:340px;border-radius:20px;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.2);animation:panelSlide .4s cubic-bezier(.16,1,.3,1);max-height:80vh;overflow:hidden}@keyframes panelSlide{0%{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}.view-content{display:none}.view-content.active{display:block}.access-summary-card{border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;transition:.15s}.access-summary-card,.flex-sb-aic-w100-p18-bg-br12-mb20{width:100%;background:#f2f2f7;padding:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.flex-sb-aic-w100-p18-bg-br12-mb20{border-radius:var(--radius)}.w-48{width:48px}.h-48{height:48px}.mb-24{margin-bottom:24px}.c-danger{color:var(--danger)}.c-warning{color:var(--warning)}.c-main{color:var(--text-main)}.c-accent{color:var(--accent)}.mb-48{margin-bottom:48px}.mt-24{margin-top:24px}.w-100{width:100%}.mt-12{margin-top:12px}.bn{border:none}.mb-20{margin-bottom:20px}.c-mute{color:var(--text-mute)}.fs-12{font-size:12px}.flex-1{flex:1}.flex-gap12-mt20{display:flex;gap:12px;margin-top:20px}.m-0-flex-1{margin:0;flex:1}.w-80{width:80px}.mb-16{margin-bottom:16px}.flex-s0{flex-shrink:0}.dn{display:none}.w-20{width:20px}.h-20{height:20px}.switch{position:relative;display:inline-block;width:44px;height:24px}.switch input{opacity:0;width:0;height:0}.slider{cursor:pointer;inset:0;background-color:#ccc;border-radius:24px}.slider,.slider:before{position:absolute;transition:.2s}.slider:before{content:"";height:18px;width:18px;left:3px;bottom:3px;background-color:#fff;border-radius:50%}input:checked+.slider{background-color:var(--accent)}input:checked+.slider:before{transform:translateX(20px)}#chat-messages{position:relative}#chat-empty-state{position:absolute;inset:0;z-index:5;pointer-events:none;background:var(--bg);opacity:0;transition:opacity 0.3s}#chat-empty-state.visible{opacity:1}#chat-empty-state .empty-content{display:flex;align-items:center;justify-content:center}.empty-icon{width:64px;height:64px;color:#d1d1d6;stroke-width:1.3}.empty-title{font-size:16px;font-weight:700;color:var(--text-main)}.empty-subtitle{font-size:13px;color:var(--text-mute);line-height:1.45;max-width:280px}.acc-info-card{background:#f2f2f7;border-radius:var(--radius);padding:14px;margin-bottom:12px}.acc-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-mute);font-weight:700;margin-bottom:4px}.acc-value{font-size:14px;font-weight:600;color:var(--text-main);word-break:break-all}.info-header{text-align:center;margin-bottom:24px}.info-avatar{width:80px;height:80px;border-radius:50%;background:#f2f2f7;margin:0 auto 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:28px;font-weight:800}.info-avatar img{width:100%;height:100%;object-fit:cover}.info-title{font-size:18px;font-weight:800;color:#000;margin-bottom:4px}.info-subtitle{font-size:12px;color:var(--text-mute);text-transform:uppercase;font-weight:600;letter-spacing:.5px}.info-section{background:#f2f2f7;border-radius:var(--radius);margin-bottom:16px;padding:4px 0}.info-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;font-size:13px}.info-row:not(:last-child){border-bottom:1px solid rgba(0,0,0,.05)}.info-label{color:var(--text-mute);font-weight:500}.info-value{color:var(--text-main);font-weight:600;text-align:right;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.info-value.clickable{color:var(--accent);cursor:pointer}.status-legend{display:flex;align-items:center;gap:8px;margin-top:4px}.status-dot{width:8px;height:8px;border-radius:50%}.danger-zone{margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}.btn-danger{background:rgba(255,59,48,.1);color:var(--danger);border:none}.btn-danger:hover{background:rgba(255,59,48,.15)}.btn-danger.active{background:var(--danger);color:#fff}.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--border)}.refresh-btn{background:none;border:none;padding:4px;color:var(--text-mute);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s}.refresh-btn:active{transform:rotate(90deg)}#chat-input-area{display:flex;gap:10px;padding-top:12px;align-items:flex-end;border-top:1px solid var(--border)}#send-btn{width:50px;min-width:50px;height:50px;padding:0;border-radius:var(--radius);flex-shrink:0}#chat-input{margin:0}.icon-wrapper{width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}.edit-modal-textarea{width:100%;height:120px;border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:14px;font-family:inherit;resize:none;margin-bottom:12px}.pill-badge{font-size:9px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:99px;font-weight:700;margin-left:6px}.online-dot{width:6px;height:6px;background:var(--success);border-radius:50%;display:inline-block;margin-right:4px}
+      </style>
+   </head>
+   <body>
+      <div id="app">
+         <div id="overlay-container">
+            <div class="panel-card">
+               <div id="view-access-manager" class="view-content"><div style="display:flex;flex-direction:column;gap:12px;height:100%"><div style="text-align:center"><h3 style="font-size:16px;font-weight:800;margin-bottom:4px">Select Users</h3><p style="font-size:11px;color:var(--text-mute)">Add users to restrict access.</p></div><div style="display:flex;gap:6px;align-items:center"><input id="picker-id-input" class="input-field" placeholder="Paste User ID..." style="margin-bottom:0"><button class="btn btn-accent" style="width:auto;padding:0 12px;height:44px" onclick="window.addUserById()">Add</button></div><label style="font-size:9px;color:var(--text-mute);text-transform:uppercase;letter-spacing:1px;font-weight:800">Added (<span id="picker-count">0</span>)</label><div id="picker-selected-list" style="flex:1;overflow-y:auto;padding-right:4px;max-height:200px"><div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users added.</div></div><button class="btn btn-accent" style="height:48px" onclick="window.closeAccessManager()">Done</button></div></div>
+               <div id="view-room-settings" class="view-content"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:16px"><h3 style="margin:0;font-weight:800;font-size:16px">Settings</h3><button style="background:rgba(0,0,0,0.05);border:none;border-radius:8px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-main)" onclick="window.closeOverlay()"><i data-lucide="x" class="w-18 h-18"></i></button></div><div class="step-indicator" id="edit-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div><div class="step-container"><div id="edit-step-1" class="wizard-step active"><input id="edit-room-name" class="input-field" placeholder="Room Name"><div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Visible in Lobby</span><label class="switch"><input type="checkbox" id="edit-room-visible" checked><span class="slider"></span></label></div><button class="btn btn-accent" onclick="window.nextEditStep()">Next</button></div><div id="edit-step-2" class="wizard-step"><div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 0 8px 0"><span style="font-weight:600;font-size:12px">Password</span><span id="pass-status-label" style="font-size:9px;color:var(--text-mute);text-transform:uppercase;font-weight:700">Not Set</span></div><input id="edit-room-pass" type="password" class="input-field" placeholder="Change password" autocomplete="new-password"><button id="btn-remove-pass" class="btn bn c-danger fs-12" style="height:auto;padding:4px 0;display:none;justify-content:flex-start" onclick="window.prepareRemovePassword()">Remove Password</button></div><div id="edit-access-summary" class="access-summary-card" onclick="window.openAccessManager('edit-room')"><span class="c-main">Public Room</span><i data-lucide="chevron-right" class="w-16 h-16"></i></div><div style="display:flex;gap:8px;margin-top:4px"><button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevEditStep()">Back</button><button class="btn btn-accent" style="flex:1" onclick="window.saveRoomSettings(event)">Save</button></div></div></div></div>
+               <div id="view-room-info" class="view-content"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:16px"><h3 style="margin:0;font-weight:800;font-size:16px">Room Info</h3><button style="background:rgba(0,0,0,0.05);border:none;border-radius:8px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-main)" onclick="window.closeOverlay()"><i data-lucide="x" class="w-18 h-18"></i></button></div><div class="info-header"><div id="info-avatar" class="info-avatar">?</div><div id="info-name" class="info-title">Room Name</div><div id="info-type" class="info-subtitle">Group</div></div><div class="info-section"><div class="info-row" id="info-creator-row"><span class="info-label">Created By</span><span id="info-creator" class="info-value">User</span></div><div class="info-row"><span class="info-label">Room ID</span><div style="display:flex;align-items:center;gap:6px"><span id="info-id" class="info-value" style="font-family:monospace;font-size:11px;max-width:120px">id</span><i data-lucide="copy" style="width:14px;height:14px;color:var(--accent);cursor:pointer;flex-shrink:0" onclick="window.copyInfoId()"></i></div></div><div class="info-row"><span class="info-label">Created</span><span id="info-date" class="info-value">Date</span></div></div><div class="info-section" style="background:transparent;padding:0"><div style="padding:0 0 8px 4px;font-size:11px;font-weight:700;color:var(--text-mute);text-transform:uppercase">Presence</div><div style="display:flex;flex-direction:column;gap:6px;background:#f2f2f7;padding:12px 14px;border-radius:var(--radius)"><div style="display:flex;justify-content:space-between;align-items:center"><div class="status-legend"><div class="status-dot" style="background:var(--success)"></div><span style="font-size:12px;font-weight:600">This Room</span></div><span id="info-room-count" class="pill-badge">0/150</span></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="status-legend"><div class="status-dot" style="background:var(--accent)"></div><span style="font-size:12px;font-weight:600">Global Network</span></div><span id="info-global-count" class="pill-badge" style="background:var(--text-main)">0</span></div></div></div><div style="margin-top:24px; display:flex; flex-direction:column; gap:10px"><button id="info-delete-btn" class="btn btn-danger" style="display:none" onclick="window.initiateDeleteRoom()">Delete Chat</button></div></div>
+               <div id="view-edit-message" class="view-content">
+                  <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:16px">
+                     <h3 style="margin:0;font-weight:800;font-size:16px">Edit Message</h3>
+                     <button style="background:rgba(0,0,0,0.05);border:none;border-radius:8px;padding:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-main)" onclick="window.closeOverlay()"><i data-lucide="x" class="w-18 h-18"></i></button>
+                  </div>
+                  <textarea id="edit-msg-input" class="edit-modal-textarea" placeholder="Message..."></textarea>
+                  <button class="btn btn-accent" onclick="window.saveEditMessage()">Save</button>
+               </div>
+            </div>
+         </div>
+
+         <div id="block-overlay"><i data-lucide="copy" class="w-48 h-48 mb-24 c-warning"></i><h1 class="title">Active Session</h1><p class="subtitle mb-48">HRN Chat is open in another tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button></div>
+         <div id="offline-screen"><i data-lucide="wifi-off" class="w-48 h-48 mb-24 c-main"></i><h1 class="title">No Signal</h1><p class="subtitle mb-48">Waiting for internet...</p></div>
+         <div id="loader-overlay" class="active"><div class="spinner"></div><span id="loader-text" class="loader-text">Initializing...</span></div>
+         <div id="toast-container"></div>
+         
+         <div id="context-menu">
+             <button class="ctx-item" id="ctx-edit"><i data-lucide="pencil"></i> Edit</button>
+             <button class="ctx-item" id="ctx-copy"><i data-lucide="copy"></i> Copy</button>
+             <button class="ctx-item danger" id="ctx-delete"><i data-lucide="trash-2"></i> Delete</button>
+         </div>
+
+         <div id="scr-start" class="screen active center-content"><i data-lucide="shield" style="width:40px;height:40px;stroke-width:1.5;color:var(--accent);margin-bottom:16px"></i><h1 class="title">HRN Chat</h1><p class="subtitle">Secure Network</p><button class="btn btn-accent" onclick="window.nav('scr-login')">Sign In</button><button class="btn mt-12" onclick="window.nav('scr-register')">Create Account</button></div>
+         <div id="scr-login" class="screen center-content"><h1 class="title">Sign In</h1><p class="subtitle">Access Secure Room</p><input id="l-email" class="input-field" type="email" placeholder="Email Address"><input id="l-pass" type="password" class="input-field" placeholder="Password"><button class="btn btn-accent" onclick="window.handleLogin(event)">Access</button><button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Back</button></div>
+         
+         <div id="scr-register" class="screen center-content">
+            <div class="step-indicator" id="reg-step-indicator">
+               <div class="step-dot active"></div><div class="step-dot"></div><div class="step-dot"></div>
+            </div>
+            <div class="step-container">
+               <div id="reg-step-1" class="wizard-step active">
+                  <h1 class="title">Sign Up</h1><p class="subtitle">Step 1 of 3</p>
+                  <input id="r-email" class="input-field" type="email" placeholder="Email Address">
+                  <input id="r-pass" class="input-field" type="password" placeholder="Password (min. 8 chars)">
+                  <button class="btn btn-accent" onclick="window.nextRegStep()">Next</button>
+               </div>
+               <div id="reg-step-2" class="wizard-step">
+                  <h1 class="title">Profile</h1><p class="subtitle">Step 2 of 3</p>
+                  <input id="r-name" class="input-field" placeholder="Full Name">
+                  <div style="display:flex;gap:8px;margin-top:4px">
+                     <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
+                     <button class="btn btn-accent" style="flex:1" onclick="window.nextRegStep()">Next</button>
+                  </div>
+               </div>
+               <div id="reg-step-3" class="wizard-step">
+                  <h1 class="title">Avatar</h1><p class="subtitle">Step 3 of 3</p>
+                  <div class="avatar-carousel-container">
+                     <div class="carousel-wrapper">
+                        <button class="carousel-btn" onclick="window.carouselNav(-1)"><i data-lucide="chevron-left"></i></button>
+                        <div class="carousel-preview" id="avatar-preview-el"></div>
+                        <button class="carousel-btn" onclick="window.carouselNav(1)"><i data-lucide="chevron-right"></i></button>
+                     </div>
+                     <div class="upload-btn-wrapper">
+                        <label class="upload-btn">
+                           <i data-lucide="upload" style="width:16px;height:16px"></i>
+                           <span>Upload Custom</span>
+                           <input type="file" id="avatar-upload-input" accept="image/*" style="display:none" onchange="window.handleAvatarUpload(event)">
+                        </label>
+                     </div>
+                  </div>
+                  <input id="r-avatar-url" class="input-field" placeholder="Or paste Image URL..." style="margin-top:8px">
+                  <div style="display:flex;gap:8px;margin-top:4px">
+                     <button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevRegStep()">Back</button>
+                     <button class="btn btn-accent" style="flex:1" onclick="window.handleRegister(event)">Verify</button>
+                  </div>
+               </div>
+            </div>
+            <button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-start')">Cancel</button>
+         </div>
+
+         <div id="scr-verify" class="screen center-content"><h1 class="title">Verify</h1><p class="subtitle">Confirm Identity</p><input id="v-code" class="input-field" style="text-align:center;font-size:22px;letter-spacing:6px" placeholder="000000"><button class="btn btn-accent" onclick="window.handleVerify(event)">Confirm</button><div id="v-timer" class="mt-24" style="color:var(--accent);font-weight:800;font-size:12px">10:00</div></div>
+         <div id="scr-account" class="screen"><div class="header"><span class="clickable" onclick="window.nav('scr-lobby', 'right')"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></span><h1 class="title" style="font-size:18px;margin:0;flex:1;text-align:center">My Account</h1><div style="width:22px"></div></div><div class="center-content" style="padding-top: 20px; margin-bottom: 30px"><div id="acc-page-avatar" class="chat-avatar" style="width:90px;height:90px;font-size:36px; margin:0 auto 12px auto"></div><h1 id="acc-page-name" class="title" style="font-size:22px">User Name</h1><p id="acc-page-type" class="subtitle">Account Type</p></div><div style="padding: 0 10px"><div class="acc-info-card"><div class="acc-label">User ID</div><div id="acc-page-id" class="acc-value" style="cursor:pointer;color:var(--accent);font-family:monospace;font-size:12px" onclick="window.copyAccountId()"></div></div><div id="acc-email-wrapper" class="acc-info-card"><div class="acc-label">Email Address</div><div id="acc-page-email" class="acc-value" style="font-size:12px"></div></div></div><div style="padding: 20px; margin-top:auto"><button class="btn" style="background:transparent;border:1px dotted var(--accent);color:var(--accent)" onclick="window.handleLogout(event)">Log Out</button></div></div>
+         <div id="scr-lobby" class="screen"><div class="header"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><h1 class="title" style="font-size:18px;margin:0">HRN Chat</h1><button class="refresh-btn" onclick="window.refreshLobby()"><i data-lucide="refresh-cw" style="width:18px;height:18px"></i></button></div><div style="display:flex;gap:12px;align-items:center;flex-shrink:0"><div id="lobby-avatar-btn" class="chat-avatar" style="width:32px;height:32px;cursor:pointer" onclick="window.nav('scr-account')">?</div><span class="clickable" id="icon-plus-lobby" onclick="window.nav('scr-create')"><i data-lucide="plus" class="w-20 h-20"></i></span></div></div><input id="search-bar" class="input-field" placeholder="Search..." oninput="window.filterRooms()"><div id="room-list" class="flex-1" style="overflow-y:auto"></div><div style="display:flex;gap:10px;padding-top:12px;border-top:1px solid var(--border)"><input id="join-id" class="input-field m-0-flex-1" placeholder="Direct ID"><button class="btn btn-accent w-80" onclick="window.joinPrivate()">Join</button></div></div>
+         <div id="scr-chat" class="screen"><div class="header" style="margin-bottom:12px"><div class="chat-header-main"><span class="clickable flex-s0" onclick="window.leaveChat()"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></span><div class="chat-avatar status-border" id="chat-avatar-display">?</div><div class="chat-header-title-wrapper"><h2 id="chat-title" class="title">---</h2><div id="chat-subtitle-area" class="chat-header-subtitle"><span class="online-dot"></span><span id="room-user-count">0/150</span></div></div></div><div style="display:flex;gap:12px;align-items:center;flex-shrink:0"><span id="info-edit-btn" class="icon-wrapper" style="display:none" onclick="window.openRoomSettings()"><i data-lucide="settings" class="w-20 h-20"></i></span><span class="icon-wrapper" onclick="window.openRoomInfo()"><i data-lucide="info" class="w-20 h-20"></i></span></div></div><div id="chat-messages"></div><div id="chat-input-area"><textarea id="chat-input" class="input-field" placeholder="Message..." style="height:50px;resize:none;min-height:50px"></textarea><button id="send-btn" class="btn btn-accent" onclick="window.sendMsg(event)"><i data-lucide="arrow-up" style="width:20px;height:20px"></i></button></div></div>
+         <div id="scr-create" class="screen center-content"><div class="step-indicator" id="create-step-indicator"><div class="step-dot active"></div><div class="step-dot"></div></div><div class="step-container"><div id="create-step-1" class="wizard-step active"><h1 class="title">New Chat</h1><p class="subtitle">Choose Type</p><div id="type-group" class="type-card" onclick="window.selectCreateType('group')"><div class="type-icon"><i data-lucide="users" class="w-20 h-20"></i></div><div class="type-info"><h4>Group Chat</h4><p>Multiple people</p></div></div><div id="type-direct" class="type-card" onclick="window.selectCreateType('direct')"><div class="type-icon"><i data-lucide="user" class="w-20 h-20"></i></div><div class="type-info"><h4>Private Chat</h4><p>Direct message</p></div></div><button class="btn btn-accent" onclick="window.nextCreateStep()">Next</button></div><div id="create-step-2" class="wizard-step"><h1 class="title" id="create-step2-title">Setup</h1><p class="subtitle" id="create-step2-sub">Details</p><div id="create-group-fields"><input id="c-name" class="input-field" placeholder="Group Name"><input id="c-avatar" class="input-field" placeholder="Avatar URL (optional)"><input id="c-pass" type="password" class="input-field" placeholder="Password (optional)"><div class="flex-sb-aic-w100-p18-bg-br12-mb20"><span style="font-weight:600;font-size:13px">Visible in Lobby</span><label class="switch"><input type="checkbox" id="c-visible" checked><span class="slider"></span></label></div></div><div id="create-direct-fields" class="dn"><input id="c-target-user" class="input-field" placeholder="Paste User ID..."></div><div style="display:flex;gap:8px"><button class="btn" style="background:#f2f2f7;flex:1" onclick="window.prevCreateStep()">Back</button><button class="btn btn-accent" style="flex:1" onclick="window.handleCreate(event)">Create</button></div></div></div><button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Cancel</button></div>
+         <div id="scr-gate" class="screen center-content"><h1 class="title">Encrypted</h1><p class="subtitle">Authentication Required</p><input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Passkey"><button class="btn btn-accent" onclick="window.submitGate(event)">Decrypt</button><button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Abort</button></div>
+         <div id="scr-success" class="screen center-content"><i data-lucide="check-circle" class="w-48 h-48 mb-24 c-success"></i><h1 class="title">Room Created</h1><p class="subtitle">Deployment Successful</p><div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:800;border:1px dashed var(--accent)" onclick="window.copySId()">---</div><button class="btn btn-accent" onclick="window.enterCreated()">Enter</button></div>
+      </div>
+      
+      <!-- LOGIC START -->
+      <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+        const CONFIG = {
+            supabaseUrl: "https://jnhsuniduzvhkpexorqk.supabase.co",
+            supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaHN1bmlkdXp2aGtwZXhvcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NjAxMDYsImV4cCI6MjA4NzEzNjEwNn0.9I5bbqskCgksUaNWYlFFo0-6Odht28pOMdxTGZECahY",
+            mailApi: "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI",
+            maxUsers: 150,
+            maxMessages: 50,
+            historyLoadLimit: 20,
+            rateLimitMs: 1000,
+            presenceHeartbeatMs: 10000,
+            verificationCodeExpiry: 600,
+        };
+
+        const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
+        const DB_NAME = 'HRN_LOCAL_DB';
+        const DB_VERSION = 3; 
+
+        lucide.createIcons();
+
+        const localDB = {
+            db: null,
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onerror = (e) => { reject(request.error); };
+                    request.onsuccess = () => { 
+                        this.db = request.result; 
+                        resolve(); 
+                    };
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        const tx = e.target.transaction;
+                        
+                        if (!db.objectStoreNames.contains('rooms')) db.createObjectStore('rooms', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('messages')) {
+                            const ms = db.createObjectStore('messages', { keyPath: 'id' });
+                            ms.createIndex('room_id', 'room_id', { unique: false });
+                        } else {
+                            const ms = tx.objectStore('messages');
+                            if (!ms.indexNames.contains('room_id')) ms.createIndex('room_id', 'room_id', { unique: false });
+                        }
+                        if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+                        if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
+                    };
+                });
+            },
+            async get(store, key) { 
+                return new Promise((res, rej) => { 
+                    const tx = this.db.transaction(store, 'readonly'); 
+                    const req = tx.objectStore(store).get(key); 
+                    req.onsuccess = () => res(req.result); 
+                    req.onerror = () => rej(req.error); 
+                }); 
+            },
+            async getAll(store) { 
+                return new Promise((res, rej) => { 
+                    const tx = this.db.transaction(store, 'readonly'); 
+                    const req = tx.objectStore(store).getAll(); 
+                    req.onsuccess = () => res(req.result || []); 
+                    req.onerror = () => rej(req.error); 
+                }); 
+            },
+            async put(store, val) { 
+                if(!val || !val.id) return; 
+                return new Promise((res, rej) => { 
+                    const tx = this.db.transaction(store, 'readwrite'); 
+                    const req = tx.objectStore(store).put(val); 
+                    req.onsuccess = () => res(); 
+                    req.onerror = () => rej(req.error); 
+                }); 
+            },
+            async putAll(store, vals) { 
+                if(!vals || vals.length === 0) return; 
+                return new Promise((res, rej) => { 
+                    const tx = this.db.transaction(store, 'readwrite'); 
+                    const os = tx.objectStore(store); 
+                    vals.forEach(v => { if(v && v.id) os.put(v); }); 
+                    tx.oncomplete = () => res(); 
+                    tx.onerror = () => rej(tx.error); 
+                }); 
+            },
+            async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+            async delete(store, key) { 
+                return new Promise((res, rej) => { 
+                    const tx = this.db.transaction(store, 'readwrite'); 
+                    const req = tx.objectStore(store).delete(key); 
+                    req.onsuccess = () => res(); 
+                    req.onerror = () => rej(req.error); 
+                }); 
+            },
+            async getRoomMessages(roomId) {
+                const all = await this.getAll('messages');
+                const filtered = all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                return filtered;
+            },
+            async clearRoomMessages(roomId) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('messages', 'readwrite');
+                    const store = tx.objectStore('messages');
+                    const index = store.index('room_id');
+                    const req = index.openCursor(IDBKeyRange.only(roomId));
+                    req.onsuccess = (e) => {
+                        const cursor = e.target.result;
+                        if (cursor) {
+                            cursor.delete();
+                            cursor.continue();
+                        }
+                    };
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+        };
+
+        const state = {
+            user: null, currentRoomId: null, chatChannel: null, presenceChannel: null, globalPresenceChannel: null,
+            allRooms: [], vTimer: null, lastRenderedDateLabel: null, lastKnownOnlineCount: null, globalOnlineCount: 0,
+            heartbeatInterval: null, uptimeInterval: null, sessionStartTime: null, isPresenceSubscribed: false,
+            lastReconnectAttempt: 0, pending: null, lastCreated: null, lastCreatedPass: null, isMasterTab: false,
+            tabId: sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id')),
+            processingAction: false, isLoadingHistory: false, oldestMessageTimestamp: null,
+            hasMoreHistory: true, lastMessageTime: 0, isConnecting: false, isChatChannelReady: false,
+            currentRoomAccessType: null, currentRoomData: null, selectedAllowedUsers: [], currentPickerContext: null,
+            lastLobbyRefresh: 0, removePasswordFlag: false, longPressTimer: null,
+            currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
+            currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
+            profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
+            isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null,
+            recentlySentIds: new Set()
+        };
+
+        let toastQueue = []; let toastVisible = false;
+        const tabChannel = new BroadcastChannel('hrn_tab_sync');
+        const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 10 } } });
+
+        const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
+        const truncateText = (text, maxLength = 20) => !text ? "" : text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
+        const $ = id => document.getElementById(id);
+        const getTimeFromDate = (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+        const setConnectionVisuals = (status) => {
+            const avatar = $('chat-avatar-display'); if (!avatar) return;
+            avatar.classList.remove('status-connected', 'status-connecting', 'status-offline');
+            if (status === 'connected') avatar.classList.add('status-connected');
+            else if (status === 'connecting') avatar.classList.add('status-connecting');
+            else avatar.classList.add('status-offline');
+        };
+
+        const updatePresenceUI = () => {
+            const roomCountEl = $('room-user-count'); const infoRoomEl = $('info-room-count'); const infoGlobalEl = $('info-global-count');
+            const roomCount = state.lastKnownOnlineCount || 0;
+            if (infoGlobalEl) infoGlobalEl.innerText = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
+            if (state.currentRoomData?.is_direct) {
+                const isOnline = roomCount >= 2 && navigator.onLine; const statusText = isOnline ? "Online" : "Offline";
+                if (roomCountEl) roomCountEl.innerText = statusText; if (infoRoomEl) infoRoomEl.innerText = statusText;
+                const dot = roomCountEl?.previousElementSibling; if (dot) dot.style.background = isOnline ? 'var(--success)' : 'var(--text-mute)';
+            } else {
+                if (roomCountEl) roomCountEl.innerText = `${roomCount}`; if (infoRoomEl) infoRoomEl.innerText = `${roomCount}`;
+                const dot = roomCountEl?.previousElementSibling; if (dot) dot.style.background = 'var(--success)';
+            }
+        };
+
+        const schedulePresenceUpdate = () => {
+            if (state.presenceUpdateTimer) clearTimeout(state.presenceUpdateTimer);
+            state.presenceUpdateTimer = setTimeout(() => {
+                updatePresenceUI();
+                state.presenceUpdateTimer = null;
+            }, 500);
+        };
+
+        const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
+        window.toast = m => { toastQueue.push(m); processToastQueue(); };
+        window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { loader.classList.add('active'); } else { loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
+
+        const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
+
+        const getProfile = async (userId) => {
+            if (!userId) return null;
+            if (state.profileCache[userId]) return state.profileCache[userId];
+            
+            let profile = await localDB.get('profiles', userId);
+            if (profile) {
+                state.profileCache[userId] = profile;
+                return profile;
+            }
+
+            if (navigator.onLine) {
+                try {
+                    const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', userId).single();
+                    if (data) {
+                        state.profileCache[userId] = data;
+                        await localDB.put('profiles', data);
+                        return data;
+                    }
+                } catch (e) {}
+            }
+            return null;
+        };
+
+        const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
+        const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+        const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
+        const pendingResolvers = {};
+        cryptoWorker.onmessage = (e) => { const { id, type, result, error, results, success } = e.data; const key = id || type; if (pendingResolvers[key]) { if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed"); else if (type === 'keyDerived') pendingResolvers[key].resolve(success); else pendingResolvers[key].resolve({ type, result, results }); delete pendingResolvers[key]; } };
+        const workerExec = (type, payload) => { return new Promise((resolve, reject) => { const id = crypto.randomUUID(); pendingResolvers[id] = { resolve, reject }; cryptoWorker.postMessage({ id, type, payload }); }); };
+        
+        const generateSalt = () => { const arr = new Uint8Array(16); crypto.getRandomValues(arr); return Array.from(arr, b => b.toString(16).padStart(2, '0')).join(''); };
+        const sha256 = async (text) => { const buffer = new TextEncoder().encode(text); const hashBuffer = await crypto.subtle.digest('SHA-256', buffer); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); };
+        const deriveKey = (pass, salt) => workerExec('deriveKey', { password: pass, salt: salt });
+        const encryptMessage = async (text) => { const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); const res = await workerExec('encrypt', { text: time + "|" + text }); return res.result; };
+
+        const getConnectionTimeout = () => { const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (connection) { const type = connection.effectiveType; if (type === '4g') return 5000; if (type === '3g') return 10000; if (type === '2g') return 20000; if (type === 'slow-2g') return 30000; } return 8000; };
+
+        const cleanupChannels = async (keepGlobal = false) => {
+            if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
+            if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
+            if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
+            if (state.presenceChannel) { state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; }
+            if (state.chatChannel) { state.chatChannel.unsubscribe(); state.chatChannel = null; }
+            if (!keepGlobal && state.globalPresenceChannel) { state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = null; }
+            state.isChatChannelReady = false; state.isReconnecting = false; setConnectionVisuals('offline');
+        };
+
+        const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; schedulePresenceUpdate(); };
+        
+        const setupGlobalPresence = async (userId) => { 
+            if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); 
+            if(!userId) return; 
+            state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId } } }); 
+            state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; schedulePresenceUpdate(); })
+            .subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); 
+        };
+
+        const attemptHardReconnect = () => {
+            if (!state.user) return; 
+            cleanupChannels(true); 
+            state.isReconnecting = !!state.currentRoomId; 
+            setConnectionVisuals('connecting');
+            if (state.currentRoomId) { const timeout = getConnectionTimeout(); state.connectionTimeoutTimer = setTimeout(() => { state.isReconnecting = false; attemptHardReconnect(); }, timeout); initRoomPresence(state.currentRoomId); setupChatChannel(state.currentRoomId); }
+            else { setConnectionVisuals('connected'); }
+        };
+
+        const processOutgoingQueue = async () => {
+            if (!state.user) return;
+            const queue = await localDB.getAll('queue');
+            if (queue.length === 0) return;
+            window.toast(`Sending ${queue.length} pending message(s)...`);
+            const failed = [];
+            for (const item of queue) {
+                try {
+                    const enc = await encryptMessage(item.text);
+                    const { data, error } = await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]).select().single();
+                    if (!error && data) {
+                        state.recentlySentIds.add(data.id);
+                        await localDB.delete('queue', item.id);
+                        const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
+                        if(msgEl) {
+                            const prevEl = msgEl.previousElementSibling; 
+                            let prevMsg = null; 
+                            if(prevEl && prevEl.classList.contains('msg')) prevMsg = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                            try {
+                                const decRes = await workerExec('decryptSingle', { content: data.content });
+                                if(decRes.result) {
+                                    const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                                    msgEl.outerHTML = renderMsg(finalMsg, prevMsg, state.currentRoomData?.is_direct);
+                                    lucide.createIcons();
+                                    await localDB.put('messages', finalMsg);
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                } catch(e) { failed.push(item); }
+            }
+            if(failed.length > 0) await localDB.putAll('queue', failed);
+        };
+
+        const setupChatChannel = (id) => {
+            if (state.chatChannel) state.chatChannel.unsubscribe(); const isDirect = state.currentRoomData?.is_direct;
+            state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
+            state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+                const m = payload.new; if (m && state.currentRoomId) {
+                    if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) {
+                        state.recentlySentIds.delete(m.id);
+                        return;
+                    }
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: m.content });
+                        if(decRes.result) { 
+                            const msgObj = { ...m, ...decRes.result, room_id: m.room_id }; 
+                            const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
+                            // Fade in new message logic
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = renderMsg(msgObj, prevMsg, isDirect);
+                            const newMsgEl = tempDiv.firstElementChild;
+                            newMsgEl.style.opacity = '0';
+                            newMsgEl.style.transform = 'translateY(10px)';
+                            container.appendChild(newMsgEl);
+                            container.scrollTop = container.scrollHeight;
+                            checkChatEmpty();
+                            
+                            requestAnimationFrame(() => {
+                                newMsgEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                                newMsgEl.style.opacity = '1';
+                                newMsgEl.style.transform = 'translateY(0)';
+                            });
+                            
+                            lucide.createIcons();
+                            await localDB.put('messages', msgObj); 
+                        }
+                    } catch(e) { console.error("Decryption failed for new message", e); }
+                }
+            }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+                const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
+                        if(deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; } const timeSpan = msgEl.querySelector('.msg-time'); if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); } msgEl.dataset.text = ""; lucide.createIcons(); }
+                        else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, room_id: m.room_id, updated_at: m.updated_at }, prevData, isDirect); lucide.createIcons(); }
+                        const cached = await localDB.get('messages', m.id); if(cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); }
+                    } catch(e) { console.error("Decryption failed for update", e); }
+                }
+            }).subscribe((status) => {
+                state.isChatChannelReady = (status === 'SUBSCRIBED');
+                if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); processOutgoingQueue(); }
+                else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
+            });
+        };
+
+        const initRoomPresence = async (roomId) => { if (!state.user) return; if(state.presenceChannel) state.presenceChannel.unsubscribe(); const myId = state.user.id; state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } }); state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); }).subscribe(async (status, err) => { if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }); };
+
+        const monitorConnection = () => {
+            window.addEventListener('online', () => { 
+                setConnectionVisuals('connecting'); 
+                attemptHardReconnect(); 
+            });
+            window.addEventListener('offline', () => { 
+                setConnectionVisuals('offline'); 
+                if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); 
+                if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
+                state.isReconnecting = false; 
+            });
+        };
+
+        state.preventNextClose = false;
+        const showContextMenu = (e, msgEl) => { if(!msgEl || !state.user) return; if(msgEl.classList.contains('msg-deleted')) return; e.preventDefault(); const msgData = { id: msgEl.dataset.id, user_id: msgEl.dataset.uid, created_at: msgEl.dataset.time, text: msgEl.dataset.text }; const menu = $('context-menu'); const editBtn = $('ctx-edit'); const deleteBtn = $('ctx-delete'); const copyBtn = $('ctx-copy'); const isOwner = msgData.user_id === state.user.id; const msgDate = new Date(msgData.created_at); const now = new Date(); const diffMinutes = (now - msgDate) / 60000; const canEdit = isOwner && diffMinutes < 15; const canDelete = isOwner; editBtn.style.display = canEdit ? 'flex' : 'none'; deleteBtn.style.display = canDelete ? 'flex' : 'none'; copyBtn.style.display = 'flex'; state.contextTarget = msgData; let x = e.clientX || e.touches?.[0]?.clientX; let y = e.clientY || e.touches?.[0]?.clientY; menu.style.left = `${x}px`; menu.style.top = `${y}px`; setTimeout(() => { const rect = menu.getBoundingClientRect(); if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`; if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`; menu.classList.add('active'); lucide.createIcons(); }, 10); };
+        const hideContextMenu = () => { const menu = $('context-menu'); menu.classList.remove('active'); state.contextTarget = null; };
+        $('ctx-edit').onclick = () => { if(!state.contextTarget) return; state.editingMessage = state.contextTarget; $('edit-msg-input').value = state.contextTarget.text; window.showOverlayView('edit-message'); $('overlay-container').classList.add('active'); hideContextMenu(); lucide.createIcons(); };
+        $('ctx-copy').onclick = () => { if(!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Copied to clipboard"); hideContextMenu(); };
+        $('ctx-delete').onclick = async () => { if(!state.contextTarget || !state.user) return; const idToDelete = state.contextTarget.id; hideContextMenu(); window.setLoading(true, "Deleting..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); if(error) window.toast("Failed: " + error.message); window.setLoading(false); };
+        window.saveEditMessage = async () => { if(!state.editingMessage) return; const v = $('edit-msg-input').value.trim(); if(!v) return window.toast("Message cannot be empty"); const msgDate = new Date(state.editingMessage.created_at); const now = new Date(); if((now - msgDate) / 60000 >= 15) { window.toast("Edit time expired"); window.closeOverlay(); state.editingMessage = null; return; } window.setLoading(true, "Saving..."); try { const enc = await encryptMessage(v); const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id); if (error) window.toast("Failed to edit: " + error.message); else window.toast("Message updated"); } catch(e) { window.toast("Encryption failed"); } state.editingMessage = null; window.setLoading(false); window.closeOverlay(); };
+        document.addEventListener('click', (e) => { if (state.preventNextClose) { state.preventNextClose = false; return; } hideContextMenu(); });
+        const chatContainer = $('chat-messages');
+        chatContainer.addEventListener('touchstart', (e) => { const msg = e.target.closest('.msg'); if (!msg) return; state.longPressTimer = setTimeout(() => { showContextMenu(e, msg); state.preventNextClose = true; }, 500); }, {passive: true});
+        chatContainer.addEventListener('touchend', () => clearTimeout(state.longPressTimer));
+        chatContainer.addEventListener('touchmove', () => clearTimeout(state.longPressTimer));
+        chatContainer.addEventListener('contextmenu', (e) => { const msg = e.target.closest('.msg'); if (msg) { e.preventDefault(); showContextMenu(e, msg); } });
+
+        const updateAccessSummary = (prefix) => { const summaryEl = $(`${prefix}-access-summary`); if (!summaryEl) return; const count = state.selectedAllowedUsers.length; const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`; summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`; lucide.createIcons(); };
+        const updateStepUI = (context) => { const current = state.currentStep[context]; const indicator = $(`${context}-step-indicator`); if(!indicator) return; indicator.querySelectorAll('.step-dot').forEach((dot, index) => { if(index < current) dot.classList.add('active'); else dot.classList.remove('active'); }); if(context === 'reg') { $('reg-step-1').classList.toggle('active', current === 1); $('reg-step-2').classList.toggle('active', current === 2); $('reg-step-3').classList.toggle('active', current === 3); if(current === 3) initAvatarCarousel(); } else { $(`${context}-step-1`).classList.toggle('active', current === 1); $(`${context}-step-2`).classList.toggle('active', current === 2); } lucide.createIcons(); };
+        const initAvatarCarousel = () => { if(!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; updateCarouselPreview(); };
+        const updateCarouselPreview = () => { const preview = $('avatar-preview-el'); if(state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`; lucide.createIcons(); };
+        window.carouselNav = (direction) => { let index = AVATARS.indexOf(state.selectedAvatar); if(index === -1) index = 0; index += direction; if(index < 0) index = AVATARS.length - 1; if(index >= AVATARS.length) index = 0; state.selectedAvatar = AVATARS[index]; $('r-avatar-url').value = ''; updateCarouselPreview(); };
+        window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar added to carousel"); }; img.src = e.target.result; }; reader.readAsDataURL(file); } };
+
+        window.selectCreateType = (type) => { state.createType = type; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $(`type-${type}`).classList.add('selected'); };
+        window.nextRegStep = () => { if(state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if(!em || p.length < 8) return window.toast("Email and valid password required"); } if(state.currentStep.reg === 2) { const n = $('r-name').value; if(!n) return window.toast("Name required"); } state.currentStep.reg++; updateStepUI('reg'); };
+        window.prevRegStep = () => { state.currentStep.reg--; updateStepUI('reg'); };
+        window.nextCreateStep = () => { state.currentStep.create = 2; updateStepUI('create'); if(state.createType === 'direct') { $('create-group-fields').classList.add('dn'); $('create-direct-fields').classList.remove('dn'); $('create-access-summary').classList.add('dn'); $('create-step2-title').innerText = "Direct Message"; $('create-step2-sub').innerText = "Who are you messaging?"; } else { $('create-group-fields').classList.remove('dn'); $('create-direct-fields').classList.add('dn'); $('create-access-summary').classList.remove('dn'); $('create-step2-title').innerText = "Setup"; $('create-step2-sub').innerText = "Details"; } updateAccessSummary('create'); };
+        window.prevCreateStep = () => { state.currentStep.create = 1; updateStepUI('create'); };
+        window.nextEditStep = () => { const name = $('edit-room-name').value.trim(); if(!name) return window.toast("Name required"); state.currentStep.edit = 2; updateStepUI('edit'); updateAccessSummary('edit'); };
+        window.prevEditStep = () => { state.currentStep.edit = 1; updateStepUI('edit'); };
+        window.openAccessManager = async (prefix) => { state.currentPickerContext = prefix; if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) { const ids = state.currentRoomData.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } } renderPickerSelectedUsers(); $('overlay-container').classList.add('active'); window.showOverlayView('access-manager'); $('picker-id-input').value = ''; $('picker-id-input').focus(); };
+        window.closeAccessManager = () => { if (state.currentPickerContext === 'edit-room') window.showOverlayView('room-settings'); else window.closeOverlay(); updateAccessSummary(state.currentPickerContext); };
+        const renderPickerSelectedUsers = () => { const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers; if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users selected.</div>`; $('picker-count').innerText = '0'; return; } $('picker-count').innerText = displayUsers.length; container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join(''); lucide.createIcons(); };
+        window.removePickerUser = (id) => { state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id); renderPickerSelectedUsers(); };
+        window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Enter ID"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added"); window.setLoading(true, "Fetching..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("User not found"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Added"); };
+        
+        const checkMaster = () => new Promise((resolve) => { let masterFound = false; const handler = (ev) => { if (ev.data.type === 'PONG_MASTER') masterFound = true; }; tabChannel.addEventListener('message', handler); tabChannel.postMessage({ type: 'PING_MASTER' }); setTimeout(() => { tabChannel.removeEventListener('message', handler); resolve(masterFound); }, 300); });
+        window.forceClaimMaster = () => { if (!state.isMasterTab) { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); $('block-overlay').classList.remove('active'); if(state.user) { setupGlobalPresence(state.user.id); if(state.currentRoomId) attemptHardReconnect(); } } };
+        tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active'); lucide.createIcons(); } } if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } };
+        window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
+        window.closeOverlay = () => $('overlay-container').classList.remove('active');
+        window.showOverlayView = (viewId) => { const panel = document.querySelector('.panel-card'); if(!panel) return; panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); const target = $(`view-${viewId}`); if(target) { target.classList.add('active'); lucide.createIcons(); } };
+        window.prepareAccountPage = async () => { if(!state.user) return; const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); const name = profile?.full_name || state.user.user_metadata?.full_name || "User"; const avatar = profile?.avatar_url || state.user.user_metadata?.avatar_url; $('acc-page-name').innerText = name; $('acc-page-type').innerText = "Full Account"; $('acc-page-id').innerText = state.user.id; const avPrev = $('acc-page-avatar'); if(avatar) avPrev.innerHTML = `<img src="${avatar}">`; else avPrev.innerText = name.charAt(0); $('acc-email-wrapper').style.display = 'block'; $('acc-page-email').innerText = state.user.email || "Not set"; lucide.createIcons(); };
+        window.copyAccountId = () => { if(!state.user) return; navigator.clipboard.writeText(state.user.id); window.toast("ID Copied"); };
+        window.copyInfoId = () => { if(!state.currentRoomId) return; navigator.clipboard.writeText(state.currentRoomId); window.toast("Room ID Copied"); };
+        const updateLobbyAvatar = async () => { if(!state.user) return; const btn = $('lobby-avatar-btn'); if(!btn) return; let avatar = state.user.user_metadata?.avatar_url; let name = state.user.user_metadata?.full_name; if(!avatar || !name) { const { data } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); if(data) { avatar = data.avatar_url; name = data.full_name; } } if (avatar) btn.innerHTML = `<img src="${avatar}">`; else btn.innerText = (name || "U").charAt(0); };
+        const getDateLabel = (d) => { const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const diff = Math.round((today - target) / 86400000); if (diff === 0) return "Today"; if (diff === 1) return "Yesterday"; if (diff < 7) return d.toLocaleDateString('en-GB', { weekday: 'long' }); return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
+        const processText = (text) => { let t = esc(text); const urlRegex = /(https?:\/\/[^\s]+)/g; t = t.replace(urlRegex, (url) => { const safeUrl = url.replace(/[<>"']/g, ''); return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${safeUrl}</a>`; }); return t; };
+        const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; if(hasMessages) container.classList.add('ready'); };
+
+        const renderMsg = (m, prevMsg, isDirect, isOptimistic = false) => {
+            const isDeleted = m.deleted === true; const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000; let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
+            const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
+            if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
+            const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isOptimistic ? 'msg-optimistic' : (isGroupStart ? 'group-start' : 'msg-continuation'); const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
+            
+            const safeText = isDeleted ? '' : esc(m.text || '').replace(/"/g, '&quot;');
+            const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
+            
+            const timeString = m.time || getTimeFromDate(m.created_at);
+            html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''}" ${dataAttrs}>`;
+            if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
+            else { const processedText = processText(m.text); html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`; }
+            html += `</div>`; return html;
+        };
+
+        const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
+        const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
+
+        window.openRoomInfo = async () => { 
+            if (!state.currentRoomData) return; 
+            window.setLoading(true, "Loading info..."); 
+            const room = state.currentRoomData; 
+            const delBtn = $('info-delete-btn'); 
+            const creatorRow = $('info-creator-row'); 
+            delBtn.style.display = 'none'; 
+            delBtn.innerText = "Delete Chat"; 
+            delBtn.classList.remove('active'); 
+            if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); 
+            $('info-id').innerText = room.id; 
+            const date = new Date(room.created_at); 
+            $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; 
+            if (room.is_direct) { 
+                $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { 
+                    const profile = await getProfile(otherId);
+                    if(profile) {
+                        $('info-name').innerText = profile.full_name;
+                        const avEl = $('info-avatar');
+                        if (profile.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile.full_name || 'U').charAt(0);
+                    } else {
+                        $('info-name').innerText = 'User';
+                    }
+                } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
+        };
+        window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
+        window.openRoomSettings = async () => { window.closeOverlay(); if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); window.setLoading(true, "Loading..."); const room = state.currentRoomData; state.currentStep.edit = 1; updateStepUI('edit'); $('edit-room-name').value = room.name; $('edit-room-visible').checked = room.is_visible; $('edit-room-pass').value = ''; const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass'); if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; } else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute)"; removePassBtn.style.display = 'none'; } state.removePasswordFlag = false; state.selectedAllowedUsers = []; const ids = room.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } $('overlay-container').classList.add('active'); window.showOverlayView('room-settings'); window.setLoading(false); };
+        window.prepareRemovePassword = () => { state.removePasswordFlag = true; $('pass-status-label').innerText = "Will be removed"; $('pass-status-label').style.color = "var(--danger)"; $('edit-room-pass').value = ''; $('edit-room-pass').disabled = true; };
+        window.saveRoomSettings = async (e) => { if (!e || !e.isTrusted) return; if (state.processingAction) return; state.processingAction = true; const name = $('edit-room-name').value.trim(); const isVisible = $('edit-room-visible').checked; const newPass = $('edit-room-pass').value; let allowedUsers = state.selectedAllowedUsers.length > 0 ? state.selectedAllowedUsers.map(u => u.id) : ['*']; if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); if (!name) { window.toast("Name required"); state.processingAction = false; return; } const room = state.currentRoomData; const isChangingPass = newPass.length > 0; const isRemovingPass = state.removePasswordFlag; window.setLoading(true, "Saving..."); const updates = { name, is_visible: isVisible, allowed_users: allowedUsers }; if (isRemovingPass) updates.has_password = false; else if (isChangingPass) updates.has_password = true; const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId); if (updateError) { window.toast("Failed: " + updateError.message); window.setLoading(false); state.processingAction = false; return; } if (isRemovingPass) { await db.rpc('set_room_password', { p_room_id: state.currentRoomId, p_hash: null }); state.currentRoomData.has_password = false; } else if (isChangingPass) { const roomSalt = state.currentRoomData.salt; const accessHash = await sha256(newPass + roomSalt); await db.rpc('set_room_password', { p_room_id: state.currentRoomId, p_hash: accessHash }); state.currentRoomData.has_password = true; } const { data: updatedRoom } = await db.from('rooms').select('*').eq('id', state.currentRoomId).single(); state.currentRoomData = updatedRoom; $('chat-title').innerText = updatedRoom.name; window.toast("Saved"); window.closeOverlay(); state.processingAction = false; window.setLoading(false); };
+        window.deleteRoom = async () => { if (!state.currentRoomId) return; window.setLoading(true, "Deleting..."); const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); if (error) { window.toast("Failed: " + error.message); window.setLoading(false); return; } window.toast("Deleted"); state.currentRoomId = null; state.currentRoomData = null; window.closeOverlay(); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
+
+        // OPTIMIZED: openVault now handles all rendering BEFORE screen transition
+        window.openVault = async (id, n, rawPassword, roomSalt) => { 
+            if (!state.user) return window.toast("Please login first"); 
+            state.currentRoomPassword = rawPassword; 
+            
+            // 1. IMMEDIATELY SHOW LOADING (Keeps previous screen hidden, no flicker)
+            window.setLoading(true, "Decrypting Channel...");
+            
+            // 2. CLEANUP PREVIOUS STATE
+            if (state.chatChannel) state.chatChannel.unsubscribe(); 
+            state.currentRoomId = id; 
+            state.lastRenderedDateLabel = null; 
+            state.oldestMessageTimestamp = null; 
+            state.hasMoreHistory = true; 
+            state.isLoadingHistory = false; 
+            
+            // Prepare container but hide it
+            const container = $('chat-messages'); 
+            container.innerHTML = ''; 
+            container.classList.remove('ready');
+            container.style.opacity = '0'; 
+            container.onscroll = handleScroll; 
+
+            let roomData = await localDB.get('rooms', id);
+            
+            if(!roomData && !navigator.onLine) {
+                window.setLoading(false);
+                return window.toast("Offline & No Cache");
+            }
+
+            if (navigator.onLine) {
+                setConnectionVisuals('connecting');
+                const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
+                if(netRoom && netRoom.id) {
+                    roomData = netRoom;
+                    state.currentRoomData = roomData;
+                    await localDB.put('rooms', roomData);
+                }
+            } else {
+                state.currentRoomData = roomData;
+            }
+
+            if (!roomData) { window.setLoading(false); return window.toast("Room data not found"); }
+
+            const isDirect = roomData?.is_direct; 
+            let displayTitle = roomData.name; 
+            let displayAvatar = roomData?.avatar_url; 
+
+            if (isDirect) { 
+                const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id); 
+                if (otherUserId) { 
+                    const profile = await getProfile(otherUserId);
+                    if(profile) { 
+                        displayTitle = profile.full_name; 
+                        displayAvatar = profile.avatar_url; 
+                    } else {
+                        displayTitle = "Unknown User";
+                    }
+                } else {
+                    displayTitle = "Private Chat";
+                }
+            } 
+            
+            // 3. PREPARE UI HEADER
+            $('chat-title').innerText = displayTitle; 
+            const avEl = $('chat-avatar-display'); 
+            if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); 
+            const editBtn = $('info-edit-btn'); 
+            if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
+            
+            const keySource = rawPassword ? (rawPassword + id) : id; 
+            let hasKey = await localDB.get('keys', id);
+            deriveKey(keySource, roomData?.salt).then(async () => { 
+                if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
+            }).catch(e => { });
+
+            // 4. LOAD MESSAGES
+            let finalHtml = "";
+            let hasCached = false;
+
+            const cachedMsgs = await localDB.getRoomMessages(id);
+            if (cachedMsgs.length > 0) {
+                hasCached = true;
+                let prev = null; 
+                cachedMsgs.forEach(m => { finalHtml += renderMsg(m, prev, isDirect); prev = m; }); 
+            }
+
+            if (navigator.onLine) {
+                setConnectionVisuals('connecting');
+                const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
+                if (data && data.length > 0) { 
+                    data.reverse(); 
+                    if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
+                    try {
+                        const res = await workerExec('decryptHistory', { messages: data });
+                        const validMsgs = res.results.filter(m => !m.error); 
+                        const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
+                        
+                        await localDB.clearRoomMessages(id);
+                        await localDB.putAll('messages', messagesWithRoomId);
+
+                        let prev = null; 
+                        finalHtml = ""; // Override cache with fresh server data
+                        validMsgs.forEach(m => { finalHtml += renderMsg(m, prev, isDirect); prev = m; }); 
+                    } catch(e) { console.error(e); }
+                } else { 
+                    await localDB.clearRoomMessages(id);
+                    state.hasMoreHistory = false; 
+                    finalHtml = "";
+                } 
+            } else {
+                if(!hasCached) finalHtml = "";
+            }
+
+            // 5. SMOOTH DELAY FOR EFFECT
+            // We wait a minimum of 600ms total to prevent "blink" on fast connections
+            // This makes the app feel "heavy" and polished.
+            await new Promise(r => setTimeout(r, 600));
+
+            // 6. INJECT HTML & SWITCH SCREEN
+            container.innerHTML = finalHtml;
+            checkChatEmpty();
+            
+            // Switch to Chat Screen (Still hidden behind loader)
+            window.nav('scr-chat');
+            lucide.createIcons(); 
+
+            // 7. FINALIZE VISUALS
+            setupChatChannel(id); 
+            initRoomPresence(id); 
+            
+            // Scroll to bottom
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+                // Reveal content
+                container.classList.add('ready');
+                window.setLoading(false); // Remove loader
+            });
+        };
+        
+        const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
+        
+        window.sendMsg = async (e) => { 
+            if (!e || !e.isTrusted) return; 
+            if (!state.user || !state.currentRoomId || state.processingAction) return; 
+            if (!applyRateLimit()) return; 
+            state.processingAction = true; 
+            const v = $('chat-input').value.trim(); 
+            if(!v) { state.processingAction = false; return; } 
+            $('chat-input').value = ''; 
+            state.lastMessageTime = Date.now(); 
+            
+            const tempId = `temp_${Date.now()}`;
+            const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
+
+            const container = $('chat-messages'); 
+            const lastMsg = container.querySelector('.msg:last-of-type'); 
+            let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
+            container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct, true)); 
+            container.scrollTop = container.scrollHeight;
+            lucide.createIcons();
+            await localDB.put('messages', tempMsg);
+
+            if (!navigator.onLine) {
+                await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
+                window.toast("Saved offline");
+                state.processingAction = false;
+                return;
+            }
+
+            try { 
+                const enc = await encryptMessage(v); 
+                const { data, error } = await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]).select().single();
+                if (!error && data) {
+                    state.recentlySentIds.add(data.id);
+                    const msgEl = container.querySelector(`[data-id="${tempId}"]`);
+                    if(msgEl) {
+                        const prevEl = msgEl.previousElementSibling; 
+                        let prevData = null; 
+                        if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                        try {
+                            const decRes = await workerExec('decryptSingle', { content: data.content });
+                            if(decRes.result) {
+                                const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                                msgEl.outerHTML = renderMsg(finalMsg, prevData, state.currentRoomData?.is_direct);
+                                lucide.createIcons();
+                                await localDB.put('messages', finalMsg);
+                            }
+                        } catch(e) {}
+                    }
+                } else {
+                    throw error;
+                }
+            } catch(e) { 
+                window.toast("Send failed, saved locally"); 
+                await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
+            } 
+            state.processingAction = false; 
+        };
+        
+        window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
+
+        window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine) return window.toast("Server is full. Please try again later."); state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { const { data: { user } } = await db.auth.getUser(); state.user = user; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; } };
+
+        window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
+        const startVTimer = () => { let left = CONFIG.verificationCodeExpiry; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
+        window.handleVerify = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); if(!temp) { window.toast("Session expired"); state.processingAction = false; return; } window.setLoading(true, "Verifying..."); try { const r = await fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.em, code: code }) }); if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Verified") { await finishReg(temp); } else { window.toast(j.message || "Wrong code"); window.setLoading(false); } } catch(err) { window.toast("API Fallback: Auto-verifying (Dev Mode)"); await finishReg(temp); } state.processingAction = false; };
+        const finishReg = async (temp) => { const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); if(error) { window.toast(error.message); window.setLoading(false); } else { window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); } };
+
+        window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
+        window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
+        window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+        window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
+        window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
+
+        db.auth.onAuthStateChange(async (ev, ses) => { 
+            state.user = ses?.user; 
+            if (state.user) setupGlobalPresence(state.user.id);
+            const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; 
+            if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); window.nav('scr-start'); } 
+        });
+
+        window.nav = (id, direction = null) => { const current = document.querySelector('.screen.active'); const next = $(id); if(!next) return; if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); } if(id === 'scr-register') { state.currentStep.reg = 1; state.selectedAvatar = null; $('r-name').value = ''; $('r-email').value = ''; $('r-pass').value = ''; $('r-avatar-url').value = ''; updateStepUI('reg'); } if(id === 'scr-account') window.prepareAccountPage(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right')); if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); } else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); } else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); next.classList.add('active'); lucide.createIcons(); const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; if(id === 'scr-lobby') updateLobbyAvatar(); };
+        window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
+        window.loadRooms = async () => { 
+            if(!state.user) return; 
+            
+            const localRooms = await localDB.getAll('rooms');
+            if (localRooms.length > 0) {
+                const uid = state.user.id;
+                const processedRooms = [];
+                for(const r of localRooms) {
+                    if(!r || !r.id) continue;
+                    let name = r.name;
+                    let avatar = r.avatar_url;
+                    if(r.is_direct && r.allowed_users) { 
+                        const otherId = r.allowed_users.find(id => id !== uid); 
+                        if(otherId) {
+                            let profile = await getProfile(otherId);
+                            if(profile) { name = profile.full_name; avatar = profile.avatar_url; }
+                        } 
+                    }
+                    processedRooms.push({ ...r, display_name: name, display_avatar: avatar });
+                }
+                state.allRooms = processedRooms;
+                window.filterRooms();
+            }
+
+            if (!navigator.onLine) return;
+
+            window.setLoading(true, "Syncing..."); 
+            const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
+            if (error) { window.toast("Sync failed"); window.setLoading(false); return; } 
+            if (rooms && rooms.length > 0) {
+                const uid = state.user.id; const processedRooms = []; 
+                for(const r of rooms) { 
+                    if(!r || !r.id) continue; 
+                    if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { 
+                        const profile = await getProfile(otherId);
+                        if(profile) { 
+                            state.profileCache[otherId] = profile; 
+                            await localDB.put('profiles', profile);
+                            processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); 
+                        } else { 
+                            processedRooms.push({ ...r, display_name: 'Unknown', display_avatar: null }); 
+                        }
+                    } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                } 
+                state.allRooms = processedRooms; 
+                
+                await localDB.clear('rooms');
+                await localDB.putAll('rooms', rooms);
+                
+                window.filterRooms(); 
+            }
+            window.setLoading(false); 
+            updateLobbyAvatar(); 
+        };
+        window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); lucide.createIcons(); };
+        window.joinAttempt = async (id) => { 
+            const meta = await localDB.get('rooms', id);
+            if (meta && meta.id) {
+                state.pending = { id: meta.id, name: meta.name, salt: meta.salt }; 
+                state.currentRoomData = meta;
+                if (meta.has_password) {
+                    window.nav('scr-gate');
+                } else {
+                    window.openVault(meta.id, meta.name, null, meta.salt);
+                }
+            } else if (!navigator.onLine) {
+                window.toast("Offline data not found");
+                return;
+            }
+
+            if (!navigator.onLine) return;
+
+            window.setLoading(true, "Checking..."); 
+            const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); 
+            if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); } 
+            const { data, error } = await db.from('rooms').select('*').eq('id', id).single(); 
+            window.setLoading(false); 
+            if (error || !data) return window.toast("Not found"); 
+            if(data && data.id) await localDB.put('rooms', data); 
+            state.pending = { id: data.id, name: data.name, salt: data.salt }; 
+            state.currentRoomData = data; 
+            if (data.has_password) window.nav('scr-gate'); 
+            else window.openVault(data.id, data.name, null, data.salt); 
+        };
+        window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
+
+        const init = async () => { 
+            await localDB.init();
+            monitorConnection();
+            const hasMaster = await checkMaster();
+            if (hasMaster) { state.isMasterTab = false; $('block-overlay').classList.add('active'); } 
+            else { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); if(navigator.onLine) setupGlobalPresence(null); }
+            window.nav('scr-start');
+            lucide.createIcons(); 
+            window.setLoading(false); 
+        };
+        init();
+      </script>
+   </body>
+</html>
