@@ -1,5 +1,3 @@
-// GH: HyperRushNet | 2026 | MIT License | logic.js (Fixed IDB & Syntax Errors)
-
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function startChatApp(customConfig = {}) {
@@ -41,7 +39,6 @@ export function startChatApp(customConfig = {}) {
         async get(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).get(key); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
         async getAll(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).getAll(); req.onsuccess = () => res(req.result || []); req.onerror = () => rej(req.error); }); },
         async put(store, val) { 
-            // FIX: Ensure ID exists and is valid to prevent silent fails
             if(!val || !val.id) return; 
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
@@ -273,7 +270,6 @@ export function startChatApp(customConfig = {}) {
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
         const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isGroupStart ? 'group-start' : 'msg-continuation'; const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
         
-        // FIX: Escape quotes to prevent HTML attribute breaking
         const safeText = isDeleted ? '' : esc(m.text || '').replace(/"/g, '&quot;');
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
         
@@ -295,10 +291,7 @@ export function startChatApp(customConfig = {}) {
         const creatorRow = $('info-creator-row'); 
         delBtn.style.display = 'none'; 
         delBtn.innerText = "Delete Chat"; 
-        
-        // FIX: Added missing closing parenthesis
         delBtn.classList.remove('active'); 
-        
         if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); 
         $('info-id').innerText = room.id; 
         const date = new Date(room.created_at); 
