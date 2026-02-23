@@ -148,17 +148,18 @@
 
         const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
         const DB_NAME = 'HRN_LOCAL_DB';
-        const DB_VERSION = 4; // Incremented for 'sessions' store
+        const DB_VERSION = 4;
 
         lucide.createIcons();
 
-                const localDB = {
+        // ROBUST LOCALDB OBJECT
+        const localDB = {
             db: null,
-            initPromise: null, // Houdt de init promise bij
+            initPromise: null,
             
             async init() {
-                if (this.db) return; // Alleen init als hij nog niet bestaat
-                if (this.initPromise) return this.initPromise; // Wacht als init al bezig is
+                if (this.db) return;
+                if (this.initPromise) return this.initPromise;
 
                 this.initPromise = new Promise((resolve, reject) => {
                     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -303,7 +304,7 @@
             currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
             profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
             isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null,
-            recentlySentIds: new Set(), isNavigating: false // Prevent double nav
+            recentlySentIds: new Set(), isNavigating: false
         };
 
         let toastQueue = []; let toastVisible = false;
@@ -607,12 +608,10 @@
 
                 if(error) throw error;
 
-                // If successful, close library and proceed (AuthStateChange handles the rest)
-                window.nav('scr-login', 'right'); // Slide library away
+                window.nav('scr-login', 'right');
                 window.toast("Welcome back!");
             } catch(e) {
                 console.error("Restore failed", e);
-                // If token is invalid/expired, remove it to prevent loops
                 if(e.message?.includes('refresh_token') || e.message?.includes('invalid')) {
                     await localDB.delete('sessions', userId);
                     window.toast("Session expired. Removed from library.");
@@ -634,12 +633,11 @@
             const loginScreen = $('scr-login');
             const libScreen = $('scr-library');
 
-            // Login Screen Gestures
             loginScreen.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
             loginScreen.addEventListener('touchend', e => { 
                 touchEndX = e.changedTouches[0].screenX;
                 if (touchStartX - touchEndX > minSwipeDistance) {
-                    // Swipe Left (Do nothing or back to start if needed, but request said right to lib)
+                    // Swipe Left
                 } else if (touchEndX - touchStartX > minSwipeDistance) {
                     // Swipe Right -> Open Library
                     renderLibrary();
@@ -647,7 +645,6 @@
                 }
             }, {passive: true});
 
-            // Library Screen Gestures
             libScreen.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
             libScreen.addEventListener('touchend', e => {
                 touchEndX = e.changedTouches[0].screenX;
@@ -671,38 +668,30 @@
                 return;
             }
 
-            // Reset content for specific screens
             if(targetId === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); } 
             if(targetId === 'scr-register') { state.currentStep.reg = 1; state.selectedAvatar = null; $('r-name').value = ''; $('r-email').value = ''; $('r-pass').value = ''; $('r-avatar-url').value = ''; updateStepUI('reg'); } 
             if(targetId === 'scr-account') window.prepareAccountPage();
 
-            // Determine direction if not provided (default to right slide for simplicity or hierarchy)
-            // If direction is null, assume simple switch (no animation)
-            
             if (direction) {
                 target.classList.remove('hidden-temp');
                 
                 if (direction === 'left') {
-                    // Target enters from Left
                     target.classList.remove('slide-out-left', 'slide-out-right', 'slide-in-right');
                     target.classList.add('slide-in-left');
                     current.classList.add('slide-out-left');
                 } else if (direction === 'right') {
-                    // Target enters from Right
                     target.classList.remove('slide-out-left', 'slide-out-right', 'slide-in-left');
                     target.classList.add('slide-in-right');
                     current.classList.add('slide-out-right');
                 }
 
-                // Wait for animation
                 setTimeout(() => {
                     current.classList.remove('active', 'slide-out-left', 'slide-out-right');
                     target.classList.add('active');
                     target.classList.remove('slide-in-left', 'slide-in-right');
                     state.isNavigating = false;
-                }, 400); // Match CSS duration
+                }, 400);
             } else {
-                // Instant switch
                 document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                 target.classList.add('active');
                 state.isNavigating = false;
@@ -804,17 +793,31 @@
 
             if (navigator.onLine) {
                 setConnectionVisuals('connecting');
-                const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
-                if(netRoom && netRoom.id) {
-                    roomData = netRoom;
-                    state.currentRoomData = roomData;
-                    await localDB.put('rooms', roomData);
+                try {
+                    const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
+                    if(netRoom && netRoom.id) {
+                        roomData = netRoom;
+                    }
+                } catch(e) {
+                    console.error("Sync error", e);
                 }
-            } else {
-                state.currentRoomData = roomData;
             }
 
-            if (!roomData) { window.setLoading(false); return window.toast("Room data not found"); }
+            if (!roomData) { 
+                window.setLoading(false); 
+                return window.toast("Room data not found"); 
+            }
+
+            // FIX: Zorg dat allowed_users altijd een array is (voorkomt undefined filter error)
+            if (!Array.isArray(roomData.allowed_users)) {
+                roomData.allowed_users = ['*'];
+            }
+            
+            state.currentRoomData = roomData;
+            
+            if (navigator.onLine) {
+                await localDB.put('rooms', roomData);
+            }
 
             const isDirect = roomData?.is_direct; 
             let displayTitle = roomData.name; 
@@ -859,27 +862,31 @@
 
             if (navigator.onLine) {
                 setConnectionVisuals('connecting');
-                const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
-                if (data && data.length > 0) { 
-                    data.reverse(); 
-                    if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
-                    try {
-                        const res = await workerExec('decryptHistory', { messages: data });
-                        const validMsgs = res.results.filter(m => !m.error); 
-                        const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
-                        
-                        await localDB.clearRoomMessages(id);
-                        await localDB.putAll('messages', messagesWithRoomId);
+                try {
+                    const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
+                    if (data && data.length > 0) { 
+                        data.reverse(); 
+                        if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
+                        try {
+                            const res = await workerExec('decryptHistory', { messages: data });
+                            const validMsgs = res.results.filter(m => !m.error); 
+                            const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
+                            
+                            await localDB.clearRoomMessages(id);
+                            await localDB.putAll('messages', messagesWithRoomId);
 
-                        let prev = null; 
-                        finalHtml = ""; 
-                        validMsgs.forEach(m => { finalHtml += renderMsg(m, prev, isDirect); prev = m; }); 
-                    } catch(e) { console.error(e); }
-                } else { 
-                    await localDB.clearRoomMessages(id);
-                    state.hasMoreHistory = false; 
-                    finalHtml = "";
-                } 
+                            let prev = null; 
+                            finalHtml = ""; 
+                            validMsgs.forEach(m => { finalHtml += renderMsg(m, prev, isDirect); prev = m; }); 
+                        } catch(e) { console.error(e); }
+                    } else { 
+                        await localDB.clearRoomMessages(id);
+                        state.hasMoreHistory = false; 
+                        finalHtml = "";
+                    } 
+                } catch(e) {
+                    console.error("Network fetch error", e);
+                }
             } else {
                 if(!hasCached) finalHtml = "";
             }
@@ -977,31 +984,10 @@
         window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
         window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
-        db.auth.onAuthStateChange(async (ev, ses) => { 
-            state.user = ses?.user; 
-            if (ev === 'SIGNED_IN') {
-                window.saveSessionToLibrary(ses); // Save to library
-                setupGlobalPresence(state.user.id);
-                window.setLoading(false); // Stop any pending login loaders
-                window.nav('scr-lobby');
-                window.loadRooms();
-            } else if (ev === 'TOKEN_REFRESHED') {
-                // Update library with new tokens
-                if(ses) await window.saveSessionToLibrary(ses);
-            } else if (ev === 'SIGNED_OUT') { 
-                if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
-                if (state.presenceChannel) state.presenceChannel.unsubscribe(); 
-                if (state.chatChannel) state.chatChannel.unsubscribe(); 
-                if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); 
-                window.nav('scr-start'); 
-            } 
-        });
-
-        window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
-                window.loadRooms = async () => { 
+        // FIXED loadRooms
+        window.loadRooms = async () => { 
             if(!state.user) return; 
             
-            // 1. Laad lokale rooms eerst (instant feedback)
             const localRooms = await localDB.getAll('rooms');
             if (localRooms.length > 0) {
                 const uid = state.user.id;
@@ -1023,7 +1009,6 @@
                 window.filterRooms();
             }
 
-            // 2. Sync met server als er verbinding is
             if (!navigator.onLine) return;
 
             const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
@@ -1040,9 +1025,9 @@
                         const otherId = r.allowed_users.find(id => id !== uid); 
                         
                         if(otherId) { 
-                            const profile = await getProfile(otherId); // FIX: was otherUserId
+                            const profile = await getProfile(otherId); 
                             if(profile) { 
-                                state.profileCache[otherId] = profile; // FIX: was otherUserId
+                                state.profileCache[otherId] = profile; 
                                 await localDB.put('profiles', profile);
                                 processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); 
                             } else { 
@@ -1058,7 +1043,6 @@
                 
                 state.allRooms = processedRooms; 
                 
-                // Update lokale cache
                 await localDB.clear('rooms');
                 await localDB.putAll('rooms', rooms);
                 
@@ -1098,15 +1082,11 @@
         };
         window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
 
-
+        // FIXED INIT FUNCTION
         const init = async () => { 
-            // 1. Eerst IndexedDB openen en klaarmaken
             await localDB.init();
-            
-            // 2. Setup dingen die geen DB nodig hebben
             setupSwipeGestures();
             monitorConnection();
-            
             const hasMaster = await checkMaster();
             if (hasMaster) { 
                 state.isMasterTab = false; 
@@ -1117,18 +1097,24 @@
                 if(navigator.onLine) setupGlobalPresence(null); 
             }
 
-            // 3. EERST NU de Auth listener registreren
-            // Hierdoor weten we zeker dat 'localDB' beschikbaar is als 'SIGNED_IN' vuurt
+            // FIXED: Listener moved inside init, wrapped in try/catch
             db.auth.onAuthStateChange(async (ev, ses) => { 
                 state.user = ses?.user; 
-                
                 if (ev === 'SIGNED_IN') {
-                    // DB is nu gegarandeerd open
                     window.saveSessionToLibrary(ses); 
                     setupGlobalPresence(state.user.id);
+                    
+                    try {
+                        window.nav('scr-lobby');
+                        await window.loadRooms();
+                    } catch (e) {
+                        console.error("Fout bij laden rooms:", e);
+                        window.toast("Fout bij laden, probeer opnieuw");
+                        if (!document.querySelector('#scr-lobby').classList.contains('active')) {
+                             window.nav('scr-lobby');
+                        }
+                    }
                     window.setLoading(false); 
-                    window.nav('scr-lobby');
-                    window.loadRooms();
                 } else if (ev === 'TOKEN_REFRESHED') {
                     if(ses) await window.saveSessionToLibrary(ses);
                 } else if (ev === 'SIGNED_OUT') { 
@@ -1140,11 +1126,9 @@
                 } 
             });
 
-            // 4. Check huidige sessie
             const { data: { session } } = await db.auth.getSession();
             if(session) {
                window.setLoading(true, "Restoring...");
-               // De listener hierboven handelt de navigatie af
             } else {
                window.nav('scr-start');
                window.setLoading(false);
@@ -1152,8 +1136,7 @@
             
             lucide.createIcons(); 
         };
-        
-        init(); // Start de app
+        init();
       </script>
    </body>
 </html>
