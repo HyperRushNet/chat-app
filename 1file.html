@@ -998,9 +998,10 @@
         });
 
         window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
-        window.loadRooms = async () => { 
+                window.loadRooms = async () => { 
             if(!state.user) return; 
             
+            // 1. Laad lokale rooms eerst (instant feedback)
             const localRooms = await localDB.getAll('rooms');
             if (localRooms.length > 0) {
                 const uid = state.user.id;
@@ -1022,28 +1023,42 @@
                 window.filterRooms();
             }
 
+            // 2. Sync met server als er verbinding is
             if (!navigator.onLine) return;
 
-            // No loader for background refresh to avoid flicker
             const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
             if (error) { return; } 
+            
             if (rooms && rooms.length > 0) {
-                const uid = state.user.id; const processedRooms = []; 
+                const uid = state.user.id; 
+                const processedRooms = []; 
+                
                 for(const r of rooms) { 
                     if(!r || !r.id) continue; 
-                    if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { 
-                        const profile = await getProfile(otherUserId);
-                        if(profile) { 
-                            state.profileCache[otherUserId] = profile; 
-                            await localDB.put('profiles', profile);
-                            processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); 
+                    
+                    if(r.is_direct && r.allowed_users) { 
+                        const otherId = r.allowed_users.find(id => id !== uid); 
+                        
+                        if(otherId) { 
+                            const profile = await getProfile(otherId); // FIX: was otherUserId
+                            if(profile) { 
+                                state.profileCache[otherId] = profile; // FIX: was otherUserId
+                                await localDB.put('profiles', profile);
+                                processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); 
+                            } else { 
+                                processedRooms.push({ ...r, display_name: 'Unknown', display_avatar: null }); 
+                            }
                         } else { 
-                            processedRooms.push({ ...r, display_name: 'Unknown', display_avatar: null }); 
+                            processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); 
                         }
-                    } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                    } else { 
+                        processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                    }
                 } 
+                
                 state.allRooms = processedRooms; 
                 
+                // Update lokale cache
                 await localDB.clear('rooms');
                 await localDB.putAll('rooms', rooms);
                 
