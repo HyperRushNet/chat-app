@@ -1,4 +1,4 @@
-// GH: HyperRushNet | 2026 | MIT License | logic.js (Fixed + Offline Support)
+// GH: HyperRushNet | 2026 | MIT License | logic.js (Offline-First / IndexedDB)
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -17,22 +17,38 @@ export function startChatApp(customConfig = {}) {
     };
 
     const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
+    const DB_NAME = 'HRN_LOCAL_DB';
+    const DB_VERSION = 1;
 
     lucide.createIcons();
 
-    const Cache = {
-        save: (key, data) => { try { localStorage.setItem(`hrn_${key}`, JSON.stringify(data)); } catch(e) {} },
-        load: (key) => { try { const d = localStorage.getItem(`hrn_${key}`); return d ? JSON.parse(d) : null; } catch(e) { return null; } },
-        remove: (key) => { try { localStorage.removeItem(`hrn_${key}`); } catch(e) {} },
-        saveRoomMeta: (room) => Cache.save(`room_${room.id}`, { name: room.name, salt: room.salt, avatar_url: room.avatar_url, is_direct: room.is_direct, allowed_users: room.allowed_users }),
-        getRoomMeta: (id) => Cache.load(`room_${id}`),
-        saveMessages: (roomId, msgs) => Cache.save(`msgs_${roomId}`, msgs),
-        getMessages: (roomId) => Cache.load(`msgs_${roomId}`) || [],
-        saveRooms: (rooms) => Cache.save('rooms_list', rooms),
-        getRooms: () => Cache.load('rooms_list') || [],
-        addOutgoing: (msg) => { const q = Cache.load('outgoing') || []; q.push(msg); Cache.save('outgoing', q); },
-        getOutgoing: () => Cache.load('outgoing') || [],
-        clearOutgoing: () => Cache.save('outgoing', [])
+    const localDB = {
+        db: null,
+        async init() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => { this.db = request.result; resolve(); };
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('rooms')) db.createObjectStore('rooms', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('messages')) db.createObjectStore('messages', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+                    if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
+                };
+            });
+        },
+        async get(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).get(key); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
+        async getAll(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).getAll(); req.onsuccess = () => res(req.result || []); req.onerror = () => rej(req.error); }); },
+        async put(store, val) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).put(val); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async putAll(store, vals) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const os = tx.objectStore(store); vals.forEach(v => os.put(v)); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
+        async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async delete(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).delete(key); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async getRoomMessages(roomId) {
+            const all = await this.getAll('messages');
+            return all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        }
     };
 
     const state = {
@@ -73,7 +89,7 @@ export function startChatApp(customConfig = {}) {
         const roomCount = state.lastKnownOnlineCount || 0;
         if (infoGlobalEl) infoGlobalEl.innerText = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
         if (state.currentRoomData?.is_direct) {
-            const isOnline = roomCount >= 2; const statusText = isOnline ? "Online" : "Offline";
+            const isOnline = roomCount >= 2 && navigator.onLine; const statusText = isOnline ? "Online" : "Offline";
             if (roomCountEl) roomCountEl.innerText = statusText; if (infoRoomEl) infoRoomEl.innerText = statusText;
             const dot = roomCountEl?.previousElementSibling; if (dot) dot.style.background = isOnline ? 'var(--success)' : 'var(--text-mute)';
         } else {
@@ -114,12 +130,28 @@ export function startChatApp(customConfig = {}) {
 
     const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; updatePresenceUI(); };
     
-    const setupGlobalPresence = async (userId) => { if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId || 'anonymous' } } }); state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; updatePresenceUI(); }).subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); };
+    const setupGlobalPresence = async (userId) => { if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); if(!userId) return; state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId } } }); state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; updatePresenceUI(); }).subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); };
 
     const attemptHardReconnect = () => {
         if (!navigator.onLine || !state.user) return; cleanupChannels(true); state.isReconnecting = !!state.currentRoomId; setConnectionVisuals('connecting');
         if (state.currentRoomId) { const timeout = getConnectionTimeout(); state.connectionTimeoutTimer = setTimeout(() => { state.isReconnecting = false; attemptHardReconnect(); }, timeout); initRoomPresence(state.currentRoomId); setupChatChannel(state.currentRoomId); }
         else { setConnectionVisuals('connected'); }
+    };
+
+    const processOutgoingQueue = async () => {
+        if (!state.user) return;
+        const queue = await localDB.getAll('queue');
+        if (queue.length === 0) return;
+        window.toast(`Sending ${queue.length} pending message(s)...`);
+        for (const item of queue) {
+            if (item.roomId === state.currentRoomId) {
+                try {
+                    const enc = await encryptMessage(item.text);
+                    await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
+                    await localDB.delete('queue', item.id);
+                } catch(e) { console.error("Failed to send queued msg", e); return; }
+            }
+        }
     };
 
     const setupChatChannel = (id) => {
@@ -133,7 +165,7 @@ export function startChatApp(customConfig = {}) {
                         const msgObj = { ...m, ...decRes.result };
                         const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
                         container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); container.scrollTop = container.scrollHeight; checkChatEmpty(); lucide.createIcons();
-                        const cached = Cache.getMessages(id); cached.push(msgObj); Cache.saveMessages(id, cached); 
+                        await localDB.put('messages', msgObj); 
                     }
                 } catch(e) { console.error("Decryption failed for new message", e); }
             }
@@ -143,43 +175,24 @@ export function startChatApp(customConfig = {}) {
                     const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
                     if(deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; } const timeSpan = msgEl.querySelector('.msg-time'); if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); } msgEl.dataset.text = ""; lucide.createIcons(); }
                     else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, prevData, isDirect); lucide.createIcons(); }
-                    const cached = Cache.getMessages(id); const idx = cached.findIndex(x => x.id === m.id); if(idx !== -1) { cached[idx] = { ...m, ...decRes.result }; Cache.saveMessages(id, cached); }
+                    const cached = await localDB.get('messages', m.id); if(cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); }
                 } catch(e) { console.error("Decryption failed for update", e); }
             }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
-            if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); }
+            if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); processOutgoingQueue(); }
             else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
 
     const initRoomPresence = async (roomId) => { if (!state.user) return; if(state.presenceChannel) state.presenceChannel.unsubscribe(); const myId = state.user.id; state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } }); state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); }).subscribe(async (status, err) => { if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }); };
 
-    const processOutgoingQueue = async () => {
-        if (!navigator.onLine || !state.user) return;
-        const queue = Cache.getOutgoing();
-        if (queue.length === 0) return;
-        Cache.clearOutgoing();
-        window.toast(`Sending ${queue.length} pending message(s)...`);
-        for (const item of queue) {
-            if (item.roomId === state.currentRoomId) {
-                try {
-                    const enc = await encryptMessage(item.text);
-                    await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
-                } catch(e) { console.error("Failed to send queued msg", e); }
-            }
-        }
-    };
-
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
-            $('offline-screen').classList.remove('active'); 
             setConnectionVisuals('connecting'); 
             attemptHardReconnect(); 
-            processOutgoingQueue(); 
         });
         window.addEventListener('offline', () => { 
-            $('offline-screen').classList.add('active'); 
             setConnectionVisuals('offline'); 
             if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); 
             if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
@@ -222,7 +235,7 @@ export function startChatApp(customConfig = {}) {
     window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Enter ID"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added"); window.setLoading(true, "Fetching..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("User not found"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Added"); };
     
     const checkMaster = () => new Promise((resolve) => { let masterFound = false; const handler = (ev) => { if (ev.data.type === 'PONG_MASTER') masterFound = true; }; tabChannel.addEventListener('message', handler); tabChannel.postMessage({ type: 'PING_MASTER' }); setTimeout(() => { tabChannel.removeEventListener('message', handler); resolve(masterFound); }, 300); });
-    window.forceClaimMaster = () => { if (!state.isMasterTab) { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); $('block-overlay').classList.remove('active'); if(state.user) { setupGlobalPresence(state.user.id); if(state.currentRoomId) attemptHardReconnect(); } else setupGlobalPresence(null); } };
+    window.forceClaimMaster = () => { if (!state.isMasterTab) { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); $('block-overlay').classList.remove('active'); if(state.user) { setupGlobalPresence(state.user.id); if(state.currentRoomId) attemptHardReconnect(); } } };
     tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active'); lucide.createIcons(); } } if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } };
     window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
     window.closeOverlay = () => $('overlay-container').classList.remove('active');
@@ -247,7 +260,7 @@ export function startChatApp(customConfig = {}) {
     };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
-    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); const cached = Cache.getMessages(state.currentRoomId); cached.unshift(...validMsgs); Cache.saveMessages(state.currentRoomId, cached); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
+    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); await localDB.putAll('messages', validMsgs); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
     window.openRoomInfo = async () => { if (!state.currentRoomData) return; window.setLoading(true, "Loading info..."); const room = state.currentRoomData; const delBtn = $('info-delete-btn'); const creatorRow = $('info-creator-row'); delBtn.style.display = 'none'; delBtn.innerText = "Delete Chat"; delBtn.classList.remove('active'); if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); $('info-id').innerText = room.id; const date = new Date(room.created_at); $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; if (room.is_direct) { $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); };
     window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
@@ -268,23 +281,23 @@ export function startChatApp(customConfig = {}) {
         $('chat-messages').innerHTML = ''; 
         $('chat-messages').onscroll = handleScroll; 
 
-        const isOffline = !navigator.onLine;
+        const keySource = rawPassword ? (rawPassword + id) : id; 
         let roomData = null;
-        
-        if (!isOffline) {
+        let localKey = await localDB.get('keys', id);
+
+        if (navigator.onLine) {
             window.setLoading(true, "Decrypting..."); 
-            const keySource = rawPassword ? (rawPassword + id) : id; 
             try { await deriveKey(keySource, roomSalt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); } 
             const { data: room } = await db.from('rooms').select('*').eq('id', id).single(); 
             roomData = room;
-            Cache.saveRoomMeta(room);
+            await localDB.put('rooms', room);
+            if(!localKey) await localDB.put('keys', { room_id: id, derived: true }); 
         } else {
-            const cachedMeta = Cache.getRoomMeta(id);
-            if(!cachedMeta) { window.setLoading(false); return window.toast("Offline data not found"); }
-            roomData = cachedMeta;
-            roomSalt = cachedMeta.salt;
-            const keySource = rawPassword ? (rawPassword + id) : id; 
-            try { await deriveKey(keySource, roomSalt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); }
+            const cachedRoom = await localDB.get('rooms', id);
+            if(!cachedRoom) return window.toast("Offline data not found");
+            roomData = cachedRoom;
+            if(!localKey && !rawPassword) return window.toast("Need password to decrypt offline");
+            try { await deriveKey(keySource, roomData.salt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); }
         }
 
         state.currentRoomData = roomData; 
@@ -307,26 +320,21 @@ export function startChatApp(customConfig = {}) {
         if (!isDirect && roomData.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
         lucide.createIcons(); 
         
-        if (isOffline) {
-            window.setLoading(true, "Loading Offline..."); 
-            const cachedMsgs = Cache.getMessages(id);
-            if (cachedMsgs.length > 0) {
-                const b = $('chat-messages'); b.innerHTML = ''; 
-                let prev = null; 
-                cachedMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; }); 
-                b.scrollTop = b.scrollHeight; 
-                checkChatEmpty(); 
-                lucide.createIcons(); 
-            } else {
-                checkChatEmpty();
-            }
-            window.setLoading(false);
-            window.toast("Offline Mode");
-            setConnectionVisuals('offline');
-            return;
+        const cachedMsgs = await localDB.getRoomMessages(id);
+        if (cachedMsgs.length > 0) {
+            const b = $('chat-messages'); b.innerHTML = ''; 
+            let prev = null; 
+            cachedMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; }); 
+            b.scrollTop = b.scrollHeight; 
+            checkChatEmpty(); 
+            lucide.createIcons(); 
         }
 
-        window.setLoading(true, "Fetching History..."); 
+        if (!navigator.onLine) {
+            window.setLoading(false); setConnectionVisuals('offline'); return;
+        }
+
+        window.setLoading(true, "Syncing..."); 
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
         $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
         window.nav('scr-chat'); 
@@ -334,7 +342,6 @@ export function startChatApp(customConfig = {}) {
         if (data && data.length > 0) { 
             data.reverse(); 
             if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
-            window.setLoading(true, "Decrypting..."); 
             try {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
@@ -344,7 +351,7 @@ export function startChatApp(customConfig = {}) {
                 b.scrollTop = b.scrollHeight; 
                 checkChatEmpty(); 
                 lucide.createIcons();
-                Cache.saveMessages(id, validMsgs); 
+                await localDB.putAll('messages', validMsgs); 
             } catch(e) { console.error(e); }
             window.setLoading(false); 
         } else { 
@@ -365,16 +372,19 @@ export function startChatApp(customConfig = {}) {
         $('chat-input').value = ''; 
         state.lastMessageTime = Date.now(); 
         
+        const tempId = `temp_${Date.now()}`;
+        const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
+
         if (!navigator.onLine) {
-            Cache.addOutgoing({ roomId: state.currentRoomId, text: v, time: Date.now() });
-            const tempMsg = { id: `temp_${Date.now()}`, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString() };
+            await localDB.put('messages', tempMsg);
+            await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
             const container = $('chat-messages'); 
             const lastMsg = container.querySelector('.msg:last-of-type'); 
             let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
             container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct)); 
             container.scrollTop = container.scrollHeight;
             lucide.createIcons();
-            window.toast("Saved offline");
+            window.toast("Saved locally");
             state.processingAction = false;
             return;
         }
@@ -413,24 +423,28 @@ export function startChatApp(customConfig = {}) {
     window.loadRooms = async () => { 
         if(!state.user) return; 
         
-        if (!navigator.onLine) {
-            window.toast("Offline Mode");
-            const cachedRooms = Cache.getRooms();
-            state.allRooms = cachedRooms;
+        const localRooms = await localDB.getAll('rooms');
+        if (localRooms.length > 0) {
+            const uid = state.user.id;
+            const processedRooms = localRooms.map(r => {
+                 if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); return { ...r, display_name: r.meta?.name || 'User', display_avatar: r.meta?.avatar }; }
+                 return { ...r, display_name: r.name, display_avatar: r.avatar_url };
+            });
+            state.allRooms = processedRooms;
             window.filterRooms();
-            updateLobbyAvatar();
-            return;
         }
 
-        window.setLoading(true, "Fetching..."); 
+        if (!navigator.onLine) return;
+
+        window.setLoading(true, "Syncing..."); 
         const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
-        if (error) { window.toast("Failed to load rooms"); window.setLoading(false); return; } 
+        if (error) { window.toast("Sync failed"); window.setLoading(false); return; } 
         const uid = state.user.id; const processedRooms = []; 
         for(const r of rooms) { 
             if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { if(state.profileCache[otherId]) processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url }); else { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); if(profile) { state.profileCache[otherId] = profile; processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
         } 
         state.allRooms = processedRooms; 
-        Cache.saveRooms(processedRooms); 
+        await localDB.putAll('rooms', rooms); 
         window.filterRooms(); 
         window.setLoading(false); 
         updateLobbyAvatar(); 
@@ -438,13 +452,13 @@ export function startChatApp(customConfig = {}) {
     window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); lucide.createIcons(); };
     window.joinAttempt = async (id) => { 
         if (!navigator.onLine) {
-            const meta = Cache.getRoomMeta(id);
+            const meta = await localDB.get('rooms', id);
             if (meta) {
                 state.pending = { id: meta.id, name: meta.name, salt: meta.salt }; 
                 state.currentRoomData = meta;
                 window.openVault(meta.id, meta.name, null, meta.salt);
             } else {
-                window.toast("Offline: Room data not cached");
+                window.toast("Offline: Room data not found");
             }
             return;
         }
@@ -463,11 +477,11 @@ export function startChatApp(customConfig = {}) {
     window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
 
     const init = async () => { 
-        if (!navigator.onLine) { $('offline-screen').classList.add('active'); } 
+        await localDB.init();
         monitorConnection();
         const hasMaster = await checkMaster();
         if (hasMaster) { state.isMasterTab = false; $('block-overlay').classList.add('active'); } 
-        else { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); setupGlobalPresence(null); }
+        else { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); if(navigator.onLine) setupGlobalPresence(null); }
         window.nav('scr-start');
         lucide.createIcons(); 
         window.setLoading(false); 
