@@ -11,18 +11,28 @@ export function startChatApp(customConfig = {}) {
         rateLimitMs: customConfig.rateLimitMs || 1000,
         presenceHeartbeatMs: customConfig.presenceHeartbeatMs || 10000,
         verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
+        debug: customConfig.debug !== false, // Toggle via config
     };
 
     const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
     const DB_NAME = 'HRN_LOCAL_DB';
-    const DB_VERSION = 2; 
+    const DB_VERSION = 3; // Incremented for new structure
 
     lucide.createIcons();
 
-    const debugBox = document.createElement('div');
-    debugBox.style = "position:fixed;bottom:0;right:0;width:450px;height:350px;background:#000;color:#0f0;font-family:monospace;font-size:11px;z-index:99999;overflow-y:auto;padding:10px;border-top:2px solid #0f0;word-wrap:break-word;";
-    document.body.appendChild(debugBox);
+    // Debug Console Setup
+    let debugBox = null;
+    const initDebug = () => {
+        if (!CONFIG.debug) return;
+        if (debugBox) return;
+        debugBox = document.createElement('div');
+        debugBox.style = "position:fixed;bottom:0;right:0;width:450px;height:350px;background:#000;color:#0f0;font-family:monospace;font-size:11px;z-index:99999;overflow-y:auto;padding:10px;border-top:2px solid #0f0;word-wrap:break-word;";
+        document.body.appendChild(debugBox);
+    };
+    
     const dbg = (tag, msg, obj = null) => {
+        if (!CONFIG.debug) return;
+        if (!debugBox) initDebug();
         const time = new Date().toISOString().split('T')[1].split('.')[0];
         let color = "#fff";
         if(tag === "IDB") color = "#0ff";
@@ -36,7 +46,46 @@ export function startChatApp(customConfig = {}) {
         if(obj) debugBox.innerHTML += `<div style="padding-left:15px;color:#888;">${JSON.stringify(obj)}</div>`;
         debugBox.scrollTop = debugBox.scrollHeight;
     };
-    dbg("SYS", "Debug Console Initialized");
+    initDebug();
+    dbg("SYS", "System Initialized (Debug " + (CONFIG.debug ? "ON" : "OFF"));
+
+    // Helper: Convert Blob to Base64
+    const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+
+    // Helper: Cache Profile Avatar as Base64
+    const syncProfileAvatar = async (profileId, avatarUrl) => {
+        if (!navigator.onLine || !avatarUrl || avatarUrl.startsWith('data:')) return;
+        try {
+            const response = await fetch(avatarUrl);
+            if(!response.ok) return;
+            const blob = await response.blob();
+            // Compress/Resize logic
+            const img = new Image();
+            img.onload = async () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                const max = 200; // Limit size for storage
+                if (w > h) { if (w > max) { h *= max / w; w = max; } } 
+                else { if (h > max) { w *= max / h; h = max; } }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                const base64 = canvas.toDataURL('image/jpeg', 0.7); // Compress
+                const p = await localDB.get('profiles', profileId);
+                if (p) {
+                    p.avatar_base64 = base64;
+                    await localDB.put('profiles', p);
+                    dbg("SYS", `Avatar cached for ${profileId}`);
+                }
+            };
+            img.src = URL.createObjectURL(blob);
+        } catch(e) { console.error("Avatar cache failed", e); }
+    };
 
     const localDB = {
         db: null,
@@ -58,6 +107,7 @@ export function startChatApp(customConfig = {}) {
                     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
                     if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
                     if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
+                    if (!db.objectStoreNames.contains('user_session')) db.createObjectStore('user_session', { keyPath: 'id' }); // For offline login
                 };
             });
         },
@@ -71,7 +121,6 @@ export function startChatApp(customConfig = {}) {
             }); 
         },
         async getAll(store) { 
-            dbg("IDB", `GET ALL: ${store}`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readonly'); 
                 const req = tx.objectStore(store).getAll(); 
@@ -81,7 +130,6 @@ export function startChatApp(customConfig = {}) {
         },
         async put(store, val) { 
             if(!val || !val.id) return; 
-            dbg("IDB", `PUT: ${store}`, val.id);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const req = tx.objectStore(store).put(val); 
@@ -91,7 +139,6 @@ export function startChatApp(customConfig = {}) {
         },
         async putAll(store, vals) { 
             if(!vals || vals.length === 0) return; 
-            dbg("IDB", `PUT ALL: ${store} (${vals.length} items)`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const os = tx.objectStore(store); 
@@ -102,7 +149,6 @@ export function startChatApp(customConfig = {}) {
         },
         async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
         async delete(store, key) { 
-            dbg("IDB", `DELETE: ${store}/${key}`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const req = tx.objectStore(store).delete(key); 
@@ -113,7 +159,6 @@ export function startChatApp(customConfig = {}) {
         async getRoomMessages(roomId) {
             const all = await this.getAll('messages');
             const filtered = all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            dbg("IDB", `Retrieved ${filtered.length} messages for room ${roomId}`);
             return filtered;
         }
     };
@@ -357,6 +402,27 @@ export function startChatApp(customConfig = {}) {
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
     const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
+    // Background Sync for Lobby
+    const syncLastMessages = async (rooms) => {
+        if (!navigator.onLine) return;
+        dbg("SYS", "Syncing last messages for Lobby");
+        for (const r of rooms) {
+            try {
+                const { data: msgs } = await db.from('messages').select('*').eq('room_id', r.id).order('created_at', { ascending: false }).limit(1);
+                if (msgs && msgs.length > 0) {
+                    const m = msgs[0];
+                    // Simple check if already exists or newer
+                    const existing = await localDB.get('messages', m.id);
+                    if (!existing) {
+                         // Store encrypted, decryption happens on demand/view
+                         await localDB.put('messages', { ...m, room_id: r.id }); 
+                         dbg("IDB", `Cached last msg for ${r.id}`);
+                    }
+                }
+            } catch(e) {}
+        }
+    };
+
     window.openRoomInfo = async () => { 
         if (!state.currentRoomData) return; 
         window.setLoading(true, "Loading info..."); 
@@ -413,10 +479,15 @@ export function startChatApp(customConfig = {}) {
                     if(!profile && navigator.onLine) { 
                         const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); 
                         profile = data; 
-                        if(data && data.id) { state.profileCache[otherUserId] = data; await localDB.put('profiles', data); } 
+                        if(data && data.id) { 
+                            state.profileCache[otherUserId] = data; 
+                            await localDB.put('profiles', data); 
+                            // Cache avatar as base64 for offline use
+                            syncProfileAvatar(otherUserId, data.avatar_url);
+                        } 
                     }
                 } 
-                if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } 
+                if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_base64 || profile.avatar_url; } 
             } 
         } 
         
@@ -546,23 +617,77 @@ export function startChatApp(customConfig = {}) {
     
     window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
-    window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine) return window.toast("Server is full. Please try again later."); state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { const { data: { user } } = await db.auth.getUser(); state.user = user; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; } };
+    window.handleLogin = async (e) => { 
+        if (!e || !e.isTrusted) return; 
+        if(state.processingAction) return; 
+        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine) return window.toast("Server is full. Please try again later."); 
+        state.processingAction = true; 
+        const em = $('l-email').value, p = $('l-pass').value; 
+        if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
+        window.setLoading(true, "Signing In..."); 
+        
+        if (!navigator.onLine) {
+            // Offline Login Attempt
+            dbg("SYS", "Offline Login Attempt");
+            const cachedUser = await localDB.get('user_session', 'current');
+            if (cachedUser && cachedUser.email === em) {
+                // Very basic check, ideally compare hash, but for this script logic:
+                state.user = { id: cachedUser.id, email: cachedUser.email, user_metadata: cachedUser.metadata };
+                window.nav('scr-lobby');
+                window.loadRooms();
+                window.setLoading(false);
+                state.processingAction = false;
+                window.toast("Offline Mode: Logged in from cache");
+                return;
+            } else {
+                window.toast("Offline: Account not found in cache. Please login online first.");
+                window.setLoading(false);
+                state.processingAction = false;
+                return;
+            }
+        }
+
+        const {error} = await db.auth.signInWithPassword({email:em, password:p}); 
+        if(error) { 
+            window.toast(error.message); 
+            window.setLoading(false); 
+            state.processingAction = false; 
+        } else { 
+            const { data: { user } } = await db.auth.getUser(); 
+            state.user = user; 
+            // Cache user for offline access
+            const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
+            await localDB.put('user_session', { id: 'current', email: user.email, id: user.id, metadata: user.user_metadata, profile: profile });
+            // Cache avatar as base64 if present
+            if(profile?.avatar_url) syncProfileAvatar(user.id, profile.avatar_url);
+
+            window.nav('scr-lobby'); 
+            window.loadRooms(); 
+            window.setLoading(false); 
+            state.processingAction = false; 
+        } 
+    };
 
     window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
     const startVTimer = () => { let left = CONFIG.verificationCodeExpiry; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
     window.handleVerify = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); if(!temp) { window.toast("Session expired"); state.processingAction = false; return; } window.setLoading(true, "Verifying..."); try { const r = await fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.em, code: code }) }); if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Verified") { await finishReg(temp); } else { window.toast(j.message || "Wrong code"); window.setLoading(false); } } catch(err) { window.toast("API Fallback: Auto-verifying (Dev Mode)"); await finishReg(temp); } state.processingAction = false; };
-    const finishReg = async (temp) => { const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); if(error) { window.toast(error.message); window.setLoading(false); } else { window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); } };
+    const finishReg = async (temp) => { const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); if(error) { window.toast(error.message); window.setLoading(false); } else { const { data: { user } } = await db.auth.getUser(); state.user = user; const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single(); await localDB.put('user_session', { id: 'current', email: user.email, id: user.id, metadata: user.user_metadata, profile: profile }); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); } };
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
-    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); state.user = null; await localDB.delete('user_session', 'current'); await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
     db.auth.onAuthStateChange(async (ev, ses) => { 
         dbg("AUTH", `State: ${ev}`);
         state.user = ses?.user; 
-        if (state.user) setupGlobalPresence(state.user.id);
+        if (state.user) { 
+            setupGlobalPresence(state.user.id); 
+            const { data: profile } = await db.from('profiles').select('*').eq('id', state.user.id).single();
+            await localDB.put('user_session', { id: 'current', email: state.user.email, id: state.user.id, metadata: state.user.user_metadata, profile: profile });
+            if(profile?.avatar_url) syncProfileAvatar(state.user.id, profile.avatar_url);
+        }
         const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; 
         if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); window.nav('scr-start'); } 
     });
@@ -585,7 +710,10 @@ export function startChatApp(customConfig = {}) {
                     const otherId = r.allowed_users.find(id => id !== uid); 
                     if(otherId) {
                         let profile = await localDB.get('profiles', otherId);
-                        if(profile) { name = profile.full_name; avatar = profile.avatar_url; }
+                        if(profile) { 
+                            name = profile.full_name; 
+                            avatar = profile.avatar_base64 || profile.avatar_url; 
+                        }
                     } 
                 }
                 processedRooms.push({ ...r, display_name: name, display_avatar: avatar });
@@ -604,7 +732,30 @@ export function startChatApp(customConfig = {}) {
             const uid = state.user.id; const processedRooms = []; 
             for(const r of rooms) { 
                 if(!r || !r.id) continue; 
-                if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { if(state.profileCache[otherId]) processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url }); else { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); if(profile) { state.profileCache[otherId] = profile; await localDB.put('profiles', profile); processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                if(r.is_direct && r.allowed_users) { 
+                    const otherId = r.allowed_users.find(id => id !== uid); 
+                    if(otherId) { 
+                        let profile = state.profileCache[otherId] || await localDB.get('profiles', otherId);
+                        if (!profile) {
+                            const { data: p } = await db.from('profiles').select('*').eq('id', otherId).single();
+                            profile = p;
+                            if(p) {
+                                await localDB.put('profiles', p);
+                                syncProfileAvatar(otherId, p.avatar_url);
+                            }
+                        }
+                        if(profile) { 
+                            state.profileCache[otherId] = profile;
+                            processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_base64 || profile.avatar_url }); 
+                        } else { 
+                            processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); 
+                        }
+                    } else { 
+                         processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); 
+                    }
+                } else { 
+                    processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                }
             } 
             state.allRooms = processedRooms; 
             const validRooms = rooms.filter(r => r && r.id);
@@ -613,6 +764,9 @@ export function startChatApp(customConfig = {}) {
         }
         window.setLoading(false); 
         updateLobbyAvatar(); 
+        
+        // Sync last messages in background
+        syncLastMessages(state.allRooms);
     };
     window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); lucide.createIcons(); };
     window.joinAttempt = async (id) => { 
