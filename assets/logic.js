@@ -248,7 +248,7 @@ export function startChatApp(customConfig = {}) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content });
                     if(decRes.result) { 
-                        const msgObj = { ...m, ...decRes.result };
+                        const msgObj = { ...m, ...decRes.result, room_id: m.room_id }; 
                         const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
                         container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); container.scrollTop = container.scrollHeight; checkChatEmpty(); lucide.createIcons();
                         await localDB.put('messages', msgObj); 
@@ -261,7 +261,7 @@ export function startChatApp(customConfig = {}) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
                     if(deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; } const timeSpan = msgEl.querySelector('.msg-time'); if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); } msgEl.dataset.text = ""; lucide.createIcons(); }
-                    else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, prevData, isDirect); lucide.createIcons(); }
+                    else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, room_id: m.room_id, updated_at: m.updated_at }, prevData, isDirect); lucide.createIcons(); }
                     const cached = await localDB.get('messages', m.id); if(cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); }
                 } catch(e) { console.error("Decryption failed for update", e); }
             }
@@ -355,7 +355,7 @@ export function startChatApp(customConfig = {}) {
     };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
-    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); await localDB.putAll('messages', validMsgs); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
+    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
     window.openRoomInfo = async () => { 
         if (!state.currentRoomData) return; 
@@ -483,6 +483,7 @@ export function startChatApp(customConfig = {}) {
             try {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
+                const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
                 dbg("UI", `NET Render: Decrypted ${validMsgs.length} messages. REPLACING VIEW.`);
                 const b = $('chat-messages'); b.innerHTML = ''; 
                 let prev = null; 
@@ -490,7 +491,7 @@ export function startChatApp(customConfig = {}) {
                 b.scrollTop = b.scrollHeight; 
                 checkChatEmpty(); 
                 lucide.createIcons();
-                await localDB.putAll('messages', validMsgs); 
+                await localDB.putAll('messages', messagesWithRoomId); 
             } catch(e) { console.error(e); }
         } else { 
             state.hasMoreHistory = false; checkChatEmpty(); 
