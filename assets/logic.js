@@ -16,7 +16,7 @@ export function startChatApp(customConfig = {}) {
 
     const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
     const DB_NAME = 'HRN_LOCAL_DB';
-    const DB_VERSION = 3; // Incremented for new structure
+    const DB_VERSION = 3;
 
     lucide.createIcons();
 
@@ -49,7 +49,6 @@ export function startChatApp(customConfig = {}) {
     initDebug();
     dbg("SYS", "System Initialized (Debug " + (CONFIG.debug ? "ON" : "OFF"));
 
-    // Helper: Convert Blob to Base64
     const blobToBase64 = (blob) => new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result);
@@ -57,31 +56,37 @@ export function startChatApp(customConfig = {}) {
         reader.readAsDataURL(blob);
     });
 
-    // Helper: Cache Profile Avatar as Base64
     const syncProfileAvatar = async (profileId, avatarUrl) => {
         if (!navigator.onLine || !avatarUrl || avatarUrl.startsWith('data:')) return;
+        
+        const storedProfile = await localDB.get('profiles', profileId);
+        // Check if the URL changed or if we don't have a base64 yet
+        if (storedProfile && storedProfile.avatar_url === avatarUrl && storedProfile.avatar_base64) {
+            return; 
+        }
+        
         try {
+            dbg("SYS", `Fetching new avatar for ${profileId}`);
             const response = await fetch(avatarUrl);
             if(!response.ok) return;
             const blob = await response.blob();
-            // Compress/Resize logic
             const img = new Image();
             img.onload = async () => {
                 const canvas = document.createElement('canvas');
                 let w = img.width, h = img.height;
-                const max = 200; // Limit size for storage
+                const max = 200; 
                 if (w > h) { if (w > max) { h *= max / w; w = max; } } 
                 else { if (h > max) { w *= max / h; h = max; } }
                 canvas.width = w; canvas.height = h;
                 const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                const base64 = canvas.toDataURL('image/jpeg', 0.7); // Compress
+                ctx.drawImage(img,0, 0, w, h);
+                const base64 = canvas.toDataURL('image/jpeg', 0.7); 
                 const p = await localDB.get('profiles', profileId);
-                if (p) {
-                    p.avatar_base64 = base64;
-                    await localDB.put('profiles', p);
-                    dbg("SYS", `Avatar cached for ${profileId}`);
-                }
+                const updatedProfile = p || { id: profileId };
+                updatedProfile.avatar_base64 = base64;
+                updatedProfile.avatar_url = avatarUrl; // Keep track of URL
+                await localDB.put('profiles', updatedProfile);
+                dbg("SYS", `Avatar updated & cached for ${profileId}`);
             };
             img.src = URL.createObjectURL(blob);
         } catch(e) { console.error("Avatar cache failed", e); }
@@ -107,12 +112,11 @@ export function startChatApp(customConfig = {}) {
                     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
                     if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
                     if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
-                    if (!db.objectStoreNames.contains('user_session')) db.createObjectStore('user_session', { keyPath: 'id' }); // For offline login
+                    if (!db.objectStoreNames.contains('user_session')) db.createObjectStore('user_session', { keyPath: 'id' });
                 };
             });
         },
         async get(store, key) { 
-            dbg("IDB", `GET: ${store}/${key}`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readonly'); 
                 const req = tx.objectStore(store).get(key); 
@@ -191,7 +195,6 @@ export function startChatApp(customConfig = {}) {
     const setConnectionVisuals = (status) => {
         const avatar = $('chat-avatar-display'); if (!avatar) return;
         avatar.classList.remove('status-connected', 'status-connecting', 'status-offline');
-        dbg("SYS", `Status: ${status}`);
         if (status === 'connected') avatar.classList.add('status-connected');
         else if (status === 'connecting') avatar.classList.add('status-connecting');
         else avatar.classList.add('status-offline');
@@ -212,17 +215,17 @@ export function startChatApp(customConfig = {}) {
     };
 
     const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
-    window.toast = m => { dbg("UI", "Toast: " + m); toastQueue.push(m); processToastQueue(); };
+    window.toast = m => { toastQueue.push(m); processToastQueue(); };
     window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { dbg("UI", "Loader ON: " + text); loader.classList.add('active'); } else { dbg("UI", "Loader OFF"); loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
 
-    const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { dbg("ERR", "SafeAwait caught error", error.message); return [null, error]; } };
+    const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
-    const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
+    const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv,0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
     const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
     const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
     const pendingResolvers = {};
-    cryptoWorker.onmessage = (e) => { const { id, type, result, error, results, success } = e.data; const key = id || type; dbg("WRK", `Worker Msg: ${type}`); if (pendingResolvers[key]) { if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed"); else if (type === 'keyDerived') pendingResolvers[key].resolve(success); else pendingResolvers[key].resolve({ type, result, results }); delete pendingResolvers[key]; } };
-    const workerExec = (type, payload) => { dbg("WRK", `Worker Exec: ${type}`); return new Promise((resolve, reject) => { const id = crypto.randomUUID(); pendingResolvers[id] = { resolve, reject }; cryptoWorker.postMessage({ id, type, payload }); }); };
+    cryptoWorker.onmessage = (e) => { const { id, type, result, error, results, success } = e.data; const key = id || type; if (pendingResolvers[key]) { if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed"); else if (type === 'keyDerived') pendingResolvers[key].resolve(success); else pendingResolvers[key].resolve({ type, result, results }); delete pendingResolvers[key]; } };
+    const workerExec = (type, payload) => { return new Promise((resolve, reject) => { const id = crypto.randomUUID(); pendingResolvers[id] = { resolve, reject }; cryptoWorker.postMessage({ id, type, payload }); }); };
     
     const generateSalt = () => { const arr = new Uint8Array(16); crypto.getRandomValues(arr); return Array.from(arr, b => b.toString(16).padStart(2, '0')).join(''); };
     const sha256 = async (text) => { const buffer = new TextEncoder().encode(text); const hashBuffer = await crypto.subtle.digest('SHA-256', buffer); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); };
@@ -232,7 +235,6 @@ export function startChatApp(customConfig = {}) {
     const getConnectionTimeout = () => { const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (connection) { const type = connection.effectiveType; if (type === '4g') return 5000; if (type === '3g') return 10000; if (type === '2g') return 20000; if (type === 'slow-2g') return 30000; } return 8000; };
 
     const cleanupChannels = async (keepGlobal = false) => {
-        dbg("SYS", "Cleaning up channels");
         if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
         if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
         if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
@@ -242,19 +244,17 @@ export function startChatApp(customConfig = {}) {
         state.isChatChannelReady = false; state.isReconnecting = false; setConnectionVisuals('offline');
     };
 
-    const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; dbg("SYS", `Online Count: ${state.lastKnownOnlineCount}`); updatePresenceUI(); };
+    const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; updatePresenceUI(); };
     
     const setupGlobalPresence = async (userId) => { 
-        dbg("SYS", `Setup Global Presence: ${userId}`);
         if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); 
         if(!userId) return; 
         state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId } } }); 
         state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; updatePresenceUI(); })
-        .subscribe(async (status) => { dbg("NET", `Global Presence Status: ${status}`); if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); 
+        .subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); 
     };
 
     const attemptHardReconnect = () => {
-        dbg("SYS", "Attempting Hard Reconnect");
         if (!state.user) return; 
         cleanupChannels(true); 
         state.isReconnecting = !!state.currentRoomId; 
@@ -265,7 +265,6 @@ export function startChatApp(customConfig = {}) {
 
     const processOutgoingQueue = async () => {
         if (!state.user) return;
-        dbg("NET", "Processing Outgoing Queue");
         const queue = await localDB.getAll('queue');
         if (queue.length === 0) return;
         window.toast(`Sending ${queue.length} pending message(s)...`);
@@ -277,18 +276,15 @@ export function startChatApp(customConfig = {}) {
                 await localDB.delete('queue', item.id);
                 const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
                 if(msgEl) msgEl.dataset.id = "sent";
-                dbg("NET", "Sent queued message");
-            } catch(e) { dbg("ERR", "Queue send failed", e); failed.push(item); }
+            } catch(e) { failed.push(item); }
         }
         if(failed.length > 0) await localDB.putAll('queue', failed);
     };
 
     const setupChatChannel = (id) => {
-        dbg("SYS", `Setup Chat Channel: ${id}`);
         if (state.chatChannel) state.chatChannel.unsubscribe(); const isDirect = state.currentRoomData?.is_direct;
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            dbg("NET", "New Message via WS");
             const m = payload.new; if (m && state.currentRoomId) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content });
@@ -301,7 +297,6 @@ export function startChatApp(customConfig = {}) {
                 } catch(e) { console.error("Decryption failed for new message", e); }
             }
         }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            dbg("NET", "Updated Message via WS");
             const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
@@ -311,23 +306,20 @@ export function startChatApp(customConfig = {}) {
                 } catch(e) { console.error("Decryption failed for update", e); }
             }
         }).subscribe((status) => {
-            dbg("NET", `Chat Channel Status: ${status}`);
             state.isChatChannelReady = (status === 'SUBSCRIBED');
             if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); processOutgoingQueue(); }
             else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
 
-    const initRoomPresence = async (roomId) => { if (!state.user) return; if(state.presenceChannel) state.presenceChannel.unsubscribe(); const myId = state.user.id; dbg("SYS", `Init Room Presence: ${roomId}`); state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } }); state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); }).subscribe(async (status, err) => { dbg("NET", `Room Presence Status: ${status}`); if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }); };
+    const initRoomPresence = async (roomId) => { if (!state.user) return; if(state.presenceChannel) state.presenceChannel.unsubscribe(); const myId = state.user.id; state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } }); state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); }).subscribe(async (status, err) => { if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }); };
 
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
-            dbg("SYS", "Network Online");
             setConnectionVisuals('connecting'); 
             attemptHardReconnect(); 
         });
         window.addEventListener('offline', () => { 
-            dbg("SYS", "Network Offline");
             setConnectionVisuals('offline'); 
             if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); 
             if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
@@ -354,7 +346,7 @@ export function startChatApp(customConfig = {}) {
     const initAvatarCarousel = () => { if(!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; updateCarouselPreview(); };
     const updateCarouselPreview = () => { const preview = $('avatar-preview-el'); if(state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`; lucide.createIcons(); };
     window.carouselNav = (direction) => { let index = AVATARS.indexOf(state.selectedAvatar); if(index === -1) index = 0; index += direction; if(index < 0) index = AVATARS.length - 1; if(index >= AVATARS.length) index = 0; state.selectedAvatar = AVATARS[index]; $('r-avatar-url').value = ''; updateCarouselPreview(); };
-    window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar added to carousel"); }; img.src = e.target.result; }; reader.readAsDataURL(file); } };
+    window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img,0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar added to carousel"); }; img.src = e.target.result; }; reader.readAsDataURL(file); } };
 
     window.selectCreateType = (type) => { state.createType = type; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $(`type-${type}`).classList.add('selected'); };
     window.nextRegStep = () => { if(state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if(!em || p.length < 8) return window.toast("Email and valid password required"); } if(state.currentStep.reg === 2) { const n = $('r-name').value; if(!n) return window.toast("Name required"); } state.currentStep.reg++; updateStepUI('reg'); };
@@ -402,16 +394,16 @@ export function startChatApp(customConfig = {}) {
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
     const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
-    // Background Sync for Lobby
     const syncLastMessages = async (rooms) => {
-        if (!navigator.onLine) return;
+        if (!navigator.onLine || !rooms || rooms.length === 0) return;
         dbg("SYS", "Syncing last messages for Lobby");
+        // Process sequentially to avoid hammering DB too hard
         for (const r of rooms) {
             try {
+                // Only fetch if we don't have the last one
                 const { data: msgs } = await db.from('messages').select('*').eq('room_id', r.id).order('created_at', { ascending: false }).limit(1);
                 if (msgs && msgs.length > 0) {
                     const m = msgs[0];
-                    // Simple check if already exists or newer
                     const existing = await localDB.get('messages', m.id);
                     if (!existing) {
                          // Store encrypted, decryption happens on demand/view
@@ -446,7 +438,6 @@ export function startChatApp(customConfig = {}) {
     window.deleteRoom = async () => { if (!state.currentRoomId) return; window.setLoading(true, "Deleting..."); const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); if (error) { window.toast("Failed: " + error.message); window.setLoading(false); return; } window.toast("Deleted"); state.currentRoomId = null; state.currentRoomData = null; window.closeOverlay(); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
     window.openVault = async (id, n, rawPassword, roomSalt) => { 
-        dbg("UI", `openVault called for RoomID: ${id}`);
         if (!state.user) return window.toast("Please login first"); 
         state.currentRoomPassword = rawPassword; 
         if (state.chatChannel) state.chatChannel.unsubscribe(); 
@@ -461,7 +452,6 @@ export function startChatApp(customConfig = {}) {
         let roomData = await localDB.get('rooms', id);
         
         if(!roomData && !navigator.onLine) {
-            dbg("ERR", "Offline & No Cache");
             return window.toast("Offline & No Cache");
         }
 
@@ -482,7 +472,6 @@ export function startChatApp(customConfig = {}) {
                         if(data && data.id) { 
                             state.profileCache[otherUserId] = data; 
                             await localDB.put('profiles', data); 
-                            // Cache avatar as base64 for offline use
                             syncProfileAvatar(otherUserId, data.avatar_url);
                         } 
                     }
@@ -500,7 +489,6 @@ export function startChatApp(customConfig = {}) {
 
         const cachedMsgs = await localDB.getRoomMessages(id);
         if (cachedMsgs.length > 0) {
-            dbg("UI", `IDB Render: Found ${cachedMsgs.length} messages. DISPLAYING NOW.`);
             window.setLoading(false);
             const b = $('chat-messages'); b.innerHTML = ''; 
             let prev = null; 
@@ -511,7 +499,6 @@ export function startChatApp(customConfig = {}) {
             window.nav('scr-chat');
             lucide.createIcons(); 
         } else {
-            dbg("UI", "IDB Render: No messages found. Showing empty state.");
             window.setLoading(false);
             $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
             window.nav('scr-chat');
@@ -521,18 +508,15 @@ export function startChatApp(customConfig = {}) {
         const keySource = rawPassword ? (rawPassword + id) : id; 
         let hasKey = await localDB.get('keys', id);
         deriveKey(keySource, roomData?.salt).then(async () => { 
-            dbg("WRK", "Key derivation success");
             if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
-        }).catch(e => { dbg("ERR", "Key derivation failed", e); });
+        }).catch(e => { console.error("Key derivation failed", e); });
 
         if (!navigator.onLine) {
-            dbg("NET", "OFFLINE MODE: No network fetch performed.");
             setConnectionVisuals('offline');
             return;
         }
 
         if(!roomData) {
-            dbg("NET", "Fetching Room Data from Network...");
             setConnectionVisuals('connecting');
             window.setLoading(true, "Fetching Room...");
             const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
@@ -545,7 +529,6 @@ export function startChatApp(customConfig = {}) {
             window.setLoading(false);
         }
 
-        dbg("NET", "Fetching Messages from Network...");
         setConnectionVisuals('connecting');
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
         if (data && data.length > 0) { 
@@ -555,7 +538,6 @@ export function startChatApp(customConfig = {}) {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
                 const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
-                dbg("UI", `NET Render: Decrypted ${validMsgs.length} messages. REPLACING VIEW.`);
                 const b = $('chat-messages'); b.innerHTML = ''; 
                 let prev = null; 
                 validMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, roomData?.is_direct)); prev = m; }); 
@@ -573,7 +555,6 @@ export function startChatApp(customConfig = {}) {
     const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
     
     window.sendMsg = async (e) => { 
-        dbg("UI", "sendMsg triggered");
         if (!e || !e.isTrusted) return; 
         if (!state.user || !state.currentRoomId || state.processingAction) return; 
         if (!applyRateLimit()) return; 
@@ -585,7 +566,6 @@ export function startChatApp(customConfig = {}) {
         
         const tempId = `temp_${Date.now()}`;
         const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
-        dbg("UI", `Rendering temp message: ${tempId}`);
 
         const container = $('chat-messages'); 
         const lastMsg = container.querySelector('.msg:last-of-type'); 
@@ -596,7 +576,6 @@ export function startChatApp(customConfig = {}) {
         await localDB.put('messages', tempMsg);
 
         if (!navigator.onLine) {
-            dbg("IDB", "Offline: Saving to queue");
             await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
             window.toast("Saved offline");
             state.processingAction = false;
@@ -604,11 +583,9 @@ export function startChatApp(customConfig = {}) {
         }
 
         try { 
-            dbg("NET", "Encrypting & Sending...");
             const enc = await encryptMessage(v); 
             await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); 
         } catch(e) { 
-            dbg("ERR", "Send failed", e);
             window.toast("Send failed, saved locally"); 
             await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
         } 
@@ -627,11 +604,8 @@ export function startChatApp(customConfig = {}) {
         window.setLoading(true, "Signing In..."); 
         
         if (!navigator.onLine) {
-            // Offline Login Attempt
-            dbg("SYS", "Offline Login Attempt");
             const cachedUser = await localDB.get('user_session', 'current');
             if (cachedUser && cachedUser.email === em) {
-                // Very basic check, ideally compare hash, but for this script logic:
                 state.user = { id: cachedUser.id, email: cachedUser.email, user_metadata: cachedUser.metadata };
                 window.nav('scr-lobby');
                 window.loadRooms();
@@ -647,19 +621,25 @@ export function startChatApp(customConfig = {}) {
             }
         }
 
-        const {error} = await db.auth.signInWithPassword({email:em, password:p}); 
-        if(error) { 
+        const { error, data } = await db.auth.signInWithPassword({email:em, password:p}); 
+        if (error) { 
             window.toast(error.message); 
             window.setLoading(false); 
             state.processingAction = false; 
         } else { 
-            const { data: { user } } = await db.auth.getUser(); 
-            state.user = user; 
-            // Cache user for offline access
-            const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
-            await localDB.put('user_session', { id: 'current', email: user.email, id: user.id, metadata: user.user_metadata, profile: profile });
-            // Cache avatar as base64 if present
-            if(profile?.avatar_url) syncProfileAvatar(user.id, profile.avatar_url);
+            // FIX: Use data.user directly instead of calling getUser which might hang
+            const user = data.user;
+            if (!user) {
+                // Fallback if weird SDK behavior
+                const session = await db.auth.getSession();
+                if (session.data.user) state.user = session.data.user;
+            } else {
+                state.user = user;
+            }
+
+            const { data: profile } = await db.from('profiles').select('*').eq('id', state.user.id).single();
+            await localDB.put('user_session', { id: 'current', email: state.user.email, id: state.user.id, metadata: state.user.user_metadata, profile: profile });
+            if(profile?.avatar_url) syncProfileAvatar(state.user.id, profile.avatar_url);
 
             window.nav('scr-lobby'); 
             window.loadRooms(); 
@@ -671,7 +651,7 @@ export function startChatApp(customConfig = {}) {
     window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
     const startVTimer = () => { let left = CONFIG.verificationCodeExpiry; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
     window.handleVerify = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); if(!temp) { window.toast("Session expired"); state.processingAction = false; return; } window.setLoading(true, "Verifying..."); try { const r = await fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.em, code: code }) }); if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Verified") { await finishReg(temp); } else { window.toast(j.message || "Wrong code"); window.setLoading(false); } } catch(err) { window.toast("API Fallback: Auto-verifying (Dev Mode)"); await finishReg(temp); } state.processingAction = false; };
-    const finishReg = async (temp) => { const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); if(error) { window.toast(error.message); window.setLoading(false); } else { const { data: { user } } = await db.auth.getUser(); state.user = user; const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single(); await localDB.put('user_session', { id: 'current', email: user.email, id: user.id, metadata: user.user_metadata, profile: profile }); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); } };
+    const finishReg = async (temp) => { const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); if(error) { window.toast(error.message); window.setLoading(false); } else { const { data: { user } } = await db.auth.getUser(); state.user = user; const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single(); await localDB.put('user_session', { id: 'current', email: user.email, id: user.id, metadata: user.user_metadata, profile: profile }); if(profile?.avatar_url) syncProfileAvatar(user.id, profile.avatar_url); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); } };
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
@@ -680,7 +660,6 @@ export function startChatApp(customConfig = {}) {
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
     db.auth.onAuthStateChange(async (ev, ses) => { 
-        dbg("AUTH", `State: ${ev}`);
         state.user = ses?.user; 
         if (state.user) { 
             setupGlobalPresence(state.user.id); 
@@ -697,7 +676,6 @@ export function startChatApp(customConfig = {}) {
     window.loadRooms = async () => { 
         if(!state.user) return; 
         
-        dbg("IDB", "Loading rooms from Local DB");
         const localRooms = await localDB.getAll('rooms');
         if (localRooms.length > 0) {
             const uid = state.user.id;
@@ -724,7 +702,6 @@ export function startChatApp(customConfig = {}) {
 
         if (!navigator.onLine) return;
 
-        dbg("NET", "Syncing rooms from Network");
         window.setLoading(true, "Syncing..."); 
         const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
         if (error) { window.toast("Sync failed"); window.setLoading(false); return; } 
@@ -770,10 +747,8 @@ export function startChatApp(customConfig = {}) {
     };
     window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); lucide.createIcons(); };
     window.joinAttempt = async (id) => { 
-        dbg("UI", `joinAttempt: ${id}`);
         const meta = await localDB.get('rooms', id);
         if (meta && meta.id) {
-            dbg("UI", "Found room locally");
             state.pending = { id: meta.id, name: meta.name, salt: meta.salt }; 
             state.currentRoomData = meta;
             if (meta.has_password) {
@@ -788,7 +763,6 @@ export function startChatApp(customConfig = {}) {
 
         if (!navigator.onLine) return;
 
-        dbg("NET", "Checking access on network");
         window.setLoading(true, "Checking..."); 
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); 
         if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); } 
