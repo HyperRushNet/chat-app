@@ -19,40 +19,18 @@ export function startChatApp(customConfig = {}) {
 
     lucide.createIcons();
 
-    const debugBox = document.createElement('div');
-    debugBox.style = "position:fixed;bottom:0;right:0;width:450px;height:350px;background:#000;color:#0f0;font-family:monospace;font-size:11px;z-index:99999;overflow-y:auto;padding:10px;border-top:2px solid #0f0;word-wrap:break-word;";
-    document.body.appendChild(debugBox);
-    const dbg = (tag, msg, obj = null) => {
-        const time = new Date().toISOString().split('T')[1].split('.')[0];
-        let color = "#fff";
-        if(tag === "IDB") color = "#0ff";
-        if(tag === "NET") color = "#ff0";
-        if(tag === "ERR") color = "#f00";
-        if(tag === "UI") color = "#f0f";
-        if(tag === "SYS") color = "#aaa";
-        if(tag === "WRK") color = "#0f0";
-        const line = `<div style="margin-bottom:2px;"><span style="color:${color};font-weight:bold;">[${time}] [${tag}]</span> ${msg}</div>`;
-        debugBox.innerHTML += line;
-        if(obj) debugBox.innerHTML += `<div style="padding-left:15px;color:#888;">${JSON.stringify(obj)}</div>`;
-        debugBox.scrollTop = debugBox.scrollHeight;
-    };
-    dbg("SYS", "Debug Console Initialized");
-
     const localDB = {
         db: null,
         async init() {
-            dbg("IDB", "Opening IndexedDB...", { name: DB_NAME, version: DB_VERSION });
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
-                request.onerror = (e) => { dbg("ERR", "IDB Open Error", e.target.error); reject(request.error); };
+                request.onerror = (e) => { reject(request.error); };
                 request.onsuccess = () => { 
                     this.db = request.result; 
-                    dbg("IDB", "IDB Opened Successfully");
                     resolve(); 
                 };
                 request.onupgradeneeded = (e) => {
                     const db = e.target.result;
-                    dbg("IDB", "Upgrading DB schema");
                     if (!db.objectStoreNames.contains('rooms')) db.createObjectStore('rooms', { keyPath: 'id' });
                     if (!db.objectStoreNames.contains('messages')) db.createObjectStore('messages', { keyPath: 'id' });
                     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
@@ -62,7 +40,6 @@ export function startChatApp(customConfig = {}) {
             });
         },
         async get(store, key) { 
-            dbg("IDB", `GET: ${store}/${key}`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readonly'); 
                 const req = tx.objectStore(store).get(key); 
@@ -71,7 +48,6 @@ export function startChatApp(customConfig = {}) {
             }); 
         },
         async getAll(store) { 
-            dbg("IDB", `GET ALL: ${store}`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readonly'); 
                 const req = tx.objectStore(store).getAll(); 
@@ -81,7 +57,6 @@ export function startChatApp(customConfig = {}) {
         },
         async put(store, val) { 
             if(!val || !val.id) return; 
-            dbg("IDB", `PUT: ${store}`, val.id);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const req = tx.objectStore(store).put(val); 
@@ -91,7 +66,6 @@ export function startChatApp(customConfig = {}) {
         },
         async putAll(store, vals) { 
             if(!vals || vals.length === 0) return; 
-            dbg("IDB", `PUT ALL: ${store} (${vals.length} items)`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const os = tx.objectStore(store); 
@@ -102,7 +76,6 @@ export function startChatApp(customConfig = {}) {
         },
         async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
         async delete(store, key) { 
-            dbg("IDB", `DELETE: ${store}/${key}`);
             return new Promise((res, rej) => { 
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const req = tx.objectStore(store).delete(key); 
@@ -113,7 +86,6 @@ export function startChatApp(customConfig = {}) {
         async getRoomMessages(roomId) {
             const all = await this.getAll('messages');
             const filtered = all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            dbg("IDB", `Retrieved ${filtered.length} messages for room ${roomId}`);
             return filtered;
         }
     };
@@ -131,7 +103,7 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
-        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null
+        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null
     };
 
     let toastQueue = []; let toastVisible = false;
@@ -146,7 +118,6 @@ export function startChatApp(customConfig = {}) {
     const setConnectionVisuals = (status) => {
         const avatar = $('chat-avatar-display'); if (!avatar) return;
         avatar.classList.remove('status-connected', 'status-connecting', 'status-offline');
-        dbg("SYS", `Status: ${status}`);
         if (status === 'connected') avatar.classList.add('status-connected');
         else if (status === 'connecting') avatar.classList.add('status-connecting');
         else avatar.classList.add('status-offline');
@@ -166,18 +137,26 @@ export function startChatApp(customConfig = {}) {
         }
     };
 
-    const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
-    window.toast = m => { dbg("UI", "Toast: " + m); toastQueue.push(m); processToastQueue(); };
-    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { dbg("UI", "Loader ON: " + text); loader.classList.add('active'); } else { dbg("UI", "Loader OFF"); loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
+    const schedulePresenceUpdate = () => {
+        if (state.presenceUpdateTimer) clearTimeout(state.presenceUpdateTimer);
+        state.presenceUpdateTimer = setTimeout(() => {
+            updatePresenceUI();
+            state.presenceUpdateTimer = null;
+        }, 1000);
+    };
 
-    const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { dbg("ERR", "SafeAwait caught error", error.message); return [null, error]; } };
+    const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
+    window.toast = m => { toastQueue.push(m); processToastQueue(); };
+    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { loader.classList.add('active'); } else { loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
+
+    const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
     const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
     const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
     const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
     const pendingResolvers = {};
-    cryptoWorker.onmessage = (e) => { const { id, type, result, error, results, success } = e.data; const key = id || type; dbg("WRK", `Worker Msg: ${type}`); if (pendingResolvers[key]) { if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed"); else if (type === 'keyDerived') pendingResolvers[key].resolve(success); else pendingResolvers[key].resolve({ type, result, results }); delete pendingResolvers[key]; } };
-    const workerExec = (type, payload) => { dbg("WRK", `Worker Exec: ${type}`); return new Promise((resolve, reject) => { const id = crypto.randomUUID(); pendingResolvers[id] = { resolve, reject }; cryptoWorker.postMessage({ id, type, payload }); }); };
+    cryptoWorker.onmessage = (e) => { const { id, type, result, error, results, success } = e.data; const key = id || type; if (pendingResolvers[key]) { if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed"); else if (type === 'keyDerived') pendingResolvers[key].resolve(success); else pendingResolvers[key].resolve({ type, result, results }); delete pendingResolvers[key]; } };
+    const workerExec = (type, payload) => { return new Promise((resolve, reject) => { const id = crypto.randomUUID(); pendingResolvers[id] = { resolve, reject }; cryptoWorker.postMessage({ id, type, payload }); }); };
     
     const generateSalt = () => { const arr = new Uint8Array(16); crypto.getRandomValues(arr); return Array.from(arr, b => b.toString(16).padStart(2, '0')).join(''); };
     const sha256 = async (text) => { const buffer = new TextEncoder().encode(text); const hashBuffer = await crypto.subtle.digest('SHA-256', buffer); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); };
@@ -187,7 +166,6 @@ export function startChatApp(customConfig = {}) {
     const getConnectionTimeout = () => { const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (connection) { const type = connection.effectiveType; if (type === '4g') return 5000; if (type === '3g') return 10000; if (type === '2g') return 20000; if (type === 'slow-2g') return 30000; } return 8000; };
 
     const cleanupChannels = async (keepGlobal = false) => {
-        dbg("SYS", "Cleaning up channels");
         if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
         if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
         if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
@@ -197,19 +175,17 @@ export function startChatApp(customConfig = {}) {
         state.isChatChannelReady = false; state.isReconnecting = false; setConnectionVisuals('offline');
     };
 
-    const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; dbg("SYS", `Online Count: ${state.lastKnownOnlineCount}`); updatePresenceUI(); };
+    const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; schedulePresenceUpdate(); };
     
     const setupGlobalPresence = async (userId) => { 
-        dbg("SYS", `Setup Global Presence: ${userId}`);
         if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); 
         if(!userId) return; 
         state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId } } }); 
-        state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; updatePresenceUI(); })
-        .subscribe(async (status) => { dbg("NET", `Global Presence Status: ${status}`); if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); 
+        state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; schedulePresenceUpdate(); })
+        .subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); 
     };
 
     const attemptHardReconnect = () => {
-        dbg("SYS", "Attempting Hard Reconnect");
         if (!state.user) return; 
         cleanupChannels(true); 
         state.isReconnecting = !!state.currentRoomId; 
@@ -220,7 +196,6 @@ export function startChatApp(customConfig = {}) {
 
     const processOutgoingQueue = async () => {
         if (!state.user) return;
-        dbg("NET", "Processing Outgoing Queue");
         const queue = await localDB.getAll('queue');
         if (queue.length === 0) return;
         window.toast(`Sending ${queue.length} pending message(s)...`);
@@ -232,18 +207,15 @@ export function startChatApp(customConfig = {}) {
                 await localDB.delete('queue', item.id);
                 const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
                 if(msgEl) msgEl.dataset.id = "sent";
-                dbg("NET", "Sent queued message");
-            } catch(e) { dbg("ERR", "Queue send failed", e); failed.push(item); }
+            } catch(e) { failed.push(item); }
         }
         if(failed.length > 0) await localDB.putAll('queue', failed);
     };
 
     const setupChatChannel = (id) => {
-        dbg("SYS", `Setup Chat Channel: ${id}`);
         if (state.chatChannel) state.chatChannel.unsubscribe(); const isDirect = state.currentRoomData?.is_direct;
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            dbg("NET", "New Message via WS");
             const m = payload.new; if (m && state.currentRoomId) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content });
@@ -256,7 +228,6 @@ export function startChatApp(customConfig = {}) {
                 } catch(e) { console.error("Decryption failed for new message", e); }
             }
         }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            dbg("NET", "Updated Message via WS");
             const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
@@ -266,23 +237,20 @@ export function startChatApp(customConfig = {}) {
                 } catch(e) { console.error("Decryption failed for update", e); }
             }
         }).subscribe((status) => {
-            dbg("NET", `Chat Channel Status: ${status}`);
             state.isChatChannelReady = (status === 'SUBSCRIBED');
             if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); processOutgoingQueue(); }
             else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
 
-    const initRoomPresence = async (roomId) => { if (!state.user) return; if(state.presenceChannel) state.presenceChannel.unsubscribe(); const myId = state.user.id; dbg("SYS", `Init Room Presence: ${roomId}`); state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } }); state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); }).subscribe(async (status, err) => { dbg("NET", `Room Presence Status: ${status}`); if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }); };
+    const initRoomPresence = async (roomId) => { if (!state.user) return; if(state.presenceChannel) state.presenceChannel.unsubscribe(); const myId = state.user.id; state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } }); state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); }).subscribe(async (status, err) => { if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }); };
 
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
-            dbg("SYS", "Network Online");
             setConnectionVisuals('connecting'); 
             attemptHardReconnect(); 
         });
         window.addEventListener('offline', () => { 
-            dbg("SYS", "Network Offline");
             setConnectionVisuals('offline'); 
             if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); 
             if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
@@ -380,7 +348,6 @@ export function startChatApp(customConfig = {}) {
     window.deleteRoom = async () => { if (!state.currentRoomId) return; window.setLoading(true, "Deleting..."); const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); if (error) { window.toast("Failed: " + error.message); window.setLoading(false); return; } window.toast("Deleted"); state.currentRoomId = null; state.currentRoomData = null; window.closeOverlay(); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
     window.openVault = async (id, n, rawPassword, roomSalt) => { 
-        dbg("UI", `openVault called for RoomID: ${id}`);
         if (!state.user) return window.toast("Please login first"); 
         state.currentRoomPassword = rawPassword; 
         if (state.chatChannel) state.chatChannel.unsubscribe(); 
@@ -395,7 +362,6 @@ export function startChatApp(customConfig = {}) {
         let roomData = await localDB.get('rooms', id);
         
         if(!roomData && !navigator.onLine) {
-            dbg("ERR", "Offline & No Cache");
             return window.toast("Offline & No Cache");
         }
 
@@ -429,7 +395,6 @@ export function startChatApp(customConfig = {}) {
 
         const cachedMsgs = await localDB.getRoomMessages(id);
         if (cachedMsgs.length > 0) {
-            dbg("UI", `IDB Render: Found ${cachedMsgs.length} messages. DISPLAYING NOW.`);
             window.setLoading(false);
             const b = $('chat-messages'); b.innerHTML = ''; 
             let prev = null; 
@@ -440,7 +405,6 @@ export function startChatApp(customConfig = {}) {
             window.nav('scr-chat');
             lucide.createIcons(); 
         } else {
-            dbg("UI", "IDB Render: No messages found. Showing empty state.");
             window.setLoading(false);
             $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
             window.nav('scr-chat');
@@ -450,18 +414,15 @@ export function startChatApp(customConfig = {}) {
         const keySource = rawPassword ? (rawPassword + id) : id; 
         let hasKey = await localDB.get('keys', id);
         deriveKey(keySource, roomData?.salt).then(async () => { 
-            dbg("WRK", "Key derivation success");
             if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
-        }).catch(e => { dbg("ERR", "Key derivation failed", e); });
+        }).catch(e => { });
 
         if (!navigator.onLine) {
-            dbg("NET", "OFFLINE MODE: No network fetch performed.");
             setConnectionVisuals('offline');
             return;
         }
 
         if(!roomData) {
-            dbg("NET", "Fetching Room Data from Network...");
             setConnectionVisuals('connecting');
             window.setLoading(true, "Fetching Room...");
             const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
@@ -474,7 +435,6 @@ export function startChatApp(customConfig = {}) {
             window.setLoading(false);
         }
 
-        dbg("NET", "Fetching Messages from Network...");
         setConnectionVisuals('connecting');
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
         if (data && data.length > 0) { 
@@ -484,7 +444,6 @@ export function startChatApp(customConfig = {}) {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
                 const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
-                dbg("UI", `NET Render: Decrypted ${validMsgs.length} messages. REPLACING VIEW.`);
                 const b = $('chat-messages'); b.innerHTML = ''; 
                 let prev = null; 
                 validMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, roomData?.is_direct)); prev = m; }); 
@@ -502,7 +461,6 @@ export function startChatApp(customConfig = {}) {
     const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
     
     window.sendMsg = async (e) => { 
-        dbg("UI", "sendMsg triggered");
         if (!e || !e.isTrusted) return; 
         if (!state.user || !state.currentRoomId || state.processingAction) return; 
         if (!applyRateLimit()) return; 
@@ -514,7 +472,6 @@ export function startChatApp(customConfig = {}) {
         
         const tempId = `temp_${Date.now()}`;
         const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
-        dbg("UI", `Rendering temp message: ${tempId}`);
 
         const container = $('chat-messages'); 
         const lastMsg = container.querySelector('.msg:last-of-type'); 
@@ -525,7 +482,6 @@ export function startChatApp(customConfig = {}) {
         await localDB.put('messages', tempMsg);
 
         if (!navigator.onLine) {
-            dbg("IDB", "Offline: Saving to queue");
             await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
             window.toast("Saved offline");
             state.processingAction = false;
@@ -533,11 +489,9 @@ export function startChatApp(customConfig = {}) {
         }
 
         try { 
-            dbg("NET", "Encrypting & Sending...");
             const enc = await encryptMessage(v); 
             await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); 
         } catch(e) { 
-            dbg("ERR", "Send failed", e);
             window.toast("Send failed, saved locally"); 
             await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
         } 
@@ -560,7 +514,6 @@ export function startChatApp(customConfig = {}) {
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
     db.auth.onAuthStateChange(async (ev, ses) => { 
-        dbg("AUTH", `State: ${ev}`);
         state.user = ses?.user; 
         if (state.user) setupGlobalPresence(state.user.id);
         const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; 
@@ -572,7 +525,6 @@ export function startChatApp(customConfig = {}) {
     window.loadRooms = async () => { 
         if(!state.user) return; 
         
-        dbg("IDB", "Loading rooms from Local DB");
         const localRooms = await localDB.getAll('rooms');
         if (localRooms.length > 0) {
             const uid = state.user.id;
@@ -596,7 +548,6 @@ export function startChatApp(customConfig = {}) {
 
         if (!navigator.onLine) return;
 
-        dbg("NET", "Syncing rooms from Network");
         window.setLoading(true, "Syncing..."); 
         const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
         if (error) { window.toast("Sync failed"); window.setLoading(false); return; } 
@@ -616,10 +567,8 @@ export function startChatApp(customConfig = {}) {
     };
     window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); lucide.createIcons(); };
     window.joinAttempt = async (id) => { 
-        dbg("UI", `joinAttempt: ${id}`);
         const meta = await localDB.get('rooms', id);
         if (meta && meta.id) {
-            dbg("UI", "Found room locally");
             state.pending = { id: meta.id, name: meta.name, salt: meta.salt }; 
             state.currentRoomData = meta;
             if (meta.has_password) {
@@ -634,7 +583,6 @@ export function startChatApp(customConfig = {}) {
 
         if (!navigator.onLine) return;
 
-        dbg("NET", "Checking access on network");
         window.setLoading(true, "Checking..."); 
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); 
         if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); } 
