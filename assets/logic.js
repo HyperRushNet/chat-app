@@ -1,4 +1,4 @@
-// GH: HyperRushNet | 2026 | MIT License | logic.js (fixed)
+// GH: HyperRushNet | 2026 | MIT License | logic.js (Fixed)
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -33,7 +33,7 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
-        isBackgrounded: false, globalPresenceReady: false
+        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null
     };
 
     let toastQueue = []; let toastVisible = false;
@@ -66,13 +66,11 @@ export function startChatApp(customConfig = {}) {
             const statusText = isOnline ? "Online" : "Offline";
             if (roomCountEl) roomCountEl.innerText = statusText;
             if (infoRoomEl) infoRoomEl.innerText = statusText;
-            
             const dot = roomCountEl?.previousElementSibling;
             if (dot) dot.style.background = isOnline ? 'var(--success)' : 'var(--text-mute)';
         } else {
             if (roomCountEl) roomCountEl.innerText = `${roomCount}`;
             if (infoRoomEl) infoRoomEl.innerText = `${roomCount}`;
-            
             const dot = roomCountEl?.previousElementSibling;
             if (dot) dot.style.background = 'var(--success)';
         }
@@ -96,17 +94,18 @@ export function startChatApp(customConfig = {}) {
     const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
     const workerCode = `self.onmessage = async (e) => {
-        const { type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder();
+        const { id, type, payload } = e.data; 
+        const encoder = new TextEncoder(); const decoder = new TextDecoder();
         try {
             if (type === 'deriveKey') {
                 const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']);
                 const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-                self.cryptoKey = key; self.postMessage({ type: 'keyDerived', success: true });
+                self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true });
             } else if (type === 'encrypt') {
                 if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12));
                 const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded);
                 const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length);
-                const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ type: 'encrypted', result: base64 });
+                const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 });
             } else if (type === 'decryptHistory') {
                 if (!self.cryptoKey) throw new Error("Key not derived"); const results = [];
                 for (const m of payload.messages) {
@@ -119,30 +118,51 @@ export function startChatApp(customConfig = {}) {
                         const text = decoder.decode(decrypted); const parts = text.split('|');
                         results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at });
                     } catch (err) { results.push({ id: m.id, error: true }); }
-                } self.postMessage({ type: 'historyDecrypted', results });
+                } self.postMessage({ id, type: 'historyDecrypted', results });
             } else if (type === 'decryptSingle') {
                 if (!self.cryptoKey) throw new Error("Key not derived");
-                if (payload.content === '/') { self.postMessage({ type: 'singleDecrypted', result: { deleted: true } }); return; }
+                if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; }
                 try {
                     const binary = atob(payload.content); const bytes = new Uint8Array(binary.length);
                     for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
                     const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12);
                     const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext);
                     const text = decoder.decode(decrypted); const parts = text.split('|');
-                    self.postMessage({ type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } });
-                } catch(e) { self.postMessage({ type: 'singleDecrypted', error: e.message }); }
+                    self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } });
+                } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); }
             }
-        } catch (error) { self.postMessage({ type: 'error', message: error.message }); }
+        } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); }
     };`;
+    
     const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
     const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
-    const pendingCallbacks = {};
-    cryptoWorker.onmessage = (e) => { const { type } = e.data; if (pendingCallbacks[type]) { pendingCallbacks[type](e.data); delete pendingCallbacks[type]; } };
+    const pendingResolvers = {};
+
+    cryptoWorker.onmessage = (e) => { 
+        const { id, type, result, error, results, success } = e.data;
+        const key = id || type; 
+        if (pendingResolvers[key]) {
+            if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed");
+            else if (type === 'keyDerived') pendingResolvers[key].resolve(success);
+            else pendingResolvers[key].resolve({ type, result, results });
+            delete pendingResolvers[key];
+        } 
+    };
+
+    const workerExec = (type, payload) => new Promise((resolve, reject) => {
+        const id = crypto.randomUUID();
+        pendingResolvers[id] = { resolve, reject };
+        cryptoWorker.postMessage({ id, type, payload });
+    });
 
     const generateSalt = () => { const arr = new Uint8Array(16); crypto.getRandomValues(arr); return Array.from(arr, b => b.toString(16).padStart(2, '0')).join(''); };
     const sha256 = async (text) => { const buffer = new TextEncoder().encode(text); const hashBuffer = await crypto.subtle.digest('SHA-256', buffer); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); };
-    const deriveKey = (pass, salt) => new Promise((resolve, reject) => { pendingCallbacks['keyDerived'] = (data) => { if (data.success) resolve(true); else reject("Key derivation failed"); }; cryptoWorker.postMessage({ type: 'deriveKey', payload: { password: pass, salt: salt } }); });
-    const encryptMessage = (text) => new Promise((resolve, reject) => { pendingCallbacks['encrypted'] = (data) => { if (data.result) resolve(data.result); else reject("Encryption failed"); }; const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); cryptoWorker.postMessage({ type: 'encrypt', payload: { text: time + "|" + text } }); });
+    const deriveKey = (pass, salt) => workerExec('deriveKey', { password: pass, salt: salt });
+    const encryptMessage = async (text) => { 
+        const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+        const res = await workerExec('encrypt', { text: time + "|" + text });
+        return res.result;
+    };
 
     const getConnectionTimeout = () => {
         const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -179,9 +199,7 @@ export function startChatApp(customConfig = {}) {
     
     const setupGlobalPresence = async (userId) => {
         if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
-        
         state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId || 'anonymous' } } });
-        
         state.globalPresenceChannel.on('presence', { event: 'sync' }, () => {
             const presState = state.globalPresenceChannel.presenceState();
             state.globalOnlineCount = Object.keys(presState).length;
@@ -196,7 +214,6 @@ export function startChatApp(customConfig = {}) {
 
     const attemptHardReconnect = () => {
         if (!navigator.onLine || !state.user) return; 
-
         cleanupChannels(true); 
         state.isReconnecting = !!state.currentRoomId; 
         setConnectionVisuals('connecting');
@@ -207,7 +224,6 @@ export function startChatApp(customConfig = {}) {
                 state.isReconnecting = false; 
                 attemptHardReconnect(); 
             }, timeout);
-
             initRoomPresence(state.currentRoomId); 
             setupChatChannel(state.currentRoomId);
         } else {
@@ -216,11 +232,15 @@ export function startChatApp(customConfig = {}) {
     };
 
     const setupChatChannel = (id) => {
-        if (state.chatChannel) state.chatChannel.unsubscribe(); const isDirect = state.currentRoomData?.is_direct;
+        if (state.chatChannel) state.chatChannel.unsubscribe(); 
+        const isDirect = state.currentRoomData?.is_direct;
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
+        
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            const m = payload.new; if (m && state.currentRoomId) {
-                pendingCallbacks['singleDecrypted'] = async (decRes) => {
+            const m = payload.new; 
+            if (m && state.currentRoomId) {
+                try {
+                    const decRes = await workerExec('decryptSingle', { content: m.content });
                     if(decRes.result) { 
                         const msgObj = { ...m, ...decRes.result }; 
                         const container = $('chat-messages'); 
@@ -232,40 +252,51 @@ export function startChatApp(customConfig = {}) {
                         checkChatEmpty(); 
                         lucide.createIcons(); 
                     }
-                }; cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
+                } catch(e) { console.error("Decryption failed for new message", e); }
             }
         }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
-                pendingCallbacks['singleDecrypted'] = (decRes) => {
-                     const deleted = m.content === '/'; 
-                     if(deleted) { 
-                         msgEl.classList.add('msg-deleted');
-                         const contentDiv = msgEl.querySelector('div:not(.msg-header)');
-                         if(contentDiv) {
-                             contentDiv.className = 'deleted-text';
-                             contentDiv.innerText = "Message deleted";
-                         }
-                         const timeSpan = msgEl.querySelector('.msg-time');
-                         if(timeSpan) {
-                             const editedTag = timeSpan.querySelector('.edited-tag');
-                             if(editedTag) editedTag.remove();
-                         }
-                         msgEl.dataset.text = "";
-                         lucide.createIcons(); 
-                     }
-                     else if (decRes.result) { 
-                         const prevEl = msgEl.previousElementSibling;
-                         let prevData = null;
-                         if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
-                         msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, prevData, isDirect); 
-                         lucide.createIcons(); 
-                     }
-                }; cryptoWorker.postMessage({ type: 'decryptSingle', payload: { content: m.content } });
+            const m = payload.new; 
+            const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); 
+            if (msgEl) {
+                try {
+                    const decRes = await workerExec('decryptSingle', { content: m.content });
+                    const deleted = m.content === '/'; 
+                    if(deleted) { 
+                        msgEl.classList.add('msg-deleted');
+                        const contentDiv = msgEl.querySelector('div:not(.msg-header)');
+                        if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; }
+                        const timeSpan = msgEl.querySelector('.msg-time');
+                        if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); }
+                        msgEl.dataset.text = "";
+                        lucide.createIcons(); 
+                    } else if (decRes.result) { 
+                        const prevEl = msgEl.previousElementSibling;
+                        let prevData = null;
+                        if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                        msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, updated_at: m.updated_at }, prevData, isDirect); 
+                        lucide.createIcons(); 
+                    }
+                } catch(e) { console.error("Decryption failed for update", e); }
             }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
-            if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); }
-            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
+            if (status === 'SUBSCRIBED') { 
+                if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } 
+                state.isReconnecting = false; 
+                if(state.reconnectTimer) clearTimeout(state.reconnectTimer); 
+                setConnectionVisuals('connected'); 
+            }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { 
+                if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } 
+                if (navigator.onLine) { 
+                    state.isChatChannelReady = false; 
+                    if(!state.isReconnecting) { 
+                        state.isReconnecting = true; 
+                        setConnectionVisuals('connecting'); 
+                        state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); 
+                    } 
+                } 
+            }
         });
     };
 
@@ -310,11 +341,10 @@ export function startChatApp(customConfig = {}) {
         
         const canEdit = isOwner && diffMinutes < 15; 
         const canDelete = isOwner;
-        const canCopy = true;
         
         editBtn.style.display = canEdit ? 'flex' : 'none'; 
         deleteBtn.style.display = canDelete ? 'flex' : 'none';
-        copyBtn.style.display = canCopy ? 'flex' : 'none';
+        copyBtn.style.display = 'flex';
         
         state.contextTarget = msgData;
         
@@ -386,9 +416,7 @@ export function startChatApp(customConfig = {}) {
             const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id);
             if (error) window.toast("Failed to edit: " + error.message);
             else window.toast("Message updated");
-        } catch(e) {
-            window.toast("Encryption failed");
-        }
+        } catch(e) { window.toast("Encryption failed"); }
         
         state.editingMessage = null;
         window.setLoading(false);
@@ -396,48 +424,29 @@ export function startChatApp(customConfig = {}) {
     };
     
     document.addEventListener('click', (e) => { 
-        if (state.preventNextClose) {
-            state.preventNextClose = false;
-            return;
-        }
+        if (state.preventNextClose) { state.preventNextClose = false; return; }
         hideContextMenu(); 
     });
     
     const chatContainer = $('chat-messages');
-    
     chatContainer.addEventListener('touchstart', (e) => {
         const msg = e.target.closest('.msg');
         if (!msg) return;
-        state.longPressTimer = setTimeout(() => {
-            showContextMenu(e, msg);
-            state.preventNextClose = true;
-        }, 500);
+        state.longPressTimer = setTimeout(() => { showContextMenu(e, msg); state.preventNextClose = true; }, 500);
     }, {passive: true});
     
     chatContainer.addEventListener('touchend', () => clearTimeout(state.longPressTimer));
     chatContainer.addEventListener('touchmove', () => clearTimeout(state.longPressTimer));
-    
     chatContainer.addEventListener('contextmenu', (e) => {
         const msg = e.target.closest('.msg');
-        if (msg) {
-            e.preventDefault();
-            showContextMenu(e, msg);
-        }
+        if (msg) { e.preventDefault(); showContextMenu(e, msg); }
     });
 
     const updateAccessSummary = (prefix) => { const summaryEl = $(`${prefix}-access-summary`); if (!summaryEl) return; const count = state.selectedAllowedUsers.length; const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`; summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`; lucide.createIcons(); };
     const updateStepUI = (context) => { const current = state.currentStep[context]; const indicator = $(`${context}-step-indicator`); if(!indicator) return; indicator.querySelectorAll('.step-dot').forEach((dot, index) => { if(index < current) dot.classList.add('active'); else dot.classList.remove('active'); }); if(context === 'reg') { $('reg-step-1').classList.toggle('active', current === 1); $('reg-step-2').classList.toggle('active', current === 2); $('reg-step-3').classList.toggle('active', current === 3); if(current === 3) initAvatarCarousel(); } else { $(`${context}-step-1`).classList.toggle('active', current === 1); $(`${context}-step-2`).classList.toggle('active', current === 2); } lucide.createIcons(); };
     
-    const initAvatarCarousel = () => { 
-        if(!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; 
-        updateCarouselPreview(); 
-    };
-    
-    const updateCarouselPreview = () => {
-        const preview = $('avatar-preview-el');
-        if(state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`;
-        lucide.createIcons();
-    };
+    const initAvatarCarousel = () => { if(!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; updateCarouselPreview(); };
+    const updateCarouselPreview = () => { const preview = $('avatar-preview-el'); if(state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`; lucide.createIcons(); };
     
     window.carouselNav = (direction) => {
         let index = AVATARS.indexOf(state.selectedAvatar);
@@ -479,18 +488,7 @@ export function startChatApp(customConfig = {}) {
     };
 
     window.selectCreateType = (type) => { state.createType = type; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $(`type-${type}`).classList.add('selected'); };
-    window.nextRegStep = () => { 
-        if(state.currentStep.reg === 1) {
-            const em = $('r-email').value, p = $('r-pass').value;
-            if(!em || p.length < 8) return window.toast("Email and valid password required");
-        }
-        if(state.currentStep.reg === 2) {
-            const n = $('r-name').value;
-            if(!n) return window.toast("Name required");
-        }
-        state.currentStep.reg++; 
-        updateStepUI('reg'); 
-    };
+    window.nextRegStep = () => { if(state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if(!em || p.length < 8) return window.toast("Email and valid password required"); } if(state.currentStep.reg === 2) { const n = $('r-name').value; if(!n) return window.toast("Name required"); } state.currentStep.reg++; updateStepUI('reg'); };
     window.prevRegStep = () => { state.currentStep.reg--; updateStepUI('reg'); };
     window.nextCreateStep = () => { state.currentStep.create = 2; updateStepUI('create'); if(state.createType === 'direct') { $('create-group-fields').classList.add('dn'); $('create-direct-fields').classList.remove('dn'); $('create-access-summary').classList.add('dn'); $('create-step2-title').innerText = "Direct Message"; $('create-step2-sub').innerText = "Who are you messaging?"; } else { $('create-group-fields').classList.remove('dn'); $('create-direct-fields').classList.add('dn'); $('create-access-summary').classList.remove('dn'); $('create-step2-title').innerText = "Setup"; $('create-step2-sub').innerText = "Details"; } updateAccessSummary('create'); };
     window.prevCreateStep = () => { state.currentStep.create = 1; updateStepUI('create'); };
@@ -515,13 +513,10 @@ export function startChatApp(customConfig = {}) {
             state.isMasterTab = true; 
             tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); 
             $('block-overlay').classList.remove('active');
-            
             if(state.user) {
                 setupGlobalPresence(state.user.id);
                 if(state.currentRoomId) attemptHardReconnect();
-            } else {
-                setupGlobalPresence(null);
-            }
+            } else setupGlobalPresence(null);
         } 
     };
 
@@ -540,13 +535,10 @@ export function startChatApp(customConfig = {}) {
                 lucide.createIcons(); 
             } 
         } 
-        if (ev.data.type === 'PING_MASTER') { 
-            if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); 
-        } 
+        if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } 
     };
     
     window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
-    
     window.closeOverlay = () => $('overlay-container').classList.remove('active');
     window.showOverlayView = (viewId) => { const panel = document.querySelector('.panel-card'); if(!panel) return; panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); const target = $(`view-${viewId}`); if(target) { target.classList.add('active'); lucide.createIcons(); } };
     window.prepareAccountPage = async () => { if(!state.user) return; const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); const name = profile?.full_name || state.user.user_metadata?.full_name || "User"; const avatar = profile?.avatar_url || state.user.user_metadata?.avatar_url; $('acc-page-name').innerText = name; $('acc-page-type').innerText = "Full Account"; $('acc-page-id').innerText = state.user.id; const avPrev = $('acc-page-avatar'); if(avatar) avPrev.innerHTML = `<img src="${avatar}">`; else avPrev.innerText = name.charAt(0); $('acc-email-wrapper').style.display = 'block'; $('acc-page-email').innerText = state.user.email || "Not set"; lucide.createIcons(); };
@@ -569,12 +561,9 @@ export function startChatApp(customConfig = {}) {
         const safeText = isDeleted ? '' : esc(m.text || '');
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`;
         const timeString = m.time || getTimeFromDate(m.created_at);
-        
         html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''}" ${dataAttrs}>`;
-        
-        if (isDeleted) {
-             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
-        } else {
+        if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
+        else {
             const processedText = processText(m.text);
             html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`;
         }
@@ -583,7 +572,30 @@ export function startChatApp(customConfig = {}) {
     };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
-    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); pendingCallbacks['historyDecrypted'] = async (res) => { const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); } state.isLoadingHistory = false; }; cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } }); };
+    const loadMoreHistory = async () => { 
+        if (!state.oldestMessageTimestamp || !state.currentRoomId) return; 
+        state.isLoadingHistory = true; 
+        const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; 
+        container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); 
+        const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); 
+        $('history-loader')?.remove(); 
+        if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } 
+        data.reverse(); 
+        
+        try {
+            const res = await workerExec('decryptHistory', { messages: data });
+            const validMsgs = res.results.filter(m => !m.error); 
+            if (validMsgs.length > 0) { 
+                state.oldestMessageTimestamp = validMsgs[0].created_at; 
+                let html = "", prev = null; 
+                validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); 
+                container.insertAdjacentHTML('afterbegin', html); 
+                container.scrollTop = container.scrollHeight - oldScrollHeight; 
+                lucide.createIcons(); 
+            } 
+        } catch(e) { console.error(e); }
+        state.isLoadingHistory = false; 
+    };
 
     window.openRoomInfo = async () => { 
         if (!state.currentRoomData) return; 
@@ -591,53 +603,34 @@ export function startChatApp(customConfig = {}) {
         const room = state.currentRoomData; 
         const delBtn = $('info-delete-btn'); 
         const creatorRow = $('info-creator-row'); 
-        delBtn.style.display = 'none'; 
-        delBtn.innerText = "Delete Chat"; 
-        delBtn.classList.remove('active'); 
+        delBtn.style.display = 'none'; delBtn.innerText = "Delete Chat"; delBtn.classList.remove('active'); 
         if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); 
         $('info-id').innerText = room.id; 
         const date = new Date(room.created_at); 
         $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; 
         if (room.is_direct) { 
-            $('info-type').innerText = "Direct Message"; 
-            creatorRow.style.display = 'none'; 
+            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; 
             const otherId = room.allowed_users?.find(id => id !== state.user.id); 
             if (otherId) { 
                 let profile = state.profileCache[otherId]; 
-                if(!profile) { 
-                    const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); 
-                    profile = data; 
-                    if(data) state.profileCache[otherId] = data; 
-                } 
+                if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } 
                 $('info-name').innerText = profile?.full_name || 'User'; 
                 const avEl = $('info-avatar'); 
-                if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; 
-                else avEl.innerText = (profile?.full_name || 'U').charAt(0); 
+                if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); 
             } 
             delBtn.style.display = 'flex'; 
         } else { 
-            $('info-type').innerText = "Group Chat"; 
-            $('info-name').innerText = room.name; 
-            const avEl = $('info-avatar'); 
-            if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; 
-            else avEl.innerText = room.name.charAt(0); 
+            $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; 
+            const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); 
             creatorRow.style.display = 'flex'; 
             if (room.created_by) { 
                 let profile = state.profileCache[room.created_by]; 
-                if(!profile) { 
-                    const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); 
-                    profile = data; 
-                    if(data) state.profileCache[room.created_by] = data; 
-                } 
+                if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } 
                 $('info-creator').innerText = profile?.full_name || 'Unknown'; 
             } else $('info-creator').innerText = 'Unknown'; 
             if (room.created_by === state.user.id) delBtn.style.display = 'flex'; 
         } 
-        updatePresenceUI(); 
-        window.setLoading(false); 
-        $('overlay-container').classList.add('active'); 
-        window.showOverlayView('room-info'); 
-        lucide.createIcons(); 
+        updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
     };
     window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
     window.openRoomSettings = async () => { window.closeOverlay(); if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); window.setLoading(true, "Loading..."); const room = state.currentRoomData; state.currentStep.edit = 1; updateStepUI('edit'); $('edit-room-name').value = room.name; $('edit-room-visible').checked = room.is_visible; $('edit-room-pass').value = ''; const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass'); if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; } else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute)"; removePassBtn.style.display = 'none'; } state.removePasswordFlag = false; state.selectedAllowedUsers = []; const ids = room.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } $('overlay-container').classList.add('active'); window.showOverlayView('room-settings'); window.setLoading(false); };
@@ -645,19 +638,117 @@ export function startChatApp(customConfig = {}) {
     window.saveRoomSettings = async (e) => { if (!e || !e.isTrusted) return; if (state.processingAction) return; state.processingAction = true; const name = $('edit-room-name').value.trim(); const isVisible = $('edit-room-visible').checked; const newPass = $('edit-room-pass').value; let allowedUsers = state.selectedAllowedUsers.length > 0 ? state.selectedAllowedUsers.map(u => u.id) : ['*']; if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); if (!name) { window.toast("Name required"); state.processingAction = false; return; } const room = state.currentRoomData; const isChangingPass = newPass.length > 0; const isRemovingPass = state.removePasswordFlag; window.setLoading(true, "Saving..."); const updates = { name, is_visible: isVisible, allowed_users: allowedUsers }; if (isRemovingPass) updates.has_password = false; else if (isChangingPass) updates.has_password = true; const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId); if (updateError) { window.toast("Failed: " + updateError.message); window.setLoading(false); state.processingAction = false; return; } if (isRemovingPass) { await db.rpc('set_room_password', { p_room_id: state.currentRoomId, p_hash: null }); state.currentRoomData.has_password = false; } else if (isChangingPass) { const roomSalt = state.currentRoomData.salt; const accessHash = await sha256(newPass + roomSalt); await db.rpc('set_room_password', { p_room_id: state.currentRoomId, p_hash: accessHash }); state.currentRoomData.has_password = true; } const { data: updatedRoom } = await db.from('rooms').select('*').eq('id', state.currentRoomId).single(); state.currentRoomData = updatedRoom; $('chat-title').innerText = updatedRoom.name; window.toast("Saved"); window.closeOverlay(); state.processingAction = false; window.setLoading(false); };
     window.deleteRoom = async () => { if (!state.currentRoomId) return; window.setLoading(true, "Deleting..."); const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); if (error) { window.toast("Failed: " + error.message); window.setLoading(false); return; } window.toast("Deleted"); state.currentRoomId = null; state.currentRoomData = null; window.closeOverlay(); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
-    window.openVault = async (id, n, rawPassword, roomSalt) => { if (!state.user) return window.toast("Please login first"); window.setLoading(true, "Decrypting..."); state.currentRoomPassword = rawPassword; if (state.chatChannel) state.chatChannel.unsubscribe(); state.currentRoomId = id; state.lastRenderedDateLabel = null; state.oldestMessageTimestamp = null; state.hasMoreHistory = true; state.isLoadingHistory = false; $('chat-messages').innerHTML = ''; $('chat-messages').onscroll = handleScroll; const keySource = rawPassword ? (rawPassword + id) : id; try { await deriveKey(keySource, roomSalt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); } const { data: room } = await db.from('rooms').select('*').eq('id', id).single(); state.currentRoomData = room; const isDirect = room.is_direct; let displayTitle = n; let displayAvatar = room.avatar_url; if (isDirect) { const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id); if (otherUserId) { let profile = state.profileCache[otherUserId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); profile = data; if(data) state.profileCache[otherUserId] = data; } if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } } } $('chat-title').innerText = displayTitle; const avEl = $('chat-avatar-display'); if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); const editBtn = $('info-edit-btn'); if (!isDirect && room.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; lucide.createIcons(); window.setLoading(true, "Fetching History..."); const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; window.nav('scr-chat'); setConnectionVisuals('connecting'); if (data && data.length > 0) { data.reverse(); if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; window.setLoading(true, "Decrypting..."); pendingCallbacks['historyDecrypted'] = async (res) => { const b = $('chat-messages'); b.innerHTML = ''; let prev = null; res.results.forEach(m => { if(!m.error) { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; } }); b.scrollTop = b.scrollHeight; checkChatEmpty(); lucide.createIcons(); window.setLoading(false); }; cryptoWorker.postMessage({ type: 'decryptHistory', payload: { messages: data } }); } else { state.hasMoreHistory = false; checkChatEmpty(); window.setLoading(false); } setupChatChannel(id); initRoomPresence(id); };
+    window.openVault = async (id, n, rawPassword, roomSalt) => { 
+        if (!state.user) return window.toast("Please login first"); 
+        window.setLoading(true, "Decrypting..."); 
+        state.currentRoomPassword = rawPassword; 
+        if (state.chatChannel) state.chatChannel.unsubscribe(); 
+        state.currentRoomId = id; 
+        state.lastRenderedDateLabel = null; 
+        state.oldestMessageTimestamp = null; 
+        state.hasMoreHistory = true; 
+        state.isLoadingHistory = false; 
+        $('chat-messages').innerHTML = ''; 
+        $('chat-messages').onscroll = handleScroll; 
+        const keySource = rawPassword ? (rawPassword + id) : id; 
+        try { 
+            await deriveKey(keySource, roomSalt); 
+        } catch(e) { 
+            window.setLoading(false); 
+            return window.toast("Key derivation failed"); 
+        } 
+        const { data: room } = await db.from('rooms').select('*').eq('id', id).single(); 
+        state.currentRoomData = room; 
+        const isDirect = room.is_direct; 
+        let displayTitle = n; 
+        let displayAvatar = room.avatar_url; 
+        if (isDirect) { 
+            const otherUserId = room.allowed_users?.find(uid => uid !== state.user.id); 
+            if (otherUserId) { 
+                let profile = state.profileCache[otherUserId]; 
+                if(!profile) { 
+                    const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); 
+                    profile = data; if(data) state.profileCache[otherUserId] = data; 
+                } 
+                if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } 
+            } 
+        } 
+        $('chat-title').innerText = displayTitle; 
+        const avEl = $('chat-avatar-display'); 
+        if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; 
+        else avEl.innerText = displayTitle.charAt(0).toUpperCase(); 
+        const editBtn = $('info-edit-btn'); 
+        if (!isDirect && room.created_by === state.user.id) editBtn.style.display = 'flex'; 
+        else editBtn.style.display = 'none'; 
+        lucide.createIcons(); 
+        window.setLoading(true, "Fetching History..."); 
+        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
+        $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
+        window.nav('scr-chat'); 
+        setConnectionVisuals('connecting'); 
+        if (data && data.length > 0) { 
+            data.reverse(); 
+            if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
+            window.setLoading(true, "Decrypting..."); 
+            try {
+                const res = await workerExec('decryptHistory', { messages: data });
+                const b = $('chat-messages'); b.innerHTML = ''; 
+                let prev = null; 
+                res.results.forEach(m => { 
+                    if(!m.error) { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; } 
+                }); 
+                b.scrollTop = b.scrollHeight; 
+                checkChatEmpty(); 
+                lucide.createIcons(); 
+            } catch(e) { console.error(e); }
+            window.setLoading(false); 
+        } else { 
+            state.hasMoreHistory = false; checkChatEmpty(); window.setLoading(false); 
+        } 
+        setupChatChannel(id); initRoomPresence(id); 
+    };
+    
     const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
     
-    window.sendMsg = async (e) => { if (!e || !e.isTrusted) return; if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return; if (!applyRateLimit()) return; state.processingAction = true; const v = $('chat-input').value.trim(); if(!v) { state.processingAction = false; return; } $('chat-input').value = ''; state.lastMessageTime = Date.now(); try { const enc = await encryptMessage(v); await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); } catch(e) { window.toast("Failed to send"); } state.processingAction = false; };
-    window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
+    window.sendMsg = async (e) => { 
+        if (!e || !e.isTrusted) return; 
+        if (!state.user || !state.currentRoomId || state.processingAction || !state.isChatChannelReady) return; 
+        if (!applyRateLimit()) return; 
+        state.processingAction = true; 
+        const v = $('chat-input').value.trim(); 
+        if(!v) { state.processingAction = false; return; } 
+        $('chat-input').value = ''; 
+        state.lastMessageTime = Date.now(); 
+        try { 
+            const enc = await encryptMessage(v); 
+            await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); 
+        } catch(e) { window.toast("Failed to send"); } 
+        state.processingAction = false; 
+    };
+    
+    window.leaveChat = async () => { 
+        window.setLoading(true, "Leaving..."); 
+        if(state.chatChannel) state.chatChannel.unsubscribe(); 
+        state.chatChannel = null; 
+        state.currentRoomId = null; 
+        state.currentRoomData = null; 
+        if (state.presenceChannel) state.presenceChannel.unsubscribe(); 
+        state.presenceChannel = null; 
+        state.isPresenceSubscribed = false; 
+        if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
+        state.heartbeatInterval = null; 
+        setConnectionVisuals('offline'); 
+        if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; 
+        window.nav('scr-lobby'); 
+        window.loadRooms(); 
+        window.setLoading(false); 
+    };
 
     window.handleLogin = async (e) => { 
         if (!e || !e.isTrusted) return;
         if(state.processingAction) return;
         
-        const isAlreadyCounted = state.globalPresenceReady && state.globalOnlineCount > 0; 
-
-        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && !isAlreadyCounted) {
+        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers) {
              return window.toast("Server is full. Please try again later.");
         }
 
@@ -666,7 +757,15 @@ export function startChatApp(customConfig = {}) {
         if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
         window.setLoading(true, "Signing In..."); 
         const {error} = await db.auth.signInWithPassword({email:em, password:p});
-        if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { state.processingAction = false; } 
+        if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; }
+        else {
+            const { data: { user } } = await db.auth.getUser();
+            state.user = user;
+            window.nav('scr-lobby');
+            window.loadRooms();
+            window.setLoading(false);
+            state.processingAction = false;
+        } 
     };
 
     window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
@@ -676,6 +775,7 @@ export function startChatApp(customConfig = {}) {
     const finishReg = async (temp) => {
         const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } });
         if(error) { window.toast(error.message); window.setLoading(false); }
+        else { window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); }
     };
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
@@ -687,25 +787,11 @@ export function startChatApp(customConfig = {}) {
     db.auth.onAuthStateChange(async (ev, ses) => { 
         state.user = ses?.user; 
         
-        if (state.user) {
-             setupGlobalPresence(state.user.id);
-        }
+        if (state.user) setupGlobalPresence(state.user.id);
 
-        const activeScreenId = document.querySelector('.screen.active')?.id;
         const createBtn = $('icon-plus-lobby');
         if (createBtn) createBtn.style.display = 'flex'; 
         
-        if (ev === 'SIGNED_IN') {
-            if(state.user) { 
-                const authScreens = ['scr-start', 'scr-login', 'scr-register', 'scr-verify']; 
-                if (authScreens.includes(activeScreenId)) { 
-                    window.nav('scr-lobby'); 
-                    window.loadRooms(); 
-                    window.forceClaimMaster(); 
-                } 
-                updateLobbyAvatar(); 
-            } 
-        } 
         if (ev === 'SIGNED_OUT') { 
             if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
             if (state.presenceChannel) state.presenceChannel.unsubscribe(); 
@@ -723,27 +809,14 @@ export function startChatApp(customConfig = {}) {
     window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
 
     const init = async () => { 
-    if (!navigator.onLine) { 
-        $('offline-screen').classList.add('active'); 
-        return; 
-    } 
-    
-    monitorConnection();
-
-    const hasMaster = await checkMaster();
-    if (hasMaster) {
-        state.isMasterTab = false;
-        $('block-overlay').classList.add('active');
-    } else {
-        state.isMasterTab = true;
-        tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId });
-        setupGlobalPresence(null);
-    }
-
-    window.nav('scr-start');
-    
-    lucide.createIcons(); 
-    window.setLoading(false); 
-};
+        if (!navigator.onLine) { $('offline-screen').classList.add('active'); return; } 
+        monitorConnection();
+        const hasMaster = await checkMaster();
+        if (hasMaster) { state.isMasterTab = false; $('block-overlay').classList.add('active'); } 
+        else { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); setupGlobalPresence(null); }
+        window.nav('scr-start');
+        lucide.createIcons(); 
+        window.setLoading(false); 
+    };
     init();
 }
