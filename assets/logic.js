@@ -15,7 +15,7 @@ export function startChatApp(customConfig = {}) {
 
     const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
     const DB_NAME = 'HRN_LOCAL_DB';
-    const DB_VERSION = 2; 
+    const DB_VERSION = 3; 
 
     lucide.createIcons();
 
@@ -31,8 +31,16 @@ export function startChatApp(customConfig = {}) {
                 };
                 request.onupgradeneeded = (e) => {
                     const db = e.target.result;
+                    const tx = e.target.transaction;
+                    
                     if (!db.objectStoreNames.contains('rooms')) db.createObjectStore('rooms', { keyPath: 'id' });
-                    if (!db.objectStoreNames.contains('messages')) db.createObjectStore('messages', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('messages')) {
+                        const ms = db.createObjectStore('messages', { keyPath: 'id' });
+                        ms.createIndex('room_id', 'room_id', { unique: false });
+                    } else {
+                        const ms = tx.objectStore('messages');
+                        if (!ms.indexNames.contains('room_id')) ms.createIndex('room_id', 'room_id', { unique: false });
+                    }
                     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
                     if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
                     if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
@@ -87,6 +95,23 @@ export function startChatApp(customConfig = {}) {
             const all = await this.getAll('messages');
             const filtered = all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
             return filtered;
+        },
+        async clearRoomMessages(roomId) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('messages', 'readwrite');
+                const store = tx.objectStore('messages');
+                const index = store.index('room_id');
+                const req = index.openCursor(IDBKeyRange.only(roomId));
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    }
+                };
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
         }
     };
 
@@ -499,6 +524,11 @@ export function startChatApp(customConfig = {}) {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
                 const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
+                
+                // OVERWRITE: Clear local room messages, then insert fresh server data
+                await localDB.clearRoomMessages(id);
+                await localDB.putAll('messages', messagesWithRoomId);
+
                 const b = $('chat-messages'); 
                 let html = ''; 
                 let prev = null; 
@@ -507,9 +537,10 @@ export function startChatApp(customConfig = {}) {
                 b.scrollTop = b.scrollHeight;
                 checkChatEmpty(); 
                 lucide.createIcons();
-                await localDB.putAll('messages', messagesWithRoomId); 
             } catch(e) { console.error(e); }
         } else { 
+            // Even if no data, clear to ensure sync if messages were deleted server-side
+            await localDB.clearRoomMessages(id);
             state.hasMoreHistory = false; checkChatEmpty(); 
         } 
         setupChatChannel(id); initRoomPresence(id); 
@@ -644,8 +675,11 @@ export function startChatApp(customConfig = {}) {
                 } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
             } 
             state.allRooms = processedRooms; 
-            const validRooms = rooms.filter(r => r && r.id);
-            await localDB.putAll('rooms', validRooms); 
+            
+            // OVERWRITE: Clear rooms, then insert fresh data
+            await localDB.clear('rooms');
+            await localDB.putAll('rooms', rooms);
+            
             window.filterRooms(); 
         }
         window.setLoading(false); 
