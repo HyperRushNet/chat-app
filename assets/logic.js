@@ -318,23 +318,16 @@ export function startChatApp(customConfig = {}) {
         $('chat-messages').onscroll = handleScroll; 
 
         let roomData = await localDB.get('rooms', id);
-        if(!roomData) {
-            if(!navigator.onLine) return window.toast("Room not found locally");
-            window.setLoading(true, "Fetching...");
-            const { data } = await db.from('rooms').select('*').eq('id', id).single();
-            roomData = data;
-            if(roomData && roomData.id) await localDB.put('rooms', roomData);
-        }
         
-        if(!roomData) return window.toast("Room data unavailable");
+        if(!roomData && !navigator.onLine) return window.toast("Offline & No Cache");
 
         state.currentRoomData = roomData; 
-        const isDirect = roomData.is_direct; 
+        const isDirect = roomData?.is_direct; 
         let displayTitle = n; 
-        let displayAvatar = roomData.avatar_url; 
+        let displayAvatar = roomData?.avatar_url; 
 
         if (isDirect) { 
-            const otherUserId = roomData.allowed_users?.find(uid => uid !== state.user.id); 
+            const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id); 
             if (otherUserId) { 
                 let profile = state.profileCache[otherUserId]; 
                 if(!profile) { 
@@ -348,40 +341,54 @@ export function startChatApp(customConfig = {}) {
                 if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } 
             } 
         } 
+        
         $('chat-title').innerText = displayTitle; 
         const avEl = $('chat-avatar-display'); 
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); 
         const editBtn = $('info-edit-btn'); 
-        if (!isDirect && roomData.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
+        if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
         lucide.createIcons(); 
-        
-        const keySource = rawPassword ? (rawPassword + id) : id; 
-        let hasKey = await localDB.get('keys', id);
-        try { 
-            await deriveKey(keySource, roomData.salt); 
-            if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
-        } catch(e) { 
-            window.setLoading(false); 
-            return window.toast("Decryption failed"); 
-        }
 
         const cachedMsgs = await localDB.getRoomMessages(id);
         if (cachedMsgs.length > 0) {
+            window.setLoading(false);
             const b = $('chat-messages'); b.innerHTML = ''; 
             let prev = null; 
             cachedMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; }); 
             b.scrollTop = b.scrollHeight; 
             checkChatEmpty(); 
+            $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
+            window.nav('scr-chat');
             lucide.createIcons(); 
+        } else {
+            window.setLoading(false);
+            $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
+            window.nav('scr-chat');
+            checkChatEmpty();
         }
-        
-        window.setLoading(false);
-        $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
-        window.nav('scr-chat'); 
-        
+
+        const keySource = rawPassword ? (rawPassword + id) : id; 
+        let hasKey = await localDB.get('keys', id);
+        deriveKey(keySource, roomData?.salt).then(async () => { 
+            if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
+        }).catch(e => { console.warn("Key derivation failed"); });
+
         if (!navigator.onLine) {
             setConnectionVisuals('offline');
             return;
+        }
+
+        if(!roomData) {
+            setConnectionVisuals('connecting');
+            window.setLoading(true, "Fetching Room...");
+            const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
+            if(netRoom && netRoom.id) {
+                roomData = netRoom;
+                state.currentRoomData = roomData;
+                await localDB.put('rooms', roomData);
+                $('chat-title').innerText = roomData.name;
+            }
+            window.setLoading(false);
         }
 
         setConnectionVisuals('connecting');
@@ -394,7 +401,7 @@ export function startChatApp(customConfig = {}) {
                 const validMsgs = res.results.filter(m => !m.error); 
                 const b = $('chat-messages'); b.innerHTML = ''; 
                 let prev = null; 
-                validMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; }); 
+                validMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, roomData?.is_direct)); prev = m; }); 
                 b.scrollTop = b.scrollHeight; 
                 checkChatEmpty(); 
                 lucide.createIcons();
