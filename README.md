@@ -23,8 +23,8 @@ Focuses on privacy, end-to-end encryption, and a seamless user experience.
 - **Live Presence Count**: Shows online users per room and globally.  
 - **Message Actions**: Delete, edit, copy messages securely.
 
-  ## Bèta Features
-  - Offline message support.
+## Bèta Features
+- Offline message support.
 
 ---
 
