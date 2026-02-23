@@ -152,6 +152,29 @@ export function startChatApp(customConfig = {}) {
 
     const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
+    const getProfile = async (userId) => {
+        if (!userId) return null;
+        if (state.profileCache[userId]) return state.profileCache[userId];
+        
+        let profile = await localDB.get('profiles', userId);
+        if (profile) {
+            state.profileCache[userId] = profile;
+            return profile;
+        }
+
+        if (navigator.onLine) {
+            try {
+                const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', userId).single();
+                if (data) {
+                    state.profileCache[userId] = data;
+                    await localDB.put('profiles', data);
+                    return data;
+                }
+            } catch (e) {}
+        }
+        return null;
+    };
+
     const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
     const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
     const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
@@ -363,7 +386,16 @@ export function startChatApp(customConfig = {}) {
         const date = new Date(room.created_at); 
         $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; 
         if (room.is_direct) { 
-            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) { state.profileCache[otherId] = data; await localDB.put('profiles', data); } } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
+            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { 
+                const profile = await getProfile(otherId);
+                if(profile) {
+                    $('info-name').innerText = profile.full_name;
+                    const avEl = $('info-avatar');
+                    if (profile.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile.full_name || 'U').charAt(0);
+                } else {
+                    $('info-name').innerText = 'User';
+                }
+            } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
     };
     window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
     window.openRoomSettings = async () => { window.closeOverlay(); if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); window.setLoading(true, "Loading..."); const room = state.currentRoomData; state.currentStep.edit = 1; updateStepUI('edit'); $('edit-room-name').value = room.name; $('edit-room-visible').checked = room.is_visible; $('edit-room-pass').value = ''; const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass'); if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; } else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute)"; removePassBtn.style.display = 'none'; } state.removePasswordFlag = false; state.selectedAllowedUsers = []; const ids = room.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } $('overlay-container').classList.add('active'); window.showOverlayView('room-settings'); window.setLoading(false); };
@@ -397,19 +429,13 @@ export function startChatApp(customConfig = {}) {
         if (isDirect) { 
             const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id); 
             if (otherUserId) { 
-                let profile = state.profileCache[otherUserId]; 
-                if(!profile) { 
-                    profile = await localDB.get('profiles', otherUserId);
-                    if(!profile && navigator.onLine) { 
-                        const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); 
-                        profile = data; 
-                        if(data && data.id) { 
-                            state.profileCache[otherUserId] = data; 
-                            await localDB.put('profiles', data); 
-                        }
-                    }
-                } 
-                if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } 
+                const profile = await getProfile(otherUserId);
+                if (profile) { 
+                    displayTitle = profile.full_name; 
+                    displayAvatar = profile.avatar_url; 
+                } else {
+                    displayTitle = "Unknown User";
+                }
             } 
         } 
         
@@ -587,7 +613,7 @@ export function startChatApp(customConfig = {}) {
                 if(r.is_direct && r.allowed_users) { 
                     const otherId = r.allowed_users.find(id => id !== uid); 
                     if(otherId) {
-                        let profile = await localDB.get('profiles', otherId);
+                        let profile = await getProfile(otherId);
                         if(profile) { name = profile.full_name; avatar = profile.avatar_url; }
                     } 
                 }
@@ -606,7 +632,16 @@ export function startChatApp(customConfig = {}) {
             const uid = state.user.id; const processedRooms = []; 
             for(const r of rooms) { 
                 if(!r || !r.id) continue; 
-                if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { if(state.profileCache[otherId]) processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url }); else { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); if(profile) { state.profileCache[otherId] = profile; await localDB.put('profiles', profile); processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { 
+                    const profile = await getProfile(otherId);
+                    if(profile) { 
+                        state.profileCache[otherId] = profile; 
+                        await localDB.put('profiles', profile);
+                        processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); 
+                    } else { 
+                        processedRooms.push({ ...r, display_name: 'Unknown', display_avatar: null }); 
+                    }
+                } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
             } 
             state.allRooms = processedRooms; 
             const validRooms = rooms.filter(r => r && r.id);
