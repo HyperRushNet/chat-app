@@ -103,7 +103,8 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
-        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null
+        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null,
+        recentlySentIds: new Set()
     };
 
     let toastQueue = []; let toastVisible = false;
@@ -203,10 +204,26 @@ export function startChatApp(customConfig = {}) {
         for (const item of queue) {
             try {
                 const enc = await encryptMessage(item.text);
-                await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
-                await localDB.delete('queue', item.id);
-                const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
-                if(msgEl) msgEl.dataset.id = "sent";
+                const { data, error } = await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]).select().single();
+                if (!error && data) {
+                    state.recentlySentIds.add(data.id);
+                    await localDB.delete('queue', item.id);
+                    const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
+                    if(msgEl) {
+                        const prevEl = msgEl.previousElementSibling; 
+                        let prevMsg = null; 
+                        if(prevEl && prevEl.classList.contains('msg')) prevMsg = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                        try {
+                            const decRes = await workerExec('decryptSingle', { content: data.content });
+                            if(decRes.result) {
+                                const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                                msgEl.outerHTML = renderMsg(finalMsg, prevMsg, state.currentRoomData?.is_direct);
+                                lucide.createIcons();
+                                await localDB.put('messages', finalMsg);
+                            }
+                        } catch(e) {}
+                    }
+                }
             } catch(e) { failed.push(item); }
         }
         if(failed.length > 0) await localDB.putAll('queue', failed);
@@ -217,6 +234,10 @@ export function startChatApp(customConfig = {}) {
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new; if (m && state.currentRoomId) {
+                if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) {
+                    state.recentlySentIds.delete(m.id);
+                    return;
+                }
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content });
                     if(decRes.result) { 
@@ -306,11 +327,11 @@ export function startChatApp(customConfig = {}) {
     const processText = (text) => { let t = esc(text); const urlRegex = /(https?:\/\/[^\s]+)/g; t = t.replace(urlRegex, (url) => { const safeUrl = url.replace(/[<>"']/g, ''); return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${safeUrl}</a>`; }); return t; };
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
-    const renderMsg = (m, prevMsg, isDirect) => {
+    const renderMsg = (m, prevMsg, isDirect, isOptimistic = false) => {
         const isDeleted = m.deleted === true; const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000; let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
-        const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isGroupStart ? 'group-start' : 'msg-continuation'; const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
+        const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isOptimistic ? 'msg-optimistic' : (isGroupStart ? 'group-start' : 'msg-continuation'); const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
         
         const safeText = isDeleted ? '' : esc(m.text || '').replace(/"/g, '&quot;');
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
@@ -476,7 +497,7 @@ export function startChatApp(customConfig = {}) {
         const container = $('chat-messages'); 
         const lastMsg = container.querySelector('.msg:last-of-type'); 
         let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
-        container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct)); 
+        container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct, true)); 
         container.scrollTop = container.scrollHeight;
         lucide.createIcons();
         await localDB.put('messages', tempMsg);
@@ -490,7 +511,27 @@ export function startChatApp(customConfig = {}) {
 
         try { 
             const enc = await encryptMessage(v); 
-            await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); 
+            const { data, error } = await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]).select().single();
+            if (!error && data) {
+                state.recentlySentIds.add(data.id);
+                const msgEl = container.querySelector(`[data-id="${tempId}"]`);
+                if(msgEl) {
+                    const prevEl = msgEl.previousElementSibling; 
+                    let prevData = null; 
+                    if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: data.content });
+                        if(decRes.result) {
+                            const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                            msgEl.outerHTML = renderMsg(finalMsg, prevData, state.currentRoomData?.is_direct);
+                            lucide.createIcons();
+                            await localDB.put('messages', finalMsg);
+                        }
+                    } catch(e) {}
+                }
+            } else {
+                throw error;
+            }
         } catch(e) { 
             window.toast("Send failed, saved locally"); 
             await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
