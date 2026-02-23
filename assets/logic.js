@@ -1,4 +1,4 @@
-// GH: HyperRushNet | 2026 | MIT License | logic.js (Offline-First / IndexedDB)
+// GH: HyperRushNet | 2026 | MIT License | logic.js (True Offline-First)
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -8,11 +8,10 @@ export function startChatApp(customConfig = {}) {
         supabaseKey: customConfig.supabaseKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaHN1bmlkdXp2aGtwZXhvcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NjAxMDYsImV4cCI6MjA4NzEzNjEwNn0.9I5bbqskCgksUaNWYlFFo0-6Odht28pOMdxTGZECahY",
         mailApi: customConfig.mailApi || "https://vercel-serverless-gray-sigma.vercel.app/api/mailAPI",
         maxUsers: customConfig.maxUsers || 1,
-        maxMessages: customConfig.maxMessages || 15,
-        historyLoadLimit: customConfig.historyLoadLimit || 10,
+        maxMessages: customConfig.maxMessages || 50,
+        historyLoadLimit: customConfig.historyLoadLimit || 20,
         rateLimitMs: customConfig.rateLimitMs || 1000,
         presenceHeartbeatMs: customConfig.presenceHeartbeatMs || 10000,
-        reconnectDebounceMs: customConfig.reconnectDebounceMs || 3000,
         verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
     };
 
@@ -42,7 +41,7 @@ export function startChatApp(customConfig = {}) {
         async get(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).get(key); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
         async getAll(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).getAll(); req.onsuccess = () => res(req.result || []); req.onerror = () => rej(req.error); }); },
         async put(store, val) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).put(val); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
-        async putAll(store, vals) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const os = tx.objectStore(store); vals.forEach(v => os.put(v)); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
+        async putAll(store, vals) { if(!vals || vals.length === 0) return; return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const os = tx.objectStore(store); vals.forEach(v => os.put(v)); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
         async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
         async delete(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).delete(key); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
         async getRoomMessages(roomId) {
@@ -64,7 +63,7 @@ export function startChatApp(customConfig = {}) {
         currentStep: { create: 1, edit: 1, reg: 1 }, selectedAvatar: null, createType: 'group',
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
-        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, isOfflineMode: false
+        isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null
     };
 
     let toastQueue = []; let toastVisible = false;
@@ -130,10 +129,19 @@ export function startChatApp(customConfig = {}) {
 
     const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; updatePresenceUI(); };
     
-    const setupGlobalPresence = async (userId) => { if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); if(!userId) return; state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId } } }); state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; updatePresenceUI(); }).subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); };
+    const setupGlobalPresence = async (userId) => { 
+        if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); 
+        if(!userId) return; 
+        state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId } } }); 
+        state.globalPresenceChannel.on('presence', { event: 'sync' }, () => { const presState = state.globalPresenceChannel.presenceState(); state.globalOnlineCount = Object.keys(presState).length; state.globalPresenceReady = true; updatePresenceUI(); })
+        .subscribe(async (status) => { if (status === 'SUBSCRIBED') { if(userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } }); 
+    };
 
     const attemptHardReconnect = () => {
-        if (!navigator.onLine || !state.user) return; cleanupChannels(true); state.isReconnecting = !!state.currentRoomId; setConnectionVisuals('connecting');
+        if (!state.user) return; 
+        cleanupChannels(true); 
+        state.isReconnecting = !!state.currentRoomId; 
+        setConnectionVisuals('connecting');
         if (state.currentRoomId) { const timeout = getConnectionTimeout(); state.connectionTimeoutTimer = setTimeout(() => { state.isReconnecting = false; attemptHardReconnect(); }, timeout); initRoomPresence(state.currentRoomId); setupChatChannel(state.currentRoomId); }
         else { setConnectionVisuals('connected'); }
     };
@@ -143,15 +151,17 @@ export function startChatApp(customConfig = {}) {
         const queue = await localDB.getAll('queue');
         if (queue.length === 0) return;
         window.toast(`Sending ${queue.length} pending message(s)...`);
+        const failed = [];
         for (const item of queue) {
-            if (item.roomId === state.currentRoomId) {
-                try {
-                    const enc = await encryptMessage(item.text);
-                    await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
-                    await localDB.delete('queue', item.id);
-                } catch(e) { console.error("Failed to send queued msg", e); return; }
-            }
+            try {
+                const enc = await encryptMessage(item.text);
+                await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]);
+                await localDB.delete('queue', item.id);
+                const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
+                if(msgEl) msgEl.dataset.id = "sent";
+            } catch(e) { failed.push(item); }
         }
+        if(failed.length > 0) await localDB.putAll('queue', failed);
     };
 
     const setupChatChannel = (id) => {
@@ -281,35 +291,32 @@ export function startChatApp(customConfig = {}) {
         $('chat-messages').innerHTML = ''; 
         $('chat-messages').onscroll = handleScroll; 
 
-        const keySource = rawPassword ? (rawPassword + id) : id; 
-        let roomData = null;
-        let localKey = await localDB.get('keys', id);
-
-        if (navigator.onLine) {
-            window.setLoading(true, "Decrypting..."); 
-            try { await deriveKey(keySource, roomSalt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); } 
-            const { data: room } = await db.from('rooms').select('*').eq('id', id).single(); 
-            roomData = room;
-            await localDB.put('rooms', room);
-            if(!localKey) await localDB.put('keys', { room_id: id, derived: true }); 
-        } else {
-            const cachedRoom = await localDB.get('rooms', id);
-            if(!cachedRoom) return window.toast("Offline data not found");
-            roomData = cachedRoom;
-            if(!localKey && !rawPassword) return window.toast("Need password to decrypt offline");
-            try { await deriveKey(keySource, roomData.salt); } catch(e) { window.setLoading(false); return window.toast("Key derivation failed"); }
+        let roomData = await localDB.get('rooms', id);
+        if(!roomData) {
+            if(!navigator.onLine) return window.toast("Room not found locally");
+            window.setLoading(true, "Fetching...");
+            const { data } = await db.from('rooms').select('*').eq('id', id).single();
+            roomData = data;
+            await localDB.put('rooms', roomData);
         }
-
+        
         state.currentRoomData = roomData; 
         const isDirect = roomData.is_direct; 
         let displayTitle = n; 
         let displayAvatar = roomData.avatar_url; 
-        
+
         if (isDirect) { 
             const otherUserId = roomData.allowed_users?.find(uid => uid !== state.user.id); 
             if (otherUserId) { 
                 let profile = state.profileCache[otherUserId]; 
-                if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); profile = data; if(data) state.profileCache[otherUserId] = data; } 
+                if(!profile) { 
+                    profile = await localDB.get('profiles', otherUserId);
+                    if(!profile && navigator.onLine) { 
+                        const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); 
+                        profile = data; 
+                        if(data) { state.profileCache[otherUserId] = data; await localDB.put('profiles', data); } 
+                    }
+                } 
                 if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } 
             } 
         } 
@@ -320,6 +327,18 @@ export function startChatApp(customConfig = {}) {
         if (!isDirect && roomData.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
         lucide.createIcons(); 
         
+        // KEY DERIVATION (Attempt local first)
+        const keySource = rawPassword ? (rawPassword + id) : id; 
+        let hasKey = await localDB.get('keys', id);
+        try { 
+            await deriveKey(keySource, roomData.salt); 
+            if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
+        } catch(e) { 
+            window.setLoading(false); 
+            return window.toast("Decryption failed"); 
+        }
+
+        // RENDER LOCAL MESSAGES
         const cachedMsgs = await localDB.getRoomMessages(id);
         if (cachedMsgs.length > 0) {
             const b = $('chat-messages'); b.innerHTML = ''; 
@@ -329,16 +348,19 @@ export function startChatApp(customConfig = {}) {
             checkChatEmpty(); 
             lucide.createIcons(); 
         }
-
-        if (!navigator.onLine) {
-            window.setLoading(false); setConnectionVisuals('offline'); return;
-        }
-
-        window.setLoading(true, "Syncing..."); 
-        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
+        
+        window.setLoading(false);
         $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
         window.nav('scr-chat'); 
-        setConnectionVisuals('connecting'); 
+        
+        if (!navigator.onLine) {
+            setConnectionVisuals('offline');
+            return;
+        }
+
+        // BACKGROUND SYNC
+        setConnectionVisuals('connecting');
+        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
         if (data && data.length > 0) { 
             data.reverse(); 
             if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
@@ -353,9 +375,8 @@ export function startChatApp(customConfig = {}) {
                 lucide.createIcons();
                 await localDB.putAll('messages', validMsgs); 
             } catch(e) { console.error(e); }
-            window.setLoading(false); 
         } else { 
-            state.hasMoreHistory = false; checkChatEmpty(); window.setLoading(false); 
+            state.hasMoreHistory = false; checkChatEmpty(); 
         } 
         setupChatChannel(id); initRoomPresence(id); 
     };
@@ -375,16 +396,18 @@ export function startChatApp(customConfig = {}) {
         const tempId = `temp_${Date.now()}`;
         const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
 
+        // Optimistic UI Update
+        const container = $('chat-messages'); 
+        const lastMsg = container.querySelector('.msg:last-of-type'); 
+        let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
+        container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct)); 
+        container.scrollTop = container.scrollHeight;
+        lucide.createIcons();
+        await localDB.put('messages', tempMsg);
+
         if (!navigator.onLine) {
-            await localDB.put('messages', tempMsg);
             await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
-            const container = $('chat-messages'); 
-            const lastMsg = container.querySelector('.msg:last-of-type'); 
-            let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
-            container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct)); 
-            container.scrollTop = container.scrollHeight;
-            lucide.createIcons();
-            window.toast("Saved locally");
+            window.toast("Saved offline");
             state.processingAction = false;
             return;
         }
@@ -392,13 +415,16 @@ export function startChatApp(customConfig = {}) {
         try { 
             const enc = await encryptMessage(v); 
             await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]); 
-        } catch(e) { window.toast("Failed to send"); } 
+        } catch(e) { 
+            window.toast("Send failed, saved locally"); 
+            await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
+        } 
         state.processingAction = false; 
     };
     
     window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
-    window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers) return window.toast("Server is full. Please try again later."); state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { const { data: { user } } = await db.auth.getUser(); state.user = user; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; } };
+    window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine) return window.toast("Server is full. Please try again later."); state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { const { data: { user } } = await db.auth.getUser(); state.user = user; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; } };
 
     window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
     const startVTimer = () => { let left = CONFIG.verificationCodeExpiry; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
@@ -426,10 +452,19 @@ export function startChatApp(customConfig = {}) {
         const localRooms = await localDB.getAll('rooms');
         if (localRooms.length > 0) {
             const uid = state.user.id;
-            const processedRooms = localRooms.map(r => {
-                 if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); return { ...r, display_name: r.meta?.name || 'User', display_avatar: r.meta?.avatar }; }
-                 return { ...r, display_name: r.name, display_avatar: r.avatar_url };
-            });
+            const processedRooms = [];
+            for(const r of localRooms) {
+                let name = r.name;
+                let avatar = r.avatar_url;
+                if(r.is_direct && r.allowed_users) { 
+                    const otherId = r.allowed_users.find(id => id !== uid); 
+                    if(otherId) {
+                        let profile = await localDB.get('profiles', otherId);
+                        if(profile) { name = profile.full_name; avatar = profile.avatar_url; }
+                    } 
+                }
+                processedRooms.push({ ...r, display_name: name, display_avatar: avatar });
+            }
             state.allRooms = processedRooms;
             window.filterRooms();
         }
@@ -441,7 +476,7 @@ export function startChatApp(customConfig = {}) {
         if (error) { window.toast("Sync failed"); window.setLoading(false); return; } 
         const uid = state.user.id; const processedRooms = []; 
         for(const r of rooms) { 
-            if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { if(state.profileCache[otherId]) processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url }); else { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); if(profile) { state.profileCache[otherId] = profile; processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+            if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { if(state.profileCache[otherId]) processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url }); else { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); if(profile) { state.profileCache[otherId] = profile; await localDB.put('profiles', profile); processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
         } 
         state.allRooms = processedRooms; 
         await localDB.putAll('rooms', rooms); 
@@ -451,17 +486,21 @@ export function startChatApp(customConfig = {}) {
     };
     window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); lucide.createIcons(); };
     window.joinAttempt = async (id) => { 
-        if (!navigator.onLine) {
-            const meta = await localDB.get('rooms', id);
-            if (meta) {
-                state.pending = { id: meta.id, name: meta.name, salt: meta.salt }; 
-                state.currentRoomData = meta;
-                window.openVault(meta.id, meta.name, null, meta.salt);
+        const meta = await localDB.get('rooms', id);
+        if (meta) {
+            state.pending = { id: meta.id, name: meta.name, salt: meta.salt }; 
+            state.currentRoomData = meta;
+            if (meta.has_password) {
+                window.nav('scr-gate');
             } else {
-                window.toast("Offline: Room data not found");
+                window.openVault(meta.id, meta.name, null, meta.salt);
             }
+        } else if (!navigator.onLine) {
+            window.toast("Offline data not found");
             return;
         }
+
+        if (!navigator.onLine) return;
 
         window.setLoading(true, "Checking..."); 
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); 
@@ -469,6 +508,7 @@ export function startChatApp(customConfig = {}) {
         const { data, error } = await db.from('rooms').select('*').eq('id', id).single(); 
         window.setLoading(false); 
         if (error || !data) return window.toast("Not found"); 
+        await localDB.put('rooms', data);
         state.pending = { id: data.id, name: data.name, salt: data.salt }; 
         state.currentRoomData = data; 
         if (data.has_password) window.nav('scr-gate'); 
