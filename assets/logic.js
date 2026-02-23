@@ -446,11 +446,28 @@ export function startChatApp(customConfig = {}) {
             return window.toast("Offline & No Cache");
         }
 
-        state.currentRoomData = roomData; 
+        // 1. SYNC ROOM DATA FIRST (If online) to ensure correct users list/name
+        if (navigator.onLine) {
+            setConnectionVisuals('connecting');
+            window.setLoading(true, "Syncing Room...");
+            const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
+            if(netRoom && netRoom.id) {
+                roomData = netRoom;
+                state.currentRoomData = roomData;
+                await localDB.put('rooms', roomData);
+            }
+            window.setLoading(false);
+        } else {
+            state.currentRoomData = roomData;
+        }
+
+        if (!roomData) return window.toast("Room data not found");
+
         const isDirect = roomData?.is_direct; 
-        let displayTitle = n; 
+        let displayTitle = roomData.name; // Default to room name (for groups)
         let displayAvatar = roomData?.avatar_url; 
 
+        // 2. RESOLVE DIRECT MESSAGE PROFILE (Wait for fetch before rendering)
         if (isDirect) { 
             const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id); 
             if (otherUserId) { 
@@ -461,35 +478,18 @@ export function startChatApp(customConfig = {}) {
                 } else {
                     displayTitle = "Unknown User";
                 }
-            } 
+            } else {
+                displayTitle = "Private Chat";
+            }
         } 
         
+        // 3. RENDER UI (Now with correct data)
         $('chat-title').innerText = displayTitle; 
         const avEl = $('chat-avatar-display'); 
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); 
         const editBtn = $('info-edit-btn'); 
         if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
         lucide.createIcons(); 
-
-        const cachedMsgs = await localDB.getRoomMessages(id);
-        if (cachedMsgs.length > 0) {
-            window.setLoading(false);
-            const b = $('chat-messages'); 
-            let html = ''; 
-            let prev = null; 
-            cachedMsgs.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; }); 
-            b.innerHTML = html;
-            b.scrollTop = b.scrollHeight;
-            checkChatEmpty(); 
-            $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
-            window.nav('scr-chat');
-            lucide.createIcons(); 
-        } else {
-            window.setLoading(false);
-            $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
-            window.nav('scr-chat');
-            checkChatEmpty();
-        }
 
         const keySource = rawPassword ? (rawPassword + id) : id; 
         let hasKey = await localDB.get('keys', id);
@@ -499,50 +499,55 @@ export function startChatApp(customConfig = {}) {
 
         if (!navigator.onLine) {
             setConnectionVisuals('offline');
-            return;
         }
 
-        if(!roomData) {
+        // 4. LOAD MESSAGES (Cached first, then Network overwrite)
+        const cachedMsgs = await localDB.getRoomMessages(id);
+        if (cachedMsgs.length > 0) {
+            const b = $('chat-messages'); 
+            let html = ''; let prev = null; 
+            cachedMsgs.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; }); 
+            b.innerHTML = html;
+            b.scrollTop = b.scrollHeight;
+            checkChatEmpty(); 
+            $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
+            window.nav('scr-chat');
+            lucide.createIcons(); 
+        } else {
+            $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
+            window.nav('scr-chat');
+            checkChatEmpty();
+        }
+
+        if (navigator.onLine) {
             setConnectionVisuals('connecting');
-            window.setLoading(true, "Fetching Room...");
-            const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
-            if(netRoom && netRoom.id) {
-                roomData = netRoom;
-                state.currentRoomData = roomData;
-                await localDB.put('rooms', roomData);
-                $('chat-title').innerText = roomData.name;
-            }
-            window.setLoading(false);
-        }
+            const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
+            if (data && data.length > 0) { 
+                data.reverse(); 
+                if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
+                try {
+                    const res = await workerExec('decryptHistory', { messages: data });
+                    const validMsgs = res.results.filter(m => !m.error); 
+                    const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
+                    
+                    // OVERWRITE
+                    await localDB.clearRoomMessages(id);
+                    await localDB.putAll('messages', messagesWithRoomId);
 
-        setConnectionVisuals('connecting');
-        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
-        if (data && data.length > 0) { 
-            data.reverse(); 
-            if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
-            try {
-                const res = await workerExec('decryptHistory', { messages: data });
-                const validMsgs = res.results.filter(m => !m.error); 
-                const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
-                
-                // OVERWRITE: Clear local room messages, then insert fresh server data
+                    const b = $('chat-messages'); 
+                    let html = ''; let prev = null; 
+                    validMsgs.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; }); 
+                    b.innerHTML = html;
+                    b.scrollTop = b.scrollHeight;
+                    checkChatEmpty(); 
+                    lucide.createIcons();
+                } catch(e) { console.error(e); }
+            } else { 
+                // OVERWRITE: Even if no data, clear to ensure sync if messages were deleted server-side
                 await localDB.clearRoomMessages(id);
-                await localDB.putAll('messages', messagesWithRoomId);
-
-                const b = $('chat-messages'); 
-                let html = ''; 
-                let prev = null; 
-                validMsgs.forEach(m => { html += renderMsg(m, prev, roomData?.is_direct); prev = m; }); 
-                b.innerHTML = html;
-                b.scrollTop = b.scrollHeight;
-                checkChatEmpty(); 
-                lucide.createIcons();
-            } catch(e) { console.error(e); }
-        } else { 
-            // Even if no data, clear to ensure sync if messages were deleted server-side
-            await localDB.clearRoomMessages(id);
-            state.hasMoreHistory = false; checkChatEmpty(); 
-        } 
+                state.hasMoreHistory = false; checkChatEmpty(); 
+            } 
+        }
         setupChatChannel(id); initRoomPresence(id); 
     };
     
@@ -676,7 +681,6 @@ export function startChatApp(customConfig = {}) {
             } 
             state.allRooms = processedRooms; 
             
-            // OVERWRITE: Clear rooms, then insert fresh data
             await localDB.clear('rooms');
             await localDB.putAll('rooms', rooms);
             
