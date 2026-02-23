@@ -143,7 +143,7 @@ export function startChatApp(customConfig = {}) {
         state.presenceUpdateTimer = setTimeout(() => {
             updatePresenceUI();
             state.presenceUpdateTimer = null;
-        }, 1000);
+        }, 500);
     };
 
     const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
@@ -243,7 +243,10 @@ export function startChatApp(customConfig = {}) {
                     if(decRes.result) { 
                         const msgObj = { ...m, ...decRes.result, room_id: m.room_id }; 
                         const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
-                        container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); container.scrollTop = container.scrollHeight; checkChatEmpty(); lucide.createIcons();
+                        container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); 
+                        container.scrollTop = container.scrollHeight;
+                        checkChatEmpty(); 
+                        lucide.createIcons();
                         await localDB.put('messages', msgObj); 
                     }
                 } catch(e) { console.error("Decryption failed for new message", e); }
@@ -360,7 +363,7 @@ export function startChatApp(customConfig = {}) {
         const date = new Date(room.created_at); 
         $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; 
         if (room.is_direct) { 
-            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
+            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) { state.profileCache[otherId] = data; await localDB.put('profiles', data); } } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
     };
     window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
     window.openRoomSettings = async () => { window.closeOverlay(); if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); window.setLoading(true, "Loading..."); const room = state.currentRoomData; state.currentStep.edit = 1; updateStepUI('edit'); $('edit-room-name').value = room.name; $('edit-room-visible').checked = room.is_visible; $('edit-room-pass').value = ''; const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass'); if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; } else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute)"; removePassBtn.style.display = 'none'; } state.removePasswordFlag = false; state.selectedAllowedUsers = []; const ids = room.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } $('overlay-container').classList.add('active'); window.showOverlayView('room-settings'); window.setLoading(false); };
@@ -400,7 +403,10 @@ export function startChatApp(customConfig = {}) {
                     if(!profile && navigator.onLine) { 
                         const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherUserId).single(); 
                         profile = data; 
-                        if(data && data.id) { state.profileCache[otherUserId] = data; await localDB.put('profiles', data); } 
+                        if(data && data.id) { 
+                            state.profileCache[otherUserId] = data; 
+                            await localDB.put('profiles', data); 
+                        }
                     }
                 } 
                 if (profile) { displayTitle = profile.full_name; displayAvatar = profile.avatar_url; } 
@@ -417,10 +423,12 @@ export function startChatApp(customConfig = {}) {
         const cachedMsgs = await localDB.getRoomMessages(id);
         if (cachedMsgs.length > 0) {
             window.setLoading(false);
-            const b = $('chat-messages'); b.innerHTML = ''; 
+            const b = $('chat-messages'); 
+            let html = ''; 
             let prev = null; 
-            cachedMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, isDirect)); prev = m; }); 
-            b.scrollTop = b.scrollHeight; 
+            cachedMsgs.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; }); 
+            b.innerHTML = html;
+            b.scrollTop = b.scrollHeight;
             checkChatEmpty(); 
             $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
             window.nav('scr-chat');
@@ -465,10 +473,12 @@ export function startChatApp(customConfig = {}) {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
                 const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
-                const b = $('chat-messages'); b.innerHTML = ''; 
+                const b = $('chat-messages'); 
+                let html = ''; 
                 let prev = null; 
-                validMsgs.forEach(m => { b.insertAdjacentHTML('beforeend', renderMsg(m, prev, roomData?.is_direct)); prev = m; }); 
-                b.scrollTop = b.scrollHeight; 
+                validMsgs.forEach(m => { html += renderMsg(m, prev, roomData?.is_direct); prev = m; }); 
+                b.innerHTML = html;
+                b.scrollTop = b.scrollHeight;
                 checkChatEmpty(); 
                 lucide.createIcons();
                 await localDB.putAll('messages', messagesWithRoomId); 
