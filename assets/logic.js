@@ -1,4 +1,4 @@
-// GH: HyperRushNet | 2026 | MIT License | logic.js (Fixed IDB Error)
+// GH: HyperRushNet | 2026 | MIT License | logic.js (Fixed IDB & Syntax Errors)
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -17,7 +17,7 @@ export function startChatApp(customConfig = {}) {
 
     const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
     const DB_NAME = 'HRN_LOCAL_DB';
-    const DB_VERSION = 2; // UPGRADED VERSION TO FIX SCHEMA ISSUES
+    const DB_VERSION = 2; 
 
     lucide.createIcons();
 
@@ -40,7 +40,16 @@ export function startChatApp(customConfig = {}) {
         },
         async get(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).get(key); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
         async getAll(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).getAll(); req.onsuccess = () => res(req.result || []); req.onerror = () => rej(req.error); }); },
-        async put(store, val) { if(!val || !val.id) return; return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).put(val); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async put(store, val) { 
+            // FIX: Ensure ID exists and is valid to prevent silent fails
+            if(!val || !val.id) return; 
+            return new Promise((res, rej) => { 
+                const tx = this.db.transaction(store, 'readwrite'); 
+                const req = tx.objectStore(store).put(val); 
+                req.onsuccess = () => res(); 
+                req.onerror = () => rej(req.error); 
+            }); 
+        },
         async putAll(store, vals) { if(!vals || vals.length === 0) return; return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const os = tx.objectStore(store); vals.forEach(v => { if(v && v.id) os.put(v); }); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
         async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
         async delete(store, key) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).delete(key); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
@@ -262,7 +271,13 @@ export function startChatApp(customConfig = {}) {
         const isDeleted = m.deleted === true; const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000; let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
-        const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isGroupStart ? 'group-start' : 'msg-continuation'; const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; const safeText = isDeleted ? '' : esc(m.text || ''); const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; const timeString = m.time || getTimeFromDate(m.created_at);
+        const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isGroupStart ? 'group-start' : 'msg-continuation'; const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
+        
+        // FIX: Escape quotes to prevent HTML attribute breaking
+        const safeText = isDeleted ? '' : esc(m.text || '').replace(/"/g, '&quot;');
+        const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
+        
+        const timeString = m.time || getTimeFromDate(m.created_at);
         html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''}" ${dataAttrs}>`;
         if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
         else { const processedText = processText(m.text); html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`; }
@@ -272,7 +287,25 @@ export function startChatApp(customConfig = {}) {
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
     const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight; lucide.createIcons(); await localDB.putAll('messages', validMsgs); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
-    window.openRoomInfo = async () => { if (!state.currentRoomData) return; window.setLoading(true, "Loading info..."); const room = state.currentRoomData; const delBtn = $('info-delete-btn'); const creatorRow = $('info-creator-row'); delBtn.style.display = 'none'; delBtn.innerText = "Delete Chat"; delBtn.classList.remove('active'); if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); $('info-id').innerText = room.id; const date = new Date(room.created_at); $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; if (room.is_direct) { $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); };
+    window.openRoomInfo = async () => { 
+        if (!state.currentRoomData) return; 
+        window.setLoading(true, "Loading info..."); 
+        const room = state.currentRoomData; 
+        const delBtn = $('info-delete-btn'); 
+        const creatorRow = $('info-creator-row'); 
+        delBtn.style.display = 'none'; 
+        delBtn.innerText = "Delete Chat"; 
+        
+        // FIX: Added missing closing parenthesis
+        delBtn.classList.remove('active'); 
+        
+        if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); 
+        $('info-id').innerText = room.id; 
+        const date = new Date(room.created_at); 
+        $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; 
+        if (room.is_direct) { 
+            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { let profile = state.profileCache[otherId]; if(!profile) { const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); profile = data; if(data) state.profileCache[otherId] = data; } $('info-name').innerText = profile?.full_name || 'User'; const avEl = $('info-avatar'); if (profile?.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile?.full_name || 'U').charAt(0); } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info'); lucide.createIcons(); 
+    };
     window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
     window.openRoomSettings = async () => { window.closeOverlay(); if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); window.setLoading(true, "Loading..."); const room = state.currentRoomData; state.currentStep.edit = 1; updateStepUI('edit'); $('edit-room-name').value = room.name; $('edit-room-visible').checked = room.is_visible; $('edit-room-pass').value = ''; const passStatusLabel = $('pass-status-label'); const removePassBtn = $('btn-remove-pass'); if (room.has_password) { passStatusLabel.innerText = "Active"; passStatusLabel.style.color = "var(--success)"; removePassBtn.style.display = 'block'; } else { passStatusLabel.innerText = "Not Set"; passStatusLabel.style.color = "var(--text-mute)"; removePassBtn.style.display = 'none'; } state.removePasswordFlag = false; state.selectedAllowedUsers = []; const ids = room.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } $('overlay-container').classList.add('active'); window.showOverlayView('room-settings'); window.setLoading(false); };
     window.prepareRemovePassword = () => { state.removePasswordFlag = true; $('pass-status-label').innerText = "Will be removed"; $('pass-status-label').style.color = "var(--danger)"; $('edit-room-pass').value = ''; $('edit-room-pass').disabled = true; };
@@ -297,7 +330,7 @@ export function startChatApp(customConfig = {}) {
             window.setLoading(true, "Fetching...");
             const { data } = await db.from('rooms').select('*').eq('id', id).single();
             roomData = data;
-            if(roomData && roomData.id) await localDB.put('rooms', roomData); // Check ID validity
+            if(roomData && roomData.id) await localDB.put('rooms', roomData);
         }
         
         if(!roomData) return window.toast("Room data unavailable");
@@ -452,7 +485,7 @@ export function startChatApp(customConfig = {}) {
             const uid = state.user.id;
             const processedRooms = [];
             for(const r of localRooms) {
-                if(!r || !r.id) continue; // Skip invalid
+                if(!r || !r.id) continue;
                 let name = r.name;
                 let avatar = r.avatar_url;
                 if(r.is_direct && r.allowed_users) { 
@@ -476,11 +509,10 @@ export function startChatApp(customConfig = {}) {
         if (rooms && rooms.length > 0) {
             const uid = state.user.id; const processedRooms = []; 
             for(const r of rooms) { 
-                if(!r || !r.id) continue; // Safety check
+                if(!r || !r.id) continue; 
                 if(r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if(otherId) { if(state.profileCache[otherId]) processedRooms.push({ ...r, display_name: state.profileCache[otherId].full_name, display_avatar: state.profileCache[otherId].avatar_url }); else { const { data: profile } = await db.from('profiles').select('full_name, avatar_url').eq('id', otherId).single(); if(profile) { state.profileCache[otherId] = profile; await localDB.put('profiles', profile); processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
             } 
             state.allRooms = processedRooms; 
-            // FILTER VALID ROOMS BEFORE PUT
             const validRooms = rooms.filter(r => r && r.id);
             await localDB.putAll('rooms', validRooms); 
             window.filterRooms(); 
@@ -512,7 +544,7 @@ export function startChatApp(customConfig = {}) {
         const { data, error } = await db.from('rooms').select('*').eq('id', id).single(); 
         window.setLoading(false); 
         if (error || !data) return window.toast("Not found"); 
-        if(data && data.id) await localDB.put('rooms', data); // Check ID
+        if(data && data.id) await localDB.put('rooms', data); 
         state.pending = { id: data.id, name: data.name, salt: data.salt }; 
         state.currentRoomData = data; 
         if (data.has_password) window.nav('scr-gate'); 
