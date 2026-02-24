@@ -97,6 +97,6 @@
 <div id="scr-gate" class="screen center-content"><h1 class="title">Encrypted</h1><p class="subtitle">Authentication Required</p><input id="gate-pass" type="password" class="input-field" style="text-align:center" placeholder="Passkey"><button class="btn btn-accent" onclick="window.submitGate(event)">Decrypt</button><button class="btn bn mt-12" style="color:var(--text-mute)" onclick="window.nav('scr-lobby')">Abort</button></div>
 <div id="scr-success" class="screen center-content"><i data-lucide="check-circle" class="w-48 h-48 mb-24 c-success"></i><h1 class="title">Room Created</h1><p class="subtitle">Deployment Successful</p><div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:800;border:1px dashed var(--accent)" onclick="window.copySId()">---</div><button class="btn btn-accent" onclick="window.enterCreated()">Enter</button></div>
 </div>
-<script type="module"> import { startChatApp } from './assets/logic.js'; startChatApp({ maxUsers: 150, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 }); </script>
+<script type="module"> import { startChatApp } from './assets/logic.js'; startChatApp({ maxUsers: 150, maxMessageLength: 5000, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 }); </script>
 </body>
 </html>
