@@ -129,12 +129,12 @@ export function startChatApp(customConfig = {}) {
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
         isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null,
-        recentlySentIds: new Set()
+        recentlySentIds: new Set(), isNavigating: false
     };
 
     let toastQueue = []; let toastVisible = false;
     const tabChannel = new BroadcastChannel('hrn_tab_sync');
-    const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 10 } } });
+    const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 10 } } });
 
     const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
     const truncateText = (text, maxLength = 20) => !text ? "" : text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
@@ -639,16 +639,48 @@ export function startChatApp(customConfig = {}) {
     
     window.leaveChat = async () => { window.setLoading(true, "Leaving..."); if(state.chatChannel) state.chatChannel.unsubscribe(); state.chatChannel = null; state.currentRoomId = null; state.currentRoomData = null; if (state.presenceChannel) state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; setConnectionVisuals('offline'); if($('info-edit-btn')) $('info-edit-btn').style.display = 'none'; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
 
-    window.handleLogin = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine) return window.toast("Server is full. Please try again later."); state.processingAction = true; const em = $('l-email').value, p = $('l-pass').value; if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } window.setLoading(true, "Signing In..."); const {error} = await db.auth.signInWithPassword({email:em, password:p}); if(error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; } else { const { data: { user } } = await db.auth.getUser(); state.user = user; window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; } };
+    window.handleLogin = async (e) => { 
+        if (!e || !e.isTrusted) return; 
+        if(state.processingAction) return; 
+        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine) return window.toast("Server is full. Please try again later."); 
+        state.processingAction = true; 
+        const em = $('l-email').value, p = $('l-pass').value; 
+        if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
+        window.setLoading(true, "Signing In..."); 
+        const {error} = await db.auth.signInWithPassword({email:em, password:p}); 
+        if(error) { 
+            window.toast(error.message); 
+            window.setLoading(false); 
+            state.processingAction = false; 
+        } else { 
+            localStorage.setItem('hrn_auth_email', em);
+            localStorage.setItem('hrn_auth_pass', p);
+            const { data: { user } } = await db.auth.getUser(); 
+            state.user = user; 
+            window.nav('scr-lobby'); 
+            window.loadRooms(); 
+            window.setLoading(false); 
+            state.processingAction = false; 
+        } 
+    };
 
     window.handleRegister = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; const customAvatar = $('r-avatar-url').value.trim(); const avatarUrl = customAvatar || state.selectedAvatar; if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } window.setLoading(true, "Sending Code..."); try { const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); if(r) { if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Code sent") { sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } else { window.toast(j.message || "Error"); window.setLoading(false); } } else { throw new Error("Network error"); } } catch(err) { window.toast("API Fallback: Proceeding without code (Dev Mode)"); sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); window.nav('scr-verify'); startVTimer(); window.setLoading(false); } state.processingAction = false; };
     const startVTimer = () => { let left = CONFIG.verificationCodeExpiry; if(state.vTimer) clearInterval(state.vTimer); state.vTimer = setInterval(() => { left--; $('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; if(left<=0) { clearInterval(state.vTimer); window.nav('scr-register'); } }, 1000); };
     window.handleVerify = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); if(!temp) { window.toast("Session expired"); state.processingAction = false; return; } window.setLoading(true, "Verifying..."); try { const r = await fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.em, code: code }) }); if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } const j = await r.json(); if(j.message === "Verified") { await finishReg(temp); } else { window.toast(j.message || "Wrong code"); window.setLoading(false); } } catch(err) { window.toast("API Fallback: Auto-verifying (Dev Mode)"); await finishReg(temp); } state.processingAction = false; };
-    const finishReg = async (temp) => { const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); if(error) { window.toast(error.message); window.setLoading(false); } else { window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); } };
+    const finishReg = async (temp) => { 
+        const { error } = await db.auth.signUp({ email: temp.em, password: temp.p, options: { data: { full_name: temp.n, avatar_url: temp.avatar } } }); 
+        if(error) { window.toast(error.message); window.setLoading(false); } else { 
+            localStorage.setItem('hrn_auth_email', temp.em);
+            localStorage.setItem('hrn_auth_pass', temp.p);
+            window.nav('scr-lobby'); 
+            window.loadRooms(); 
+            window.setLoading(false); 
+        } 
+    };
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
-    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
@@ -659,7 +691,38 @@ export function startChatApp(customConfig = {}) {
         if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); window.nav('scr-start'); } 
     });
 
-    window.nav = (id, direction = null) => { const current = document.querySelector('.screen.active'); const next = $(id); if(!next) return; if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); } if(id === 'scr-register') { state.currentStep.reg = 1; state.selectedAvatar = null; $('r-name').value = ''; $('r-email').value = ''; $('r-pass').value = ''; $('r-avatar-url').value = ''; updateStepUI('reg'); } if(id === 'scr-account') window.prepareAccountPage(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right')); if(direction === 'left') { current.classList.add('slide-left'); next.classList.remove('slide-right'); } else if(direction === 'right') { current.classList.add('slide-right'); next.classList.remove('slide-left'); } else document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); next.classList.add('active'); lucide.createIcons(); const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; if(id === 'scr-lobby') updateLobbyAvatar(); };
+    window.nav = (id, direction = null) => {
+        if(state.isNavigating) return;
+        state.isNavigating = true;
+        requestAnimationFrame(() => {
+            const current = document.querySelector('.screen.active');
+            const next = $(id);
+            if(!next) { state.isNavigating = false; return; }
+            if(id === 'scr-create') { state.currentStep.create = 1; state.selectedAllowedUsers = []; state.createType = 'group'; updateStepUI('create'); $('c-name').value = ''; $('c-target-user').value = ''; $('c-pass').value = ''; $('c-avatar').value = ''; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $('type-group').classList.add('selected'); } 
+            if(id === 'scr-register') { state.currentStep.reg = 1; state.selectedAvatar = null; $('r-name').value = ''; $('r-email').value = ''; $('r-pass').value = ''; $('r-avatar-url').value = ''; updateStepUI('reg'); } 
+            if(id === 'scr-account') window.prepareAccountPage();
+            
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
+            if(direction === 'left') { 
+                if(current) current.classList.add('slide-left'); 
+                next.classList.remove('slide-right'); 
+            } else if (direction === 'right') { 
+                if(current) current.classList.add('slide-right'); 
+                next.classList.remove('slide-left'); 
+            } else { 
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); 
+            } 
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); 
+            next.classList.add('active'); 
+            lucide.createIcons(); 
+            
+            const createBtn = $('icon-plus-lobby'); 
+            if (createBtn) createBtn.style.display = 'flex'; 
+            if(id === 'scr-lobby') updateLobbyAvatar();
+            
+            setTimeout(() => { state.isNavigating = false; }, 400);
+        });
+    };
     window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
     window.loadRooms = async () => { 
         if(!state.user) return; 
@@ -753,7 +816,29 @@ export function startChatApp(customConfig = {}) {
         const hasMaster = await checkMaster();
         if (hasMaster) { state.isMasterTab = false; $('block-overlay').classList.add('active'); } 
         else { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); if(navigator.onLine) setupGlobalPresence(null); }
-        window.nav('scr-start');
+        
+        const storedEmail = localStorage.getItem('hrn_auth_email');
+        const storedPass = localStorage.getItem('hrn_auth_pass');
+        
+        if (storedEmail && storedPass) {
+            window.setLoading(true, "Auto-logging in...");
+            $('l-email').value = storedEmail;
+            $('l-pass').value = storedPass;
+            const {error} = await db.auth.signInWithPassword({email:storedEmail, password:storedPass});
+            window.setLoading(false);
+            if(!error) {
+                const { data: { user } } = await db.auth.getUser();
+                state.user = user;
+                window.nav('scr-lobby');
+                window.loadRooms();
+            } else {
+                localStorage.removeItem('hrn_auth_email');
+                localStorage.removeItem('hrn_auth_pass');
+                window.nav('scr-start');
+            }
+        } else {
+            window.nav('scr-start');
+        }
         lucide.createIcons(); 
         window.setLoading(false); 
     };
