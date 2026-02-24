@@ -1,3 +1,4 @@
+// GH: HyperRushNet | 2026 | MIT License | logic.min.js
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function startChatApp(customConfig = {}) {
