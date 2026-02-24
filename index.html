@@ -108,7 +108,7 @@
 <div id="scr-success" class="screen center-content"><i data-lucide="check-circle" class="w-48 h-48 mb-24 c-success"></i><h1 class="title">Room Created</h1><p class="subtitle">Deployment Successful</p><div id="s-id" class="input-field" style="text-align:center;color:var(--accent);font-weight:800;border:1px dashed var(--accent)" onclick="window.copySId()">---</div><button class="btn btn-accent" onclick="window.enterCreated()">Enter</button></div>
 </div>
 <script type="module">
-  import { initHRNchat } from './logic.js';
+  import { initHRNchat } from './assets/logic.js';
   initHRNchat({ maxUsers: 150, maxMessageLength: 5000, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 });
 </script>
 </body>
