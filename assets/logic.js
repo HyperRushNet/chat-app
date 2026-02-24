@@ -276,7 +276,9 @@ export function startChatApp(customConfig = {}) {
     };
 
     const processOfflineQueue = async () => {
-        if (state.isProcessingQueue || !navigator.onLine || !state.user || !state.currentRoomId) return;
+        // Only process if: In a room, Online, Channel is READY (subscribed), and not already processing
+        if (state.isProcessingQueue || !navigator.onLine || !state.user || !state.currentRoomId || !state.isChatChannelReady) return;
+        
         state.isProcessingQueue = true;
 
         const queue = await localDB.getAll('queue');
@@ -288,6 +290,9 @@ export function startChatApp(customConfig = {}) {
         }
 
         for (const item of roomQueue) {
+            // Double check connection status before each message
+            if (!navigator.onLine || !state.isChatChannelReady) break;
+
             try {
                 const enc = await encryptMessage(item.text);
                 const { data, error } = await db.from('messages').insert([{ 
@@ -329,10 +334,6 @@ export function startChatApp(customConfig = {}) {
     };
 
     const handleReconnect = async () => {
-        if (!state.isOfflineMode) {
-            processOfflineQueue();
-            return;
-        }
         const overlay = $('reconnect-overlay');
         if(overlay) overlay.classList.add('active');
         
@@ -350,6 +351,8 @@ export function startChatApp(customConfig = {}) {
                     await localDB.put('user_cache', { id: user.id, email: user.email, metadata: user.user_metadata });
                     
                     if(state.user) setupGlobalPresence(state.user.id);
+                    
+                    // If we are in a room, attempt to reconnect the chat channels
                     if(state.currentRoomId) attemptHardReconnect();
                     
                     window.loadRooms();
@@ -428,7 +431,18 @@ export function startChatApp(customConfig = {}) {
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
             setConnectionVisuals('connecting'); 
-            handleReconnect();
+            // If in a room, attempt to reconnect the socket. 
+            // setupChatChannel will trigger processOfflineQueue once subscribed.
+            if(state.currentRoomId) {
+                attemptHardReconnect();
+            } else {
+                setConnectionVisuals('connected');
+            }
+            
+            // If we were in offline mode, try to sync account
+            if(state.isOfflineMode) {
+                handleReconnect();
+            }
         });
         window.addEventListener('offline', () => { 
             setConnectionVisuals('offline'); 
@@ -598,11 +612,7 @@ export function startChatApp(customConfig = {}) {
         lucide.createIcons(); 
 
         const keySource = rawPassword ? (rawPassword + id) : id; 
-        let hasKey = await localDB.get('keys', id);
-        deriveKey(keySource, roomData?.salt).then(async () => { 
-            if(!hasKey) await localDB.put('keys', { room_id: id, status: 'derived' });
-            if(navigator.onLine) processOfflineQueue();
-        }).catch(e => { });
+        deriveKey(keySource, roomData?.salt).catch(e => { });
 
         if (!navigator.onLine) {
             setConnectionVisuals('offline');
@@ -678,42 +688,18 @@ export function startChatApp(customConfig = {}) {
         lucide.createIcons();
         
         await localDB.put('messages', tempMsg);
+        
+        // Always add to queue first. processOfflineQueue will handle it if online & ready.
         await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
 
-        if (!navigator.onLine) {
+        if (!navigator.onLine || !state.isChatChannelReady) {
             window.toast("Saved offline");
             state.processingAction = false;
             return;
         }
 
-        try { 
-            const enc = await encryptMessage(v); 
-            const { data, error } = await db.from('messages').insert([{ room_id: state.currentRoomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]).select().single();
-            if (!error && data) {
-                state.recentlySentIds.add(data.id);
-                await localDB.delete('queue', tempId);
-                
-                const msgEl = container.querySelector(`[data-id="${tempId}"]`);
-                if(msgEl) {
-                    const prevEl = msgEl.previousElementSibling; 
-                    let prevData = null; 
-                    if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
-                    try {
-                        const decRes = await workerExec('decryptSingle', { content: data.content });
-                        if(decRes.result) {
-                            const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
-                            msgEl.outerHTML = renderMsg(finalMsg, prevData, state.currentRoomData?.is_direct);
-                            lucide.createIcons();
-                            await localDB.put('messages', finalMsg);
-                        }
-                    } catch(e) {}
-                }
-            } else {
-                throw error;
-            }
-        } catch(e) { 
-            window.toast("Send failed, saved locally"); 
-        } 
+        // If connected, try to process immediately
+        processOfflineQueue();
         state.processingAction = false; 
     };
     
