@@ -151,16 +151,25 @@ export function startChatApp(customConfig = {}) {
 
     const updatePresenceUI = () => {
         const roomCountEl = $('room-user-count'); const infoRoomEl = $('info-room-count'); const infoGlobalEl = $('info-global-count');
-        const roomCount = state.lastKnownOnlineCount || 0;
-        if (infoGlobalEl) infoGlobalEl.innerText = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
-        if (state.currentRoomData?.is_direct) {
-            const isOnline = roomCount >= 2 && navigator.onLine; const statusText = isOnline ? "Online" : "Offline";
-            if (roomCountEl) roomCountEl.innerText = statusText; if (infoRoomEl) infoRoomEl.innerText = statusText;
-            const dot = roomCountEl?.previousElementSibling; if (dot) dot.style.background = isOnline ? 'var(--success)' : 'var(--text-mute)';
-        } else {
-            if (roomCountEl) roomCountEl.innerText = `${roomCount}`; if (infoRoomEl) infoRoomEl.innerText = `${roomCount}`;
-            const dot = roomCountEl?.previousElementSibling; if (dot) dot.style.background = 'var(--success)';
+        const isOnline = navigator.onLine;
+        
+        let displayRoomCount = "-";
+        let displayGlobalCount = "-";
+        let roomStatusColor = 'var(--text-mute)';
+
+        if (isOnline) {
+            const roomCount = state.lastKnownOnlineCount || 0;
+            displayRoomCount = state.currentRoomData?.is_direct ? (roomCount >= 2 ? "Online" : "Offline") : `${roomCount}`;
+            displayGlobalCount = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
+            roomStatusColor = state.currentRoomData?.is_direct ? (roomCount >= 2 ? 'var(--success)' : 'var(--text-mute)') : 'var(--success)';
         }
+
+        if (infoGlobalEl) infoGlobalEl.innerText = displayGlobalCount;
+        if (roomCountEl) roomCountEl.innerText = displayRoomCount; 
+        if (infoRoomEl) infoRoomEl.innerText = displayRoomCount;
+        
+        const dot = roomCountEl?.previousElementSibling; 
+        if (dot) dot.style.background = roomStatusColor;
     };
 
     const schedulePresenceUpdate = () => {
@@ -177,6 +186,24 @@ export function startChatApp(customConfig = {}) {
 
     const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
+    const cacheAvatar = async (profile) => {
+        if (!profile || !profile.avatar_url || profile.cached_avatar) return profile;
+        try {
+            const response = await fetch(profile.avatar_url);
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = async () => {
+                    profile.cached_avatar = reader.result;
+                    await localDB.put('profiles', profile);
+                    resolve(profile);
+                };
+                reader.onerror = () => resolve(profile);
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) { return profile; }
+    };
+
     const getProfile = async (userId) => {
         if (!userId) return null;
         if (state.profileCache[userId]) return state.profileCache[userId];
@@ -184,6 +211,9 @@ export function startChatApp(customConfig = {}) {
         let profile = await localDB.get('profiles', userId);
         if (profile) {
             state.profileCache[userId] = profile;
+            if (navigator.onLine && profile.avatar_url && !profile.cached_avatar) {
+                cacheAvatar(profile).then(updated => { state.profileCache[userId] = updated; });
+            }
             return profile;
         }
 
@@ -193,6 +223,7 @@ export function startChatApp(customConfig = {}) {
                 if (data) {
                     state.profileCache[userId] = data;
                     await localDB.put('profiles', data);
+                    if (data.avatar_url) cacheAvatar(data);
                     return data;
                 }
             } catch (e) {}
@@ -327,6 +358,7 @@ export function startChatApp(customConfig = {}) {
             if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); 
             if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
             state.isReconnecting = false; 
+            updatePresenceUI();
         });
     };
 
@@ -360,7 +392,7 @@ export function startChatApp(customConfig = {}) {
     window.prevEditStep = () => { state.currentStep.edit = 1; updateStepUI('edit'); };
     window.openAccessManager = async (prefix) => { state.currentPickerContext = prefix; if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) { const ids = state.currentRoomData.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } } renderPickerSelectedUsers(); $('overlay-container').classList.add('active'); window.showOverlayView('access-manager'); $('picker-id-input').value = ''; $('picker-id-input').focus(); };
     window.closeAccessManager = () => { if (state.currentPickerContext === 'edit-room') window.showOverlayView('room-settings'); else window.closeOverlay(); updateAccessSummary(state.currentPickerContext); };
-    const renderPickerSelectedUsers = () => { const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers; if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users selected.</div>`; $('picker-count').innerText = '0'; return; } $('picker-count').innerText = displayUsers.length; container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join(''); lucide.createIcons(); };
+    const renderPickerSelectedUsers = () => { const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers; if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users selected.</div>`; $('picker-count').innerText = '0'; return; } $('picker-count').innerText = displayUsers.length; container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join(''); lucide.createIcons(); };
     window.removePickerUser = (id) => { state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id); renderPickerSelectedUsers(); };
     window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Enter ID"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added"); window.setLoading(true, "Fetching..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("User not found"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Added"); };
     
@@ -388,7 +420,7 @@ export function startChatApp(customConfig = {}) {
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
         
         const timeString = m.time || getTimeFromDate(m.created_at);
-        html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''}" ${dataAttrs}>`;
+        html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''} pop-in" ${dataAttrs}>`;
         if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
         else { const processedText = processText(m.text); html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`; }
         html += `</div>`; return html;
@@ -416,7 +448,7 @@ export function startChatApp(customConfig = {}) {
                 if(profile) {
                     $('info-name').innerText = profile.full_name;
                     const avEl = $('info-avatar');
-                    if (profile.avatar_url) avEl.innerHTML = `<img src="${profile.avatar_url}">`; else avEl.innerText = (profile.full_name || 'U').charAt(0);
+                    if (profile.cached_avatar || profile.avatar_url) avEl.innerHTML = `<img src="${profile.cached_avatar || profile.avatar_url}">`; else avEl.innerText = (profile.full_name || 'U').charAt(0);
                 } else {
                     $('info-name').innerText = 'User';
                 }
@@ -446,7 +478,6 @@ export function startChatApp(customConfig = {}) {
             return window.toast("Offline & No Cache");
         }
 
-        // 1. SYNC ROOM DATA FIRST (If online) to ensure correct users list/name
         if (navigator.onLine) {
             setConnectionVisuals('connecting');
             window.setLoading(true, "Syncing Room...");
@@ -464,17 +495,16 @@ export function startChatApp(customConfig = {}) {
         if (!roomData) return window.toast("Room data not found");
 
         const isDirect = roomData?.is_direct; 
-        let displayTitle = roomData.name; // Default to room name (for groups)
+        let displayTitle = roomData.name; 
         let displayAvatar = roomData?.avatar_url; 
 
-        // 2. RESOLVE DIRECT MESSAGE PROFILE (Wait for fetch before rendering)
         if (isDirect) { 
             const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id); 
             if (otherUserId) { 
                 const profile = await getProfile(otherUserId);
                 if (profile) { 
                     displayTitle = profile.full_name; 
-                    displayAvatar = profile.avatar_url; 
+                    displayAvatar = profile.cached_avatar || profile.avatar_url; 
                 } else {
                     displayTitle = "Unknown User";
                 }
@@ -483,7 +513,6 @@ export function startChatApp(customConfig = {}) {
             }
         } 
         
-        // 3. RENDER UI (Now with correct data)
         $('chat-title').innerText = displayTitle; 
         const avEl = $('chat-avatar-display'); 
         if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); 
@@ -501,7 +530,6 @@ export function startChatApp(customConfig = {}) {
             setConnectionVisuals('offline');
         }
 
-        // 4. LOAD MESSAGES (Cached first, then Network overwrite)
         const cachedMsgs = await localDB.getRoomMessages(id);
         if (cachedMsgs.length > 0) {
             const b = $('chat-messages'); 
@@ -530,7 +558,6 @@ export function startChatApp(customConfig = {}) {
                     const validMsgs = res.results.filter(m => !m.error); 
                     const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
                     
-                    // OVERWRITE
                     await localDB.clearRoomMessages(id);
                     await localDB.putAll('messages', messagesWithRoomId);
 
@@ -543,7 +570,6 @@ export function startChatApp(customConfig = {}) {
                     lucide.createIcons();
                 } catch(e) { console.error(e); }
             } else { 
-                // OVERWRITE: Even if no data, clear to ensure sync if messages were deleted server-side
                 await localDB.clearRoomMessages(id);
                 state.hasMoreHistory = false; checkChatEmpty(); 
             } 
@@ -650,7 +676,7 @@ export function startChatApp(customConfig = {}) {
                     const otherId = r.allowed_users.find(id => id !== uid); 
                     if(otherId) {
                         let profile = await getProfile(otherId);
-                        if(profile) { name = profile.full_name; avatar = profile.avatar_url; }
+                        if(profile) { name = profile.full_name; avatar = profile.cached_avatar || profile.avatar_url; }
                     } 
                 }
                 processedRooms.push({ ...r, display_name: name, display_avatar: avatar });
@@ -673,7 +699,7 @@ export function startChatApp(customConfig = {}) {
                     if(profile) { 
                         state.profileCache[otherId] = profile; 
                         await localDB.put('profiles', profile);
-                        processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.avatar_url }); 
+                        processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.cached_avatar || profile.avatar_url }); 
                     } else { 
                         processedRooms.push({ ...r, display_name: 'Unknown', display_avatar: null }); 
                     }
