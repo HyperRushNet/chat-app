@@ -11,9 +11,10 @@ export function startChatApp(customConfig = {}) {
         rateLimitMs: customConfig.rateLimitMs || 1000,
         presenceHeartbeatMs: customConfig.presenceHeartbeatMs || 10000,
         verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
+        maxMessageLength: customConfig.maxMessageLength || 2000
     };
 
-    const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png?semt=ais_white_label','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg?semt=ais_user_personalization&w=740&q=80','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
+    const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
     const DB_NAME = 'HRN_LOCAL_DB';
     const DB_VERSION = 3; 
 
@@ -42,7 +43,6 @@ export function startChatApp(customConfig = {}) {
                         if (!ms.indexNames.contains('room_id')) ms.createIndex('room_id', 'room_id', { unique: false });
                     }
                     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
-                    if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
                     if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
                     if (!db.objectStoreNames.contains('user_cache')) db.createObjectStore('user_cache', { keyPath: 'id' });
                 };
@@ -635,23 +635,17 @@ export function startChatApp(customConfig = {}) {
         }
         
         if (!applyRateLimit()) return; 
-        state.processingAction = true; 
+        
         const v = $('chat-input').value.trim(); 
-        if(!v) { state.processingAction = false; return; } 
+        if(!v) return; 
+
+        if (v.length > CONFIG.maxMessageLength) {
+            return window.toast(`Message too long (max ${CONFIG.maxMessageLength} chars)`);
+        }
+
+        state.processingAction = true; 
         $('chat-input').value = ''; 
         state.lastMessageTime = Date.now(); 
-        
-        const tempId = `temp_${Date.now()}`;
-        const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
-
-        const container = $('chat-messages'); 
-        const lastMsg = container.querySelector('.msg:last-of-type'); 
-        let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
-        container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct, true)); 
-        container.scrollTop = container.scrollHeight;
-        lucide.createIcons();
-        
-        await localDB.put('messages', tempMsg);
         
         try {
             const enc = await encryptMessage(v);
@@ -662,28 +656,11 @@ export function startChatApp(customConfig = {}) {
                 content: enc 
             }]).select().single();
             
-            if (!error && data) {
-                state.recentlySentIds.add(data.id);
-                const msgEl = document.querySelector(`.msg[data-id="${tempId}"]`);
-                if(msgEl) {
-                    const prevEl = msgEl.previousElementSibling; 
-                    let prevMsgDb = null; 
-                    if(prevEl && prevEl.classList.contains('msg')) prevMsgDb = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
-                    try {
-                        const decRes = await workerExec('decryptSingle', { content: data.content });
-                        if(decRes.result) {
-                            const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
-                            msgEl.outerHTML = renderMsg(finalMsg, prevMsgDb, state.currentRoomData?.is_direct);
-                            lucide.createIcons();
-                            await localDB.put('messages', finalMsg);
-                        }
-                    } catch(e) { console.error("Update UI failed", e); }
-                }
-            } else {
-                 window.toast("Failed to send");
+            if (error) {
+                window.toast("Failed to send message");
             }
-        } catch(e) {
-            window.toast("Encryption failed");
+        } catch(err) {
+            window.toast("Encryption or Send failed");
         }
         
         state.processingAction = false; 
