@@ -79,14 +79,14 @@ This project is not positioned as a replacement for enterprise-grade audited sys
 ## Screenshots (v1.0.1)
 
 <p align="left">
-  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp">
-    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1.webp" width="220" style="margin-right: 15px;">
+  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1-1.5.2.webp">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-1-1.5.2.webp" width="220" style="margin-right: 15px;">
   </a>
-  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp">
-    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2.webp" width="220" style="margin-right: 15px;">
+  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2-1.5.2.webp">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-2-1.5.2.webp" width="220" style="margin-right: 15px;">
   </a>
-  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp">
-    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3.webp" width="220">
+  <a href="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3-1.5.2.webp">
+    <img src="https://raw.githubusercontent.com/HyperRushNet/chat-app/refs/heads/main/screenshot-3-1.5.2.webp" width="220">
   </a>
 </p>
 
