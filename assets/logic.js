@@ -148,6 +148,28 @@ export function startChatApp(customConfig = {}) {
         if (status === 'connected') avatar.classList.add('status-connected');
         else if (status === 'connecting') avatar.classList.add('status-connecting');
         else avatar.classList.add('status-offline');
+        updateSendButtonState();
+    };
+
+    const updateSendButtonState = () => {
+        const btn = $('send-btn');
+        const input = $('chat-input');
+        if (!btn || !input) return;
+        
+        const isOnline = navigator.onLine;
+        const isReady = state.isChatChannelReady;
+
+        if (isOnline && isReady) {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            input.disabled = false;
+            input.placeholder = "Message...";
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            input.disabled = true;
+            input.placeholder = !isOnline ? "Offline" : "Connecting...";
+        }
     };
 
     const updatePresenceUI = () => {
@@ -275,64 +297,6 @@ export function startChatApp(customConfig = {}) {
         else { setConnectionVisuals('connected'); }
     };
 
-    const processOfflineQueue = async () => {
-        // Only process if: In a room, Online, Channel is READY (subscribed), and not already processing
-        if (state.isProcessingQueue || !navigator.onLine || !state.user || !state.currentRoomId || !state.isChatChannelReady) return;
-        
-        state.isProcessingQueue = true;
-
-        const queue = await localDB.getAll('queue');
-        const roomQueue = queue.filter(item => item.roomId === state.currentRoomId);
-
-        if (roomQueue.length === 0) {
-            state.isProcessingQueue = false;
-            return;
-        }
-
-        for (const item of roomQueue) {
-            // Double check connection status before each message
-            if (!navigator.onLine || !state.isChatChannelReady) break;
-
-            try {
-                const enc = await encryptMessage(item.text);
-                const { data, error } = await db.from('messages').insert([{ 
-                    room_id: item.roomId, 
-                    user_id: state.user.id, 
-                    user_name: state.user.user_metadata?.full_name, 
-                    content: enc 
-                }]).select().single();
-                
-                if (!error && data) {
-                    state.recentlySentIds.add(data.id);
-                    await localDB.delete('queue', item.id);
-                    
-                    const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
-                    if(msgEl) {
-                        const prevEl = msgEl.previousElementSibling; 
-                        let prevMsg = null; 
-                        if(prevEl && prevEl.classList.contains('msg')) prevMsg = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
-                        try {
-                            const decRes = await workerExec('decryptSingle', { content: data.content });
-                            if(decRes.result) {
-                                const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
-                                msgEl.outerHTML = renderMsg(finalMsg, prevMsg, state.currentRoomData?.is_direct);
-                                lucide.createIcons();
-                                await localDB.put('messages', finalMsg);
-                            }
-                        } catch(e) { console.error("Update UI failed", e); }
-                    }
-                } else {
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-            } catch(e) {
-                console.error("Queue processing error:", e);
-                await new Promise(r => setTimeout(r, 2000));
-            }
-            await new Promise(r => setTimeout(r, 500));
-        }
-        state.isProcessingQueue = false;
-    };
-
     const handleReconnect = async () => {
         const overlay = $('reconnect-overlay');
         if(overlay) overlay.classList.add('active');
@@ -352,7 +316,6 @@ export function startChatApp(customConfig = {}) {
                     
                     if(state.user) setupGlobalPresence(state.user.id);
                     
-                    // If we are in a room, attempt to reconnect the chat channels
                     if(state.currentRoomId) attemptHardReconnect();
                     
                     window.loadRooms();
@@ -410,7 +373,6 @@ export function startChatApp(customConfig = {}) {
                 state.isReconnecting = false; 
                 if(state.reconnectTimer) clearTimeout(state.reconnectTimer); 
                 setConnectionVisuals('connected'); 
-                processOfflineQueue(); 
             }
             else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { 
                 if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } 
@@ -431,15 +393,12 @@ export function startChatApp(customConfig = {}) {
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
             setConnectionVisuals('connecting'); 
-            // If in a room, attempt to reconnect the socket. 
-            // setupChatChannel will trigger processOfflineQueue once subscribed.
             if(state.currentRoomId) {
                 attemptHardReconnect();
             } else {
                 setConnectionVisuals('connected');
             }
             
-            // If we were in offline mode, try to sync account
             if(state.isOfflineMode) {
                 handleReconnect();
             }
@@ -670,6 +629,11 @@ export function startChatApp(customConfig = {}) {
     window.sendMsg = async (e) => { 
         if (!e || !e.isTrusted) return; 
         if (!state.user || !state.currentRoomId || state.processingAction) return; 
+        
+        if (!navigator.onLine || !state.isChatChannelReady) {
+            return window.toast("Waiting for connection...");
+        }
+        
         if (!applyRateLimit()) return; 
         state.processingAction = true; 
         const v = $('chat-input').value.trim(); 
@@ -689,17 +653,39 @@ export function startChatApp(customConfig = {}) {
         
         await localDB.put('messages', tempMsg);
         
-        // Always add to queue first. processOfflineQueue will handle it if online & ready.
-        await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
-
-        if (!navigator.onLine || !state.isChatChannelReady) {
-            window.toast("Saved offline");
-            state.processingAction = false;
-            return;
+        try {
+            const enc = await encryptMessage(v);
+            const { data, error } = await db.from('messages').insert([{ 
+                room_id: state.currentRoomId, 
+                user_id: state.user.id, 
+                user_name: state.user.user_metadata?.full_name, 
+                content: enc 
+            }]).select().single();
+            
+            if (!error && data) {
+                state.recentlySentIds.add(data.id);
+                const msgEl = document.querySelector(`.msg[data-id="${tempId}"]`);
+                if(msgEl) {
+                    const prevEl = msgEl.previousElementSibling; 
+                    let prevMsgDb = null; 
+                    if(prevEl && prevEl.classList.contains('msg')) prevMsgDb = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: data.content });
+                        if(decRes.result) {
+                            const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                            msgEl.outerHTML = renderMsg(finalMsg, prevMsgDb, state.currentRoomData?.is_direct);
+                            lucide.createIcons();
+                            await localDB.put('messages', finalMsg);
+                        }
+                    } catch(e) { console.error("Update UI failed", e); }
+                }
+            } else {
+                 window.toast("Failed to send");
+            }
+        } catch(e) {
+            window.toast("Encryption failed");
         }
-
-        // If connected, try to process immediately
-        processOfflineQueue();
+        
         state.processingAction = false; 
     };
     
