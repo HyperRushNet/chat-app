@@ -22,9 +22,7 @@ Focuses on privacy, end-to-end encryption, and a seamless user experience.
 - **Smart Date Labels**: Sticky dividers for "Today", "Yesterday", weekdays, and full dates.  
 - **Live Presence Count**: Shows online users per room and globally.  
 - **Message Actions**: Delete, edit, copy messages securely.
-
-## Bèta Features
-- Offline message support.
+- **Offline login & app acces support**: See sent messages, login and see groups, even when you are offline!
 
 ---
 
