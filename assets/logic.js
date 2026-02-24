@@ -44,6 +44,7 @@ export function startChatApp(customConfig = {}) {
                     if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' });
                     if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
                     if (!db.objectStoreNames.contains('keys')) db.createObjectStore('keys', { keyPath: 'room_id' });
+                    if (!db.objectStoreNames.contains('user_cache')) db.createObjectStore('user_cache', { keyPath: 'id' });
                 };
             });
         },
@@ -129,7 +130,7 @@ export function startChatApp(customConfig = {}) {
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
         isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null,
-        recentlySentIds: new Set(), isNavigating: false
+        recentlySentIds: new Set(), isNavigating: false, isOfflineMode: false, isProcessingQueue: false
     };
 
     let toastQueue = []; let toastVisible = false;
@@ -157,7 +158,7 @@ export function startChatApp(customConfig = {}) {
         let displayGlobalCount = "-";
         let roomStatusColor = 'var(--text-mute)';
 
-        if (isOnline) {
+        if (isOnline || state.isOfflineMode) {
             const roomCount = state.lastKnownOnlineCount || 0;
             displayRoomCount = state.currentRoomData?.is_direct ? (roomCount >= 2 ? "Online" : "Offline") : `${roomCount}`;
             displayGlobalCount = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
@@ -274,12 +275,12 @@ export function startChatApp(customConfig = {}) {
         else { setConnectionVisuals('connected'); }
     };
 
-    const processOutgoingQueue = async () => {
-        if (!state.user) return;
+    const processOfflineQueue = async () => {
+        if (state.isProcessingQueue || !navigator.onLine) return;
+        state.isProcessingQueue = true;
         const queue = await localDB.getAll('queue');
-        if (queue.length === 0) return;
-        window.toast(`Sending ${queue.length} pending message(s)...`);
-        const failed = [];
+        if (queue.length === 0) { state.isProcessingQueue = false; return; }
+
         for (const item of queue) {
             try {
                 const enc = await encryptMessage(item.text);
@@ -302,10 +303,57 @@ export function startChatApp(customConfig = {}) {
                             }
                         } catch(e) {}
                     }
+                } else {
+                    await new Promise(r => setTimeout(r, 2000));
                 }
-            } catch(e) { failed.push(item); }
+            } catch(e) {
+                console.error(e);
+            }
+            await new Promise(r => setTimeout(r, 500));
         }
-        if(failed.length > 0) await localDB.putAll('queue', failed);
+        state.isProcessingQueue = false;
+    };
+
+    const handleReconnect = async () => {
+        if (!state.isOfflineMode) {
+            processOfflineQueue();
+            return;
+        }
+        const overlay = $('reconnect-overlay');
+        if(overlay) overlay.classList.add('active');
+        
+        const storedEmail = localStorage.getItem('hrn_auth_email');
+        const storedPass = localStorage.getItem('hrn_auth_pass');
+        
+        if (storedEmail && storedPass) {
+            try {
+                const {error} = await db.auth.signInWithPassword({email:storedEmail, password:storedPass});
+                if (!error) {
+                    const { data: { user } } = await db.auth.getUser();
+                    state.user = user;
+                    state.isOfflineMode = false;
+                    
+                    await localDB.put('user_cache', { id: user.id, email: user.email, metadata: user.user_metadata });
+                    
+                    if(state.user) setupGlobalPresence(state.user.id);
+                    if(state.currentRoomId) attemptHardReconnect();
+                    
+                    processOfflineQueue();
+                    window.loadRooms();
+                    
+                    if(overlay) overlay.classList.remove('active');
+                    window.toast("Synced successfully");
+                } else {
+                    if(overlay) overlay.classList.remove('active');
+                    window.toast("Login failed. Try again.");
+                }
+            } catch(e) {
+                if(overlay) overlay.classList.remove('active');
+                window.toast("Connection error.");
+            }
+        } else {
+            if(overlay) overlay.classList.remove('active');
+        }
     };
 
     const setupChatChannel = (id) => {
@@ -341,7 +389,7 @@ export function startChatApp(customConfig = {}) {
             }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
-            if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); processOutgoingQueue(); }
+            if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if(state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); processOfflineQueue(); }
             else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine) { state.isChatChannelReady = false; if(!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
@@ -351,7 +399,7 @@ export function startChatApp(customConfig = {}) {
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
             setConnectionVisuals('connecting'); 
-            attemptHardReconnect(); 
+            handleReconnect();
         });
         window.addEventListener('offline', () => { 
             setConnectionVisuals('offline'); 
@@ -420,7 +468,7 @@ export function startChatApp(customConfig = {}) {
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
         
         const timeString = m.time || getTimeFromDate(m.created_at);
-        html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''} pop-in" ${dataAttrs}>`;
+        html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''} ${isOptimistic ? 'msg-pending' : ''} pop-in" ${dataAttrs}>`;
         if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
         else { const processedText = processText(m.text); html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`; }
         html += `</div>`; return html;
@@ -647,9 +695,46 @@ export function startChatApp(customConfig = {}) {
         const em = $('l-email').value, p = $('l-pass').value; 
         if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
         window.setLoading(true, "Signing In..."); 
+        
+        if (!navigator.onLine) {
+            const cached = await localDB.get('user_cache', em);
+            if (cached && cached.metadata) {
+                state.user = { id: cached.id, email: cached.email, user_metadata: cached.metadata };
+                state.isOfflineMode = true;
+                localStorage.setItem('hrn_auth_email', em);
+                localStorage.setItem('hrn_auth_pass', p);
+                window.nav('scr-lobby'); 
+                window.loadRooms(); 
+                window.setLoading(false); 
+                state.processingAction = false; 
+                window.toast("Offline Mode");
+                return;
+            } else {
+                window.toast("No internet and no local cache.");
+                window.setLoading(false);
+                state.processingAction = false;
+                return;
+            }
+        }
+
         const {error} = await db.auth.signInWithPassword({email:em, password:p}); 
         if(error) { 
-            window.toast(error.message); 
+            if (!navigator.onLine && error.message.includes("Failed to fetch")) {
+                 window.toast("Offline Login Enabled (Cached)");
+                 const cached = await localDB.get('user_cache', em);
+                 if (cached) {
+                     state.user = { id: cached.id, email: cached.email, user_metadata: cached.metadata };
+                     state.isOfflineMode = true;
+                     localStorage.setItem('hrn_auth_email', em);
+                     localStorage.setItem('hrn_auth_pass', p);
+                     window.nav('scr-lobby'); 
+                     window.loadRooms(); 
+                 } else {
+                     window.toast("First login requires internet.");
+                 }
+            } else {
+                window.toast(error.message); 
+            }
             window.setLoading(false); 
             state.processingAction = false; 
         } else { 
@@ -657,6 +742,8 @@ export function startChatApp(customConfig = {}) {
             localStorage.setItem('hrn_auth_pass', p);
             const { data: { user } } = await db.auth.getUser(); 
             state.user = user; 
+            state.isOfflineMode = false;
+            await localDB.put('user_cache', { id: user.id, email: user.email, metadata: user.user_metadata });
             window.nav('scr-lobby'); 
             window.loadRooms(); 
             window.setLoading(false); 
@@ -680,13 +767,13 @@ export function startChatApp(customConfig = {}) {
 
     window.handleCreate = async (e) => { if (!e || !e.isTrusted) return; if(state.processingAction) return; state.processingAction = true; const isDirect = state.createType === 'direct'; let n, isVisible = true, targetUser = null; let avatarUrl = null; let rawPass = null; if(isDirect) { targetUser = $('c-target-user').value.trim(); if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } n = "Direct Message"; isVisible = true; } else { n = $('c-name').value.trim(); avatarUrl = $('c-avatar').value.trim() || null; rawPass = $('c-pass').value; isVisible = $('c-visible').checked; if(!n) { window.toast("Name required"); state.processingAction = false; return; } } let allowedUsers = ['*']; if (isDirect) allowedUsers = [state.user.id, targetUser]; else { if (state.selectedAllowedUsers.length > 0) { allowedUsers = state.selectedAllowedUsers.map(u => u.id); if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); } } window.setLoading(true, "Creating..."); const roomSalt = generateSalt(); const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; const {data, error} = await db.from('rooms').insert([insertData]).select(); if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } if(data && data.length > 0) { const newRoom = data[0]; if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); } state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = []; } state.processingAction = false; window.setLoading(false); };
     window.submitGate = async (e) => { if (!e || !e.isTrusted) return; const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt); window.setLoading(true, "Verifying..."); const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); window.setLoading(false); if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied"); };
-    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); state.user = null; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
+    window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); state.user = null; state.isOfflineMode = false; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
     db.auth.onAuthStateChange(async (ev, ses) => { 
         state.user = ses?.user; 
-        if (state.user) setupGlobalPresence(state.user.id);
+        if (state.user && !state.isOfflineMode) setupGlobalPresence(state.user.id);
         const createBtn = $('icon-plus-lobby'); if (createBtn) createBtn.style.display = 'flex'; 
         if (ev === 'SIGNED_OUT') { if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); if (state.presenceChannel) state.presenceChannel.unsubscribe(); if (state.chatChannel) state.chatChannel.unsubscribe(); if(state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe(); window.nav('scr-start'); } 
     });
@@ -821,20 +908,36 @@ export function startChatApp(customConfig = {}) {
         const storedPass = localStorage.getItem('hrn_auth_pass');
         
         if (storedEmail && storedPass) {
-            window.setLoading(true, "Auto-logging in...");
-            $('l-email').value = storedEmail;
-            $('l-pass').value = storedPass;
-            const {error} = await db.auth.signInWithPassword({email:storedEmail, password:storedPass});
-            window.setLoading(false);
-            if(!error) {
-                const { data: { user } } = await db.auth.getUser();
-                state.user = user;
-                window.nav('scr-lobby');
-                window.loadRooms();
+            if (!navigator.onLine) {
+                const cached = await localDB.get('user_cache', storedEmail);
+                if (cached) {
+                    state.user = { id: cached.id, email: cached.email, user_metadata: cached.metadata };
+                    state.isOfflineMode = true;
+                    window.nav('scr-lobby');
+                    window.loadRooms();
+                } else {
+                    window.nav('scr-login');
+                    $('l-email').value = storedEmail;
+                    $('l-pass').value = storedPass;
+                }
             } else {
-                localStorage.removeItem('hrn_auth_email');
-                localStorage.removeItem('hrn_auth_pass');
-                window.nav('scr-start');
+                window.setLoading(true, "Auto-logging in...");
+                $('l-email').value = storedEmail;
+                $('l-pass').value = storedPass;
+                const {error} = await db.auth.signInWithPassword({email:storedEmail, password:storedPass});
+                window.setLoading(false);
+                if(!error) {
+                    const { data: { user } } = await db.auth.getUser();
+                    state.user = user;
+                    state.isOfflineMode = false;
+                    await localDB.put('user_cache', { id: user.id, email: user.email, metadata: user.user_metadata });
+                    window.nav('scr-lobby');
+                    window.loadRooms();
+                } else {
+                    localStorage.removeItem('hrn_auth_email');
+                    localStorage.removeItem('hrn_auth_pass');
+                    window.nav('scr-start');
+                }
             }
         } else {
             window.nav('scr-start');
