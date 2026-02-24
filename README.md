@@ -34,7 +34,7 @@ Focuses on privacy, end-to-end encryption, and a seamless user experience.
   - API: Vercel Functions  
   - Mail Sending: Google Apps Script (handles OTP emails)  
 - **Encryption**: Web Crypto API (PBKDF2, AES-GCM, SHA-256)  
-- **Icons**: Lucide  
+- **Icons**: Inline SVG  
 
 ---
 
