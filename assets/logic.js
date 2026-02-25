@@ -1,4 +1,3 @@
-// GH: HyperRushNet | 2026 | MIT License
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 export function initHRNchat(customConfig = {}) {
@@ -18,8 +17,6 @@ export function initHRNchat(customConfig = {}) {
     const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png','https://cdn-icons-png.flaticon.com/512/236/236831.png','https://cdn-icons-png.freepik.com/256/6997/6997667.png','https://cdn-icons-png.flaticon.com/512/6997/6997668.png','https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
     const DB_NAME = 'HRN_LOCAL_DB';
     const DB_VERSION = 4; 
-
-    
 
     const localDB = {
         db: null,
@@ -52,6 +49,7 @@ export function initHRNchat(customConfig = {}) {
         },
         async get(store, key) { 
             return new Promise((res, rej) => { 
+                if (!this.db) return rej("DB not init");
                 const tx = this.db.transaction(store, 'readonly'); 
                 const req = tx.objectStore(store).get(key); 
                 req.onsuccess = () => res(req.result); 
@@ -60,6 +58,7 @@ export function initHRNchat(customConfig = {}) {
         },
         async getAll(store) { 
             return new Promise((res, rej) => { 
+                if (!this.db) return res([]);
                 const tx = this.db.transaction(store, 'readonly'); 
                 const req = tx.objectStore(store).getAll(); 
                 req.onsuccess = () => res(req.result || []); 
@@ -69,6 +68,7 @@ export function initHRNchat(customConfig = {}) {
         async put(store, val) { 
             if(!val || !val.id) return; 
             return new Promise((res, rej) => { 
+                if (!this.db) return rej("DB not init");
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const req = tx.objectStore(store).put(val); 
                 req.onsuccess = () => res(); 
@@ -78,6 +78,7 @@ export function initHRNchat(customConfig = {}) {
         async putAll(store, vals) { 
             if(!vals || vals.length === 0) return; 
             return new Promise((res, rej) => { 
+                if (!this.db) return rej("DB not init");
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const os = tx.objectStore(store); 
                 vals.forEach(v => { if(v && v.id) os.put(v); }); 
@@ -85,9 +86,10 @@ export function initHRNchat(customConfig = {}) {
                 tx.onerror = () => rej(tx.error); 
             }); 
         },
-        async clear(store) { return new Promise((res, rej) => { const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async clear(store) { return new Promise((res, rej) => { if (!this.db) return res(); const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
         async delete(store, key) { 
             return new Promise((res, rej) => { 
+                if (!this.db) return res();
                 const tx = this.db.transaction(store, 'readwrite'); 
                 const req = tx.objectStore(store).delete(key); 
                 req.onsuccess = () => res(); 
@@ -100,6 +102,7 @@ export function initHRNchat(customConfig = {}) {
         },
         async clearRoomMessages(roomId) {
             return new Promise((resolve, reject) => {
+                if (!this.db) return reject();
                 const tx = this.db.transaction('messages', 'readwrite');
                 const store = tx.objectStore('messages');
                 const index = store.index('room_id');
@@ -212,7 +215,7 @@ export function initHRNchat(customConfig = {}) {
 
     const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
     window.toast = m => { toastQueue.push(m); processToastQueue(); };
-    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { loader.classList.add('active'); } else { loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
+    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (!loader) return; if (s) { loader.classList.add('active'); } else { loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
 
     const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
@@ -220,6 +223,7 @@ export function initHRNchat(customConfig = {}) {
         if (!profile || !profile.avatar_url || profile.cached_avatar) return profile;
         try {
             const response = await fetch(profile.avatar_url);
+            if (!response.ok) throw new Error("Invalid image response");
             const blob = await response.blob();
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -305,7 +309,8 @@ export function initHRNchat(customConfig = {}) {
     };
 
     window.goOnline = async () => {
-        $('internet-detected-overlay').classList.remove('active');
+        const overlay = $('internet-detected-overlay');
+        if(overlay) overlay.classList.remove('active');
         state.isOfflineMode = false;
         window.setLoading(true, "Connecting...");
         
@@ -337,7 +342,8 @@ export function initHRNchat(customConfig = {}) {
     };
 
     window.stayOffline = () => {
-        $('internet-detected-overlay').classList.remove('active');
+        const overlay = $('internet-detected-overlay');
+        if(overlay) overlay.classList.remove('active');
         state.isOfflineMode = true;
         window.toast("Staying in Offline Mode");
     };
@@ -382,7 +388,8 @@ export function initHRNchat(customConfig = {}) {
 
     const setupChatChannel = (id) => {
         if (state.isOfflineMode) return;
-        if (state.chatChannel) state.chatChannel.unsubscribe(); const isDirect = state.currentRoomData?.is_direct;
+        if (state.chatChannel) state.chatChannel.unsubscribe(); 
+        const isDirect = state.currentRoomData?.is_direct;
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new; if (m && state.currentRoomId) {
@@ -464,7 +471,8 @@ export function initHRNchat(customConfig = {}) {
     const monitorConnection = () => {
         window.addEventListener('online', () => { 
             if (state.isOfflineMode) {
-                $('internet-detected-overlay').classList.add('active');
+                const overlay = $('internet-detected-overlay');
+                if(overlay) overlay.classList.add('active');
             } else {
                 setConnectionVisuals('connecting'); 
                 if(state.currentRoomId) attemptHardReconnect();
@@ -482,11 +490,14 @@ export function initHRNchat(customConfig = {}) {
 
     state.preventNextClose = false;
     const showContextMenu = (e, msgEl) => { if(!msgEl || !state.user) return; if(msgEl.classList.contains('msg-deleted')) return; e.preventDefault(); const msgData = { id: msgEl.dataset.id, user_id: msgEl.dataset.uid, created_at: msgEl.dataset.time, text: msgEl.dataset.text }; const menu = $('context-menu'); const editBtn = $('ctx-edit'); const deleteBtn = $('ctx-delete'); const copyBtn = $('ctx-copy'); const isOwner = msgData.user_id === state.user.id; const msgDate = new Date(msgData.created_at); const now = new Date(); const diffMinutes = (now - msgDate) / 60000; const canEdit = isOwner && diffMinutes < 15; const canDelete = isOwner; editBtn.style.display = canEdit ? 'flex' : 'none'; deleteBtn.style.display = canDelete ? 'flex' : 'none'; copyBtn.style.display = 'flex'; state.contextTarget = msgData; let x = e.clientX || e.touches?.[0]?.clientX; let y = e.clientY || e.touches?.[0]?.clientY; menu.style.left = `${x}px`; menu.style.top = `${y}px`; setTimeout(() => { const rect = menu.getBoundingClientRect(); if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`; if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`; menu.classList.add('active');  }, 10); };
-    const hideContextMenu = () => { const menu = $('context-menu'); menu.classList.remove('active'); state.contextTarget = null; };
+    const hideContextMenu = () => { const menu = $('context-menu'); if(menu) menu.classList.remove('active'); state.contextTarget = null; };
+    
     $('ctx-edit').onclick = () => { if(!state.contextTarget) return; state.editingMessage = state.contextTarget; $('edit-msg-input').value = state.contextTarget.text; window.showOverlayView('edit-message'); $('overlay-container').classList.add('active'); hideContextMenu();  };
     $('ctx-copy').onclick = () => { if(!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Copied to clipboard"); hideContextMenu(); };
     $('ctx-delete').onclick = async () => { if(!state.contextTarget || !state.user) return; const idToDelete = state.contextTarget.id; hideContextMenu(); window.setLoading(true, "Deleting..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); if(error) window.toast("Failed: " + error.message); window.setLoading(false); };
+    
     window.saveEditMessage = async () => { if(!state.editingMessage) return; const v = $('edit-msg-input').value.trim(); if(!v) return window.toast("Message cannot be empty"); const msgDate = new Date(state.editingMessage.created_at); const now = new Date(); if((now - msgDate) / 60000 >= 15) { window.toast("Edit time expired"); window.closeOverlay(); state.editingMessage = null; return; } window.setLoading(true, "Saving..."); try { const enc = await encryptMessage(v); const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id); if (error) window.toast("Failed to edit: " + error.message); else window.toast("Message updated"); } catch(e) { window.toast("Encryption failed"); } state.editingMessage = null; window.setLoading(false); window.closeOverlay(); };
+    
     document.addEventListener('click', (e) => { if (state.preventNextClose) { state.preventNextClose = false; return; } hideContextMenu(); });
     const chatContainer = $('chat-messages');
     chatContainer.addEventListener('touchstart', (e) => { const msg = e.target.closest('.msg'); if (!msg) return; state.longPressTimer = setTimeout(() => { showContextMenu(e, msg); state.preventNextClose = true; }, 500); }, {passive: true});
@@ -499,7 +510,7 @@ export function initHRNchat(customConfig = {}) {
     const initAvatarCarousel = () => { if(!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; updateCarouselPreview(); };
     const updateCarouselPreview = () => { const preview = $('avatar-preview-el'); if(state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`;  };
     window.carouselNav = (direction) => { let index = AVATARS.indexOf(state.selectedAvatar); if(index === -1) index = 0; index += direction; if(index < 0) index = AVATARS.length - 1; if(index >= AVATARS.length) index = 0; state.selectedAvatar = AVATARS[index]; $('r-avatar-url').value = ''; updateCarouselPreview(); };
-    window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar added to carousel"); }; img.src = e.target.result; }; reader.readAsDataURL(file); } };
+    window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar added to carousel"); }; img.onerror = () => window.toast("Invalid image file"); img.src = e.target.result; }; reader.readAsDataURL(file); } };
 
     window.selectCreateType = (type) => { state.createType = type; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $(`type-${type}`).classList.add('selected'); };
     window.nextRegStep = () => { if(state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if(!em || p.length < 8) return window.toast("Email and valid password required"); } if(state.currentStep.reg === 2) { const n = $('r-name').value; if(!n) return window.toast("Name required"); } state.currentStep.reg++; updateStepUI('reg'); };
@@ -515,7 +526,6 @@ export function initHRNchat(customConfig = {}) {
         const titleEl = $('create-step2-title');
         const subEl = $('create-step2-sub');
 
-        // Safety check to prevent crash
         if (!groupFields || !directFields || !accessSummary || !titleEl || !subEl) {
             console.error("Create step elements not found");
             return;
@@ -550,7 +560,7 @@ export function initHRNchat(customConfig = {}) {
     window.forceClaimMaster = () => { if (!state.isMasterTab) { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); $('block-overlay').classList.remove('active'); if(state.user) { setupGlobalPresence(state.user.id); if(state.currentRoomId) attemptHardReconnect(); } } };
     tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active');  } } if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } };
     window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
-    window.closeOverlay = () => $('overlay-container').classList.remove('active');
+    window.closeOverlay = () => { const oc = $('overlay-container'); if(oc) oc.classList.remove('active'); };
     window.showOverlayView = (viewId) => { const panel = document.querySelector('.panel-card'); if(!panel) return; panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); const target = $(`view-${viewId}`); if(target) { target.classList.add('active');  } };
     window.prepareAccountPage = async () => { if(!state.user) return; const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); const name = profile?.full_name || state.user.user_metadata?.full_name || "User"; const avatar = profile?.avatar_url || state.user.user_metadata?.avatar_url; $('acc-page-name').innerText = name; $('acc-page-type').innerText = "Full Account"; $('acc-page-id').innerText = state.user.id; const avPrev = $('acc-page-avatar'); if(avatar) avPrev.innerHTML = `<img src="${avatar}">`; else avPrev.innerText = name.charAt(0); $('acc-email-wrapper').style.display = 'block'; $('acc-page-email').innerText = state.user.email || "Not set";  };
     window.copyAccountId = () => { if(!state.user) return; navigator.clipboard.writeText(state.user.id); window.toast("ID Copied"); };
@@ -561,6 +571,7 @@ export function initHRNchat(customConfig = {}) {
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
     const renderMsg = (m, prevMsg, isDirect, isOptimistic = false) => {
+        if (!m) return "";
         const isDeleted = m.deleted === true; const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000; let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
@@ -577,7 +588,7 @@ export function initHRNchat(customConfig = {}) {
     };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
-    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight;  const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
+    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); const loader = $('history-loader'); if(loader) loader.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight;  const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
     window.openRoomInfo = async () => { 
         if (!state.currentRoomData) return; 
@@ -774,7 +785,7 @@ export function initHRNchat(customConfig = {}) {
          
 
         const keySource = rawPassword ? (rawPassword + id) : id; 
-        deriveKey(keySource, roomData?.salt).catch(e => { });
+        await deriveKey(keySource, roomData?.salt); 
 
         if (!navigator.onLine || state.isOfflineMode) {
             setConnectionVisuals('offline');
@@ -902,7 +913,7 @@ export function initHRNchat(customConfig = {}) {
             if (knownUser && knownUser.metadata) {
                 const hashInput = await sha256(p + em);
                 if(knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                    state.user = { id: knownUser.id, email: knownUser.email, user_metadata: knownUser.metadata };
+                    state.user = { id: knownUser.userId, email: knownUser.email, user_metadata: knownUser.metadata };
                     state.isOfflineMode = true;
                     window.nav('scr-lobby'); 
                     window.loadRooms(); 
