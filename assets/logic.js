@@ -21,7 +21,8 @@ export function initHRNchat(customConfig = {}) {
 		rateLimitMs: customConfig.rateLimitMs || 1000,
 		presenceHeartbeatMs: customConfig.presenceHeartbeatMs || 10000,
 		verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
-		maxMessageLength: customConfig.maxMessageLength || 2000
+		maxMessageLength: customConfig.maxMessageLength || 2000,
+		proxyUrl: customConfig.proxyUrl || "https://corsproxy.io/"
 	};
 	const AVATARS = ['./assets/avatars/1.png', './assets/avatars/2.png', './assets/avatars/3.png', './assets/avatars/4.png', './assets/avatars/5.jpg'];
 	const DB_NAME = 'HRN_LOCAL_DB';
@@ -359,7 +360,7 @@ export function initHRNchat(customConfig = {}) {
 	const cacheAvatar = async (profile) => {
 		if (!profile || !profile.avatar_url || profile.cached_avatar) return profile;
 		try {
-			const response = await fetch(profile.avatar_url);
+			const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
 			if (!response.ok) throw new Error("Invalid image response");
 			const blob = await response.blob();
 			return new Promise((resolve) => {
