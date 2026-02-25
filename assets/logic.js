@@ -357,26 +357,26 @@ export function initHRNchat(customConfig = {}) {
 			return [null, error];
 		}
 	};
-	const cacheAvatar = async (profile) => {
-		if (!profile || !profile.avatar_url || profile.cached_avatar) return profile;
-		try {
-			const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
-			if (!response.ok) throw new Error("Invalid image response");
-			const blob = await response.blob();
-			return new Promise((resolve) => {
-				const reader = new FileReader();
-				reader.onload = async () => {
-					profile.cached_avatar = reader.result;
-					await localDB.put('profiles', profile);
-					resolve(profile);
-				};
-				reader.onerror = () => resolve(profile);
-				reader.readAsDataURL(blob);
-			});
-		} catch (e) {
-			return profile;
-		}
-	};
+const cacheAvatar = async (profile) => {
+    if (!profile || !profile.avatar_url || profile.cached_avatar) return profile;
+    try {
+        const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
+        if (!response.ok) throw new Error("Invalid image response");
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                profile.cached_avatar = reader.result;
+                await localDB.put('profiles', profile);
+                resolve(profile);
+            };
+            reader.onerror = () => resolve(profile);
+            reader.readAsDataURL(blob);
+        });
+    } catch (e) {
+        return profile;
+    }
+};
 	const getProfile = async (userId) => {
 		if (!userId) return null;
 		if (state.profileCache[userId]) return state.profileCache[userId];
@@ -2302,92 +2302,42 @@ export function initHRNchat(customConfig = {}) {
 		state.lastLobbyRefresh = now;
 		await window.loadRooms();
 	};
-	window.loadRooms = async () => {
-		if (!state.user) return;
-		const localRooms = await localDB.getAll('rooms');
-		if (localRooms.length > 0) {
-			const uid = state.user.id;
-			const processedRooms = [];
-			for (const r of localRooms) {
-				if (!r || !r.id) continue;
-				let name = r.name;
-				let avatar = r.avatar_url;
-				if (r.is_direct && r.allowed_users) {
-					const otherId = r.allowed_users.find(id => id !== uid);
-					if (otherId) {
-						let profile = await getProfile(otherId);
-						if (profile) {
-							name = profile.full_name;
-							avatar = profile.cached_avatar || profile.avatar_url;
-						}
-					}
-				}
-				processedRooms.push({
-					...r,
-					display_name: name,
-					display_avatar: avatar
-				});
-			}
-			state.allRooms = processedRooms;
-			window.filterRooms();
-		}
-		if (!navigator.onLine || state.isOfflineMode) return;
-		window.setLoading(true, "Syncing...");
-		const {
-			data: rooms,
-			error
-		} = await db.from('rooms').select('*').order('created_at', {
-			ascending: false
-		});
-		if (error) {
-			window.toast("Sync failed");
-			window.setLoading(false);
-			return;
-		}
-		if (rooms && rooms.length > 0) {
-			const uid = state.user.id;
-			const processedRooms = [];
-			for (const r of rooms) {
-				if (!r || !r.id) continue;
-				if (r.is_direct && r.allowed_users) {
-					const otherId = r.allowed_users.find(id => id !== uid);
-					if (otherId) {
-						const profile = await getProfile(otherId);
-						if (profile) {
-							state.profileCache[otherId] = profile;
-							await localDB.put('profiles', profile);
-							processedRooms.push({
-								...r,
-								display_name: profile.full_name,
-								display_avatar: profile.cached_avatar || profile.avatar_url
-							});
-						} else {
-							processedRooms.push({
-								...r,
-								display_name: 'Unknown',
-								display_avatar: null
-							});
-						}
-					} else processedRooms.push({
-						...r,
-						display_name: 'User',
-						display_avatar: null
-					});
-				} else processedRooms.push({
-					...r,
-					display_name: r.name,
-					display_avatar: r.avatar_url
-				});
-			}
-			state.allRooms = processedRooms;
-			await localDB.clear('rooms');
-			await localDB.putAll('rooms', rooms);
-			await localDB.saveUserTree(uid, rooms);
-			window.filterRooms();
-		}
-		window.setLoading(false);
-		updateLobbyAvatar();
-	};
+window.loadRooms = async () => {
+    if (!state.user) return;
+    const uid = state.user.id;
+    const processRooms = async (rooms) => {
+        const processed = [];
+        for (const r of rooms) {
+            if (!r || !r.id) continue;
+            let name = r.name, avatar = r.avatar_url;
+            if (r.is_direct && r.allowed_users) {
+                const otherId = r.allowed_users.find(id => id !== uid);
+                if (otherId) {
+                    const profile = await getProfile(otherId);
+                    if (profile) {
+                        name = profile.full_name;
+                        avatar = profile.cached_avatar || profile.avatar_url;
+                    }
+                }
+            }
+            processed.push({ ...r, display_name: name, display_avatar: avatar });
+        }
+        return processed;
+    };
+    const localRooms = await localDB.getAll('rooms');
+    if (localRooms.length > 0) { state.allRooms = await processRooms(localRooms); window.filterRooms(); }
+    if (!navigator.onLine || state.isOfflineMode) return;
+    window.setLoading(true, "Syncing...");
+    const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false });
+    if (error) { window.toast("Sync failed"); window.setLoading(false); return; }
+    if (rooms && rooms.length > 0) {
+        await localDB.clear('rooms'); await localDB.putAll('rooms', rooms);
+        state.allRooms = await processRooms(rooms);
+        await localDB.saveUserTree(uid, rooms);
+        window.filterRooms();
+    }
+    window.setLoading(false); updateLobbyAvatar();
+};
 	window.filterRooms = () => {
 		const q = $('search-bar').value.toLowerCase();
 		const list = $('room-list');
