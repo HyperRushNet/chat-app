@@ -377,34 +377,28 @@ const cacheAvatar = async (profile) => {
         return profile;
     }
 };
-	const getProfile = async (userId) => {
-		if (!userId) return null;
-		if (state.profileCache[userId]) return state.profileCache[userId];
-		let profile = await localDB.get('profiles', userId);
-		if (profile) {
-			state.profileCache[userId] = profile;
-			if (navigator.onLine && !state.isOfflineMode && profile.avatar_url && !profile.cached_avatar) {
-				cacheAvatar(profile).then(updated => {
-					state.profileCache[userId] = updated;
-				});
-			}
-			return profile;
-		}
-		if (navigator.onLine && !state.isOfflineMode) {
-			try {
-				const {
-					data
-				} = await db.from('profiles').select('full_name, avatar_url').eq('id', userId).single();
-				if (data) {
-					state.profileCache[userId] = data;
-					await localDB.put('profiles', data);
-					if (data.avatar_url) cacheAvatar(data);
-					return data;
-				}
-			} catch (e) {}
-		}
-		return null;
-	};
+const getProfile = async (userId) => {
+    if (!userId) return null;
+    if (state.profileCache[userId]) return state.profileCache[userId];
+    let profile = await localDB.get('profiles', userId);
+    if (profile) {
+        state.profileCache[userId] = profile;
+        if (navigator.onLine && !state.isOfflineMode && profile.avatar_url && !profile.cached_avatar) cacheAvatar(profile).then(updated => state.profileCache[userId] = updated);
+        return profile;
+    }
+    if (navigator.onLine && !state.isOfflineMode) {
+        try {
+            const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', userId).single();
+            if (data) {
+                state.profileCache[userId] = data;
+                await localDB.put('profiles', data);
+                if (data.avatar_url) cacheAvatar(data);
+                return data;
+            }
+        } catch (e) {}
+    }
+    return null;
+};
 	const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
 	const workerBlob = new Blob([
 		workerCode
@@ -1271,24 +1265,21 @@ const cacheAvatar = async (profile) => {
 		navigator.clipboard.writeText(state.currentRoomId);
 		window.toast("Room ID Copied");
 	};
-	const updateLobbyAvatar = async () => {
-		if (!state.user) return;
-		const btn = $('lobby-avatar-btn');
-		if (!btn) return;
-		let avatar = state.user.user_metadata?.avatar_url;
-		let name = state.user.user_metadata?.full_name;
-		if (!avatar || !name) {
-			const {
-				data
-			} = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single();
-			if (data) {
-				avatar = data.avatar_url;
-				name = data.full_name;
-			}
-		}
-		if (avatar) btn.innerHTML = `<img src="${avatar}">`;
-		else btn.innerText = (name || "U").charAt(0);
-	};
+const updateLobbyAvatar = async () => {
+    if (!state.user) return;
+    const btn = $('lobby-avatar-btn');
+    if (!btn) return;
+    let avatar = state.user.user_metadata?.avatar_url;
+    let name = state.user.user_metadata?.full_name;
+    if (!avatar || !name) {
+        const { data } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single();
+        if (data) { avatar = data.avatar_url; name = data.full_name; }
+    }
+    const profile = await getProfile(state.user.id);
+    if (profile && profile.cached_avatar) avatar = profile.cached_avatar;
+    if (avatar) btn.innerHTML = `<img src="${avatar}">`;
+    else btn.innerText = (name || "U").charAt(0);
+};
 	const getDateLabel = (d) => {
 		const now = new Date();
 		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1589,249 +1580,82 @@ const cacheAvatar = async (profile) => {
 		window.loadRooms();
 		window.setLoading(false);
 	};
-	window.openVault = async (id, n, rawPassword, roomSalt) => {
-		if (!state.user) return window.toast("Please login first");
-		window.setLoading(true, "Opening chat...");
-		state.currentRoomPassword = rawPassword;
-		if (state.chatChannel) state.chatChannel.unsubscribe();
-		state.currentRoomId = id;
-		state.lastRenderedDateLabel = null;
-		state.oldestMessageTimestamp = null;
-		state.hasMoreHistory = true;
-		state.isLoadingHistory = false;
-		const chatContainer = $('chat-messages');
-		chatContainer.innerHTML = '';
-		chatContainer.onscroll = handleScroll;
-		let roomData = await localDB.get('rooms', id);
-		if (navigator.onLine && !state.isOfflineMode) {
-			const {
-				data: netRoom
-			} = await db.from('rooms').select('*').eq('id', id).single();
-			if (netRoom && netRoom.id) {
-				roomData = netRoom;
-				await localDB.put('rooms', roomData);
-			}
-		}
-		if (!roomData) {
-			window.setLoading(false);
-			return window.toast("Room data not found");
-		}
-		state.currentRoomData = roomData;
-		const isDirect = roomData?.is_direct;
-		let displayTitle = roomData.name;
-		let displayAvatar = roomData?.avatar_url;
-		if (isDirect) {
-			const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id);
-			if (otherUserId) {
-				const profile = await getProfile(otherUserId);
-				if (profile) {
-					displayTitle = profile.full_name;
-					displayAvatar = profile.cached_avatar || profile.avatar_url;
-				}
-			}
-		}
-		$('chat-title').innerText = displayTitle;
-		const avEl = $('chat-avatar-display');
-		if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`;
-		else avEl.innerText = displayTitle.charAt(0).toUpperCase();
-		const editBtn = $('info-edit-btn');
-		if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex';
-		else editBtn.style.display = 'none';
-		const keySource = rawPassword ? (rawPassword + id) : id;
-		await deriveKey(keySource, roomData?.salt);
-		let finalMessages = [];
-		if (navigator.onLine && !state.isOfflineMode) {
-			const {
-				data
-			} = await db.from('messages').select('*').eq('room_id', id).order('created_at', {
-				ascending: false
-			}).limit(CONFIG.maxMessages);
-			if (data && data.length > 0) {
-				data.reverse();
-				try {
-					const res = await workerExec('decryptHistory', {
-						messages: data
-					});
-					const validMsgs = res.results.filter(m => !m.error);
-					const messagesWithRoomId = validMsgs.map(m => ({
-						...m,
-						room_id: id
-					}));
-					await localDB.clearRoomMessages(id);
-					await localDB.putAll('messages', messagesWithRoomId);
-					finalMessages = validMsgs;
-				} catch (e) {
-					console.error(e);
-				}
-			}
-		}
-		if (finalMessages.length === 0) {
-			finalMessages = await localDB.getRoomMessages(id);
-		}
-		window.nav('scr-chat');
-		if (finalMessages.length > 0) {
-			if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
-			let html = '';
-			let prev = null;
-			finalMessages.forEach(m => {
-				html += renderMsg(m, prev, isDirect);
-				prev = m;
-			});
-			chatContainer.innerHTML = html;
-		}
-		checkChatEmpty();
-		$('chat-input').style.display = 'block';
-		$('send-btn').style.display = 'flex';
-		if (!navigator.onLine || state.isOfflineMode) {
-			setConnectionVisuals('offline');
-		} else {
-			setConnectionVisuals('connecting');
-			await new Promise((resolve) => {
-				if (state.presenceChannel) state.presenceChannel.unsubscribe();
-				const myId = state.user.id;
-				state.presenceChannel = db.channel(`room_presence:${id}`, {
-					config: {
-						presence: {
-							key: myId
-						}
-					}
-				});
-				state.presenceChannel.on('presence', {
-					event: 'sync'
-				}, queryOnlineCountImmediately).subscribe(async (status) => {
-					if (status === 'SUBSCRIBED') {
-						state.isPresenceSubscribed = true;
-						queryOnlineCountImmediately();
-						await state.presenceChannel.track({
-							user_id: myId,
-							online_at: new Date().toISOString()
-						});
-						queryOnlineCountImmediately();
-						if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-						state.heartbeatInterval = setInterval(async () => {
-							if (state.presenceChannel) await state.presenceChannel.track({
-								user_id: myId,
-								online_at: new Date().toISOString()
-							});
-						}, CONFIG.presenceHeartbeatMs);
-					}
-					if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') resolve();
-				});
-			});
-			await new Promise((resolve) => {
-				if (state.chatChannel) state.chatChannel.unsubscribe();
-				state.chatChannel = db.channel(`room_chat_${id}`, {
-					config: {
-						broadcast: {
-							self: true
-						}
-					}
-				});
-				state.chatChannel.on('postgres_changes', {
-					event: 'INSERT',
-					schema: 'public',
-					table: 'messages',
-					filter: `room_id=eq.${id}`
-				}, async (payload) => {
-					const m = payload.new;
-					if (m && state.currentRoomId) {
-						if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) {
-							state.recentlySentIds.delete(m.id);
-							return;
-						}
-						try {
-							const decRes = await workerExec('decryptSingle', {
-								content: m.content
-							});
-							if (decRes.result) {
-								const msgObj = {
-									...m,
-									...decRes.result,
-									room_id: m.room_id
-								};
-								const container = $('chat-messages');
-								const lastMsg = container.querySelector('.msg:last-of-type');
-								let prevMsg = null;
-								if (lastMsg) prevMsg = {
-									user_id: lastMsg.dataset.uid,
-									created_at: lastMsg.dataset.time
-								};
-								container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect));
-								container.scrollTop = container.scrollHeight;
-								checkChatEmpty();
-								await localDB.put('messages', msgObj);
-							}
-						} catch (e) {
-							console.error("Decryption failed for new message", e);
-						}
-					}
-				}).on('postgres_changes', {
-					event: 'UPDATE',
-					schema: 'public',
-					table: 'messages',
-					filter: `room_id=eq.${id}`
-				}, async (payload) => {
-					const m = payload.new;
-					const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`);
-					if (msgEl) {
-						try {
-							const decRes = await workerExec('decryptSingle', {
-								content: m.content
-							});
-							const deleted = m.content === '/';
-							if (deleted) {
-								msgEl.classList.add('msg-deleted');
-								const contentDiv = msgEl.querySelector('div:not(.msg-header)');
-								if (contentDiv) {
-									contentDiv.className = 'deleted-text';
-									contentDiv.innerText = "Message deleted";
-								}
-								const timeSpan = msgEl.querySelector('.msg-time');
-								if (timeSpan) {
-									const editedTag = timeSpan.querySelector('.edited-tag');
-									if (editedTag) editedTag.remove();
-								}
-								msgEl.dataset.text = "";
-							} else if (decRes.result) {
-								const prevEl = msgEl.previousElementSibling;
-								let prevData = null;
-								if (prevEl && prevEl.classList.contains('msg')) prevData = {
-									user_id: prevEl.dataset.uid,
-									created_at: prevEl.dataset.time
-								};
-								msgEl.outerHTML = renderMsg({
-									...m,
-									...decRes.result,
-									room_id: m.room_id,
-									updated_at: m.updated_at
-								}, prevData, isDirect);
-							}
-							const cached = await localDB.get('messages', m.id);
-							if (cached) {
-								cached.deleted = deleted;
-								cached.text = decRes.result?.text;
-								await localDB.put('messages', cached);
-							}
-						} catch (e) {
-							console.error("Decryption failed for update", e);
-						}
-					}
-				}).subscribe(
-					(status) => {
-						state.isChatChannelReady = (status === 'SUBSCRIBED');
-						if (status === 'SUBSCRIBED') {
-							state.isReconnecting = false;
-							setConnectionVisuals('connected');
-						}
-						if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') resolve();
-					});
-			});
-		}
-		setTimeout(() => {
-			chatContainer.scrollTop = chatContainer.scrollHeight;
-			window.setLoading(false);
-		}, 100);
-	};
+window.openVault = async (id, n, rawPassword, roomSalt) => {
+    if (!state.user) return window.toast("Please login first");
+    window.setLoading(true, "Opening chat...");
+    state.currentRoomPassword = rawPassword;
+    if (state.chatChannel) state.chatChannel.unsubscribe();
+    state.currentRoomId = id;
+    state.lastRenderedDateLabel = null;
+    state.oldestMessageTimestamp = null;
+    state.hasMoreHistory = true;
+    state.isLoadingHistory = false;
+    const chatContainer = $('chat-messages');
+    chatContainer.innerHTML = '';
+    chatContainer.onscroll = handleScroll;
+    let roomData = await localDB.get('rooms', id);
+    if (navigator.onLine && !state.isOfflineMode) {
+        const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
+        if (netRoom && netRoom.id) { roomData = netRoom; await localDB.put('rooms', roomData); }
+    }
+    if (!roomData) { window.setLoading(false); return window.toast("Room data not found"); }
+    state.currentRoomData = roomData;
+    const isDirect = roomData?.is_direct;
+    let displayTitle = roomData.name;
+    let displayAvatar = roomData?.avatar_url;
+    if (isDirect) {
+        const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id);
+        if (otherUserId) {
+            const profile = await getProfile(otherUserId);
+            if (profile) {
+                displayTitle = profile.full_name;
+                displayAvatar = profile.cached_avatar || profile.avatar_url;
+            }
+        }
+    }
+    $('chat-title').innerText = displayTitle;
+    const avEl = $('chat-avatar-display');
+    if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`;
+    else avEl.innerText = displayTitle.charAt(0).toUpperCase();
+    const editBtn = $('info-edit-btn');
+    if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex';
+    else editBtn.style.display = 'none';
+    const keySource = rawPassword ? (rawPassword + id) : id;
+    await deriveKey(keySource, roomData?.salt);
+    let finalMessages = [];
+    if (navigator.onLine && !state.isOfflineMode) {
+        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages);
+        if (data && data.length > 0) {
+            data.reverse();
+            try {
+                const res = await workerExec('decryptHistory', { messages: data });
+                const validMsgs = res.results.filter(m => !m.error);
+                const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
+                await localDB.clearRoomMessages(id);
+                await localDB.putAll('messages', messagesWithRoomId);
+                finalMessages = validMsgs;
+            } catch (e) { console.error(e); }
+        }
+    }
+    if (finalMessages.length === 0) finalMessages = await localDB.getRoomMessages(id);
+    window.nav('scr-chat');
+    if (finalMessages.length > 0) {
+        if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
+        let html = '', prev = null;
+        finalMessages.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; });
+        chatContainer.innerHTML = html;
+    }
+    checkChatEmpty();
+    $('chat-input').style.display = 'block';
+    $('send-btn').style.display = 'flex';
+    if (!navigator.onLine || state.isOfflineMode) setConnectionVisuals('offline');
+    else {
+        setConnectionVisuals('connecting');
+        await initRoomPresence(id);
+        await setupChatChannel(id);
+    }
+    setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; window.setLoading(false); }, 100);
+};
 	const applyRateLimit = () => {
 		const now = Date.now();
 		if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false;
