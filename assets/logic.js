@@ -726,6 +726,9 @@ export function initHRNchat(customConfig = {}) {
 
 window.openVault = async (id, n, rawPassword, roomSalt) => { 
     if (!state.user) return window.toast("Please login first"); 
+    
+    window.setLoading(true, "Opening chat..."); 
+    
     state.currentRoomPassword = rawPassword; 
     if (state.chatChannel) state.chatChannel.unsubscribe(); 
     state.currentRoomId = id; 
@@ -733,32 +736,29 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
     state.oldestMessageTimestamp = null; 
     state.hasMoreHistory = true; 
     state.isLoadingHistory = false; 
-    $('chat-messages').innerHTML = ''; 
-    $('chat-messages').onscroll = handleScroll; 
+    
+    const chatContainer = $('chat-messages');
+    chatContainer.innerHTML = ''; 
+    chatContainer.onscroll = handleScroll; 
 
     let roomData = await localDB.get('rooms', id);
     
-    if(!roomData && !navigator.onLine && !state.isOfflineMode) {
-        return window.toast("Offline & No Cache");
-    }
-
     if (navigator.onLine && !state.isOfflineMode) {
-        setConnectionVisuals('connecting');
-        window.setLoading(true, "Syncing Room...");
         const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
         if(netRoom && netRoom.id) {
             roomData = netRoom;
-            state.currentRoomData = roomData;
             await localDB.put('rooms', roomData);
         }
+    }
+    
+    if (!roomData) {
         window.setLoading(false);
-    } else {
-        state.currentRoomData = roomData;
+        return window.toast("Room data not found");
     }
 
-    if (!roomData) return window.toast("Room data not found");
-
+    state.currentRoomData = roomData;
     const isDirect = roomData?.is_direct; 
+    
     let displayTitle = roomData.name; 
     let displayAvatar = roomData?.avatar_url; 
 
@@ -769,49 +769,26 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
             if (profile) { 
                 displayTitle = profile.full_name; 
                 displayAvatar = profile.cached_avatar || profile.avatar_url; 
-            } else {
-                displayTitle = "Unknown User";
             }
-        } else {
-            displayTitle = "Private Chat";
-        }
+        } 
     } 
     
     $('chat-title').innerText = displayTitle; 
     const avEl = $('chat-avatar-display'); 
     if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`; else avEl.innerText = displayTitle.charAt(0).toUpperCase(); 
+    
     const editBtn = $('info-edit-btn'); 
     if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex'; else editBtn.style.display = 'none'; 
 
     const keySource = rawPassword ? (rawPassword + id) : id; 
     await deriveKey(keySource, roomData?.salt); 
 
-    if (!navigator.onLine || state.isOfflineMode) {
-        setConnectionVisuals('offline');
-    }
-
-    const cachedMsgs = await localDB.getRoomMessages(id);
-    if (cachedMsgs.length > 0) {
-        const b = $('chat-messages'); 
-        let html = ''; let prev = null; 
-        cachedMsgs.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; }); 
-        b.innerHTML = html;
-        b.scrollTop = b.scrollHeight;
-        checkChatEmpty(); 
-        $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
-        window.nav('scr-chat');
-    } else {
-        $('chat-input').style.display = 'block'; $('send-btn').style.display = 'flex'; 
-        window.nav('scr-chat');
-        checkChatEmpty();
-    }
+    let finalMessages = [];
 
     if (navigator.onLine && !state.isOfflineMode) {
-        setConnectionVisuals('connecting');
         const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages); 
         if (data && data.length > 0) { 
             data.reverse(); 
-            if (data.length > 0) state.oldestMessageTimestamp = data[0].created_at; 
             try {
                 const res = await workerExec('decryptHistory', { messages: data });
                 const validMsgs = res.results.filter(m => !m.error); 
@@ -819,25 +796,44 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
                 
                 await localDB.clearRoomMessages(id);
                 await localDB.putAll('messages', messagesWithRoomId);
-
-                const chatContainer = $('chat-messages');
-                const alreadyRendered = chatContainer.children.length > 0;
-
-                if (!alreadyRendered) {
-                    let html = ''; let prev = null; 
-                    validMsgs.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; }); 
-                    chatContainer.innerHTML = html;
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                    checkChatEmpty(); 
-                }
+                
+                finalMessages = validMsgs;
             } catch(e) { console.error(e); }
-        } else { 
-            await localDB.clearRoomMessages(id);
-            state.hasMoreHistory = false; checkChatEmpty(); 
         } 
     }
+
+    if (finalMessages.length === 0) {
+        finalMessages = await localDB.getRoomMessages(id);
+    }
+
+    if (finalMessages.length > 0) {
+        if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
+        
+        let html = ''; let prev = null; 
+        finalMessages.forEach(m => { 
+            html += renderMsg(m, prev, isDirect); 
+            prev = m; 
+        }); 
+        chatContainer.innerHTML = html;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    checkChatEmpty();
+    
+    $('chat-input').style.display = 'block'; 
+    $('send-btn').style.display = 'flex'; 
+    
+    if (!navigator.onLine || state.isOfflineMode) {
+        setConnectionVisuals('offline');
+    } else {
+        setConnectionVisuals('connecting');
+    }
+
     if(!state.isOfflineMode) setupChatChannel(id); 
     if(!state.isOfflineMode) initRoomPresence(id); 
+
+    window.nav('scr-chat');
+    window.setLoading(false); 
 };
     
     const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
