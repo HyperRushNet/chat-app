@@ -1,10 +1,10 @@
 /* 
-*  © 2026 
-*  GitHub: https://github.com/HyperRushNet/chat-app
-*  Version: 1.0.5 
-*  assets/logic.js 
-*  MIT License
-*/
+ *  © 2026 
+ *  GitHub: https://github.com/HyperRushNet/chat-app
+ *  Version: 1.0.5 
+ *  assets/logic.js 
+ *  MIT License
+ */
 
 import {
 	createClient
@@ -523,11 +523,10 @@ export function initHRNchat(customConfig = {}) {
 	};
 	const setupGlobalPresence = async (userId) => {
 		if (state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
-		if (!userId) return;
 		state.globalPresenceChannel = db.channel('global-presence', {
 			config: {
 				presence: {
-					key: userId
+					key: userId || `listener_${state.tabId}`
 				}
 			}
 		});
@@ -535,7 +534,9 @@ export function initHRNchat(customConfig = {}) {
 			event: 'sync'
 		}, () => {
 			const presState = state.globalPresenceChannel.presenceState();
-			state.globalOnlineCount = Object.keys(presState).length;
+			const allPresences = Object.values(presState).flat();
+			const uniqueUserIds = new Set(allPresences.map(p => p.user_id).filter(id => id));
+			state.globalOnlineCount = uniqueUserIds.size;
 			state.globalPresenceReady = true;
 			schedulePresenceUpdate();
 		}).subscribe(async (status) => {
@@ -2556,4 +2557,3 @@ export function initHRNchat(customConfig = {}) {
 	};
 	init();
 }
-
