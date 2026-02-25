@@ -22,7 +22,7 @@ export function initHRNchat(customConfig = {}) {
 		presenceHeartbeatMs: customConfig.presenceHeartbeatMs || 10000,
 		verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
 		maxMessageLength: customConfig.maxMessageLength || 2000,
-		proxyUrl: customConfig.proxyUrl || "https://corsproxy.io/"
+		proxyUrl: customConfig.proxyUrl || "https://vercel-serverless-hrn.vercel.app/api/CORSproxy.js?url="
 	};
 	const AVATARS = ['./assets/avatars/1.png', './assets/avatars/2.png', './assets/avatars/3.png', './assets/avatars/4.png', './assets/avatars/5.jpg'];
 	const DB_NAME = 'HRN_LOCAL_DB';
