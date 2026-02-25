@@ -806,10 +806,10 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
         finalMessages = await localDB.getRoomMessages(id);
     }
 
-    // Eerst het scherm wisselen (zodat de container zichtbaar wordt)
+    // Eerst het scherm wisselen
     window.nav('scr-chat');
 
-    // Daarna pas renderen en scrollen (loader zit er nog overheen)
+    // Content renderen
     if (finalMessages.length > 0) {
         if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
         
@@ -819,7 +819,6 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
             prev = m; 
         }); 
         chatContainer.innerHTML = html;
-        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
     
     checkChatEmpty();
@@ -827,6 +826,7 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
     $('chat-input').style.display = 'block'; 
     $('send-btn').style.display = 'flex'; 
     
+    // Wachten op verbindingen (indien online)
     if (!navigator.onLine || state.isOfflineMode) {
         setConnectionVisuals('offline');
     } else {
@@ -891,7 +891,11 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
         });
     }
 
-    window.setLoading(false); 
+    // Pas verbergen en scrollen als alles echt klaar is
+    setTimeout(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        window.setLoading(false); 
+    }, 100);
 };
     
     const applyRateLimit = () => { const now = Date.now(); if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false; return true; };
