@@ -19,8 +19,6 @@ export function initHRNchat(customConfig = {}) {
     const DB_NAME = 'HRN_LOCAL_DB';
     const DB_VERSION = 4; 
 
-    
-
     const localDB = {
         db: null,
         async init() {
@@ -137,7 +135,8 @@ export function initHRNchat(customConfig = {}) {
         currentRoomPassword: null, reconnectTimer: null, isReconnecting: false, deleteConfirmTimeout: null,
         profileCache: {}, editingMessage: null, contextTarget: null, carouselIndex: 0, connectionStrength: '4g',
         isBackgrounded: false, globalPresenceReady: false, connectionTimeoutTimer: null, presenceUpdateTimer: null,
-        recentlySentIds: new Set(), isNavigating: false, isOfflineMode: false, isProcessingQueue: false
+        recentlySentIds: new Set(), isNavigating: false, isOfflineMode: false, isProcessingQueue: false,
+        stabilityCheckPassed: false, stabilizationTimer: null
     };
 
     let toastQueue = []; let toastVisible = false;
@@ -147,7 +146,7 @@ export function initHRNchat(customConfig = {}) {
     const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
     const truncateText = (text, maxLength = 20) => !text ? "" : text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
     const $ = id => document.getElementById(id);
-    const getTimeFromDate = (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const getTimeFromDate = (d) => new Date(d).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
 
     const setConnectionVisuals = (status) => {
         const avatar = $('chat-avatar-display'); if (!avatar) return;
@@ -170,12 +169,12 @@ export function initHRNchat(customConfig = {}) {
             btn.disabled = false;
             btn.style.opacity = "1";
             input.disabled = false;
-            input.placeholder = "Message...";
+            input.placeholder = "Bericht...";
         } else {
             btn.disabled = true;
             btn.style.opacity = "0.5";
             input.disabled = true;
-            input.placeholder = !navigator.onLine ? "Offline" : (state.isOfflineMode ? "Offline Mode" : "Connecting...");
+            input.placeholder = !navigator.onLine ? "Offline" : (state.isOfflineMode ? "Offline Modus" : "Verbinden...");
         }
     };
 
@@ -190,7 +189,7 @@ export function initHRNchat(customConfig = {}) {
         if (isOnline || state.isOfflineMode) {
             const roomCount = state.lastKnownOnlineCount || 0;
             displayRoomCount = state.currentRoomData?.is_direct ? (roomCount >= 2 ? "Online" : "Offline") : `${roomCount}`;
-            displayGlobalCount = state.isOfflineMode ? "Local" : `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
+            displayGlobalCount = state.isOfflineMode ? "Lokaal" : `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
             roomStatusColor = state.currentRoomData?.is_direct ? (roomCount >= 2 ? 'var(--success)' : 'var(--text-mute)') : 'var(--success)';
         }
 
@@ -212,7 +211,7 @@ export function initHRNchat(customConfig = {}) {
 
     const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
     window.toast = m => { toastQueue.push(m); processToastQueue(); };
-    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { loader.classList.add('active'); } else { loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
+    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (s) { loader.classList.add('active'); loader.classList.remove('hidden'); } else { loader.classList.add('hidden'); loader.classList.remove('active'); } if (text) loaderText.innerText = text; else loaderText.innerText = "Laden..."; };
 
     const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
 
@@ -271,7 +270,7 @@ export function initHRNchat(customConfig = {}) {
     const generateSalt = () => { const arr = new Uint8Array(16); crypto.getRandomValues(arr); return Array.from(arr, b => b.toString(16).padStart(2, '0')).join(''); };
     const sha256 = async (text) => { const buffer = new TextEncoder().encode(text); const hashBuffer = await crypto.subtle.digest('SHA-256', buffer); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); };
     const deriveKey = (pass, salt) => workerExec('deriveKey', { password: pass, salt: salt });
-    const encryptMessage = async (text) => { const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); const res = await workerExec('encrypt', { text: time + "|" + text }); return res.result; };
+    const encryptMessage = async (text) => { const time = new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}); const res = await workerExec('encrypt', { text: time + "|" + text }); return res.result; };
 
     const getConnectionTimeout = () => { const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (connection) { const type = connection.effectiveType; if (type === '4g') return 5000; if (type === '3g') return 10000; if (type === '2g') return 20000; if (type === 'slow-2g') return 30000; } return 8000; };
 
@@ -307,7 +306,7 @@ export function initHRNchat(customConfig = {}) {
     window.goOnline = async () => {
         $('internet-detected-overlay').classList.remove('active');
         state.isOfflineMode = false;
-        window.setLoading(true, "Connecting...");
+        window.setLoading(true, "Verbinden...");
         
         const storedEmail = localStorage.getItem('hrn_auth_email');
         const storedPass = localStorage.getItem('hrn_auth_pass');
@@ -324,10 +323,10 @@ export function initHRNchat(customConfig = {}) {
                 
                 window.loadRooms();
                 window.setLoading(false);
-                window.toast("Back Online");
+                window.toast("Terug Online");
             } else {
                 window.setLoading(false);
-                window.toast("Re-login failed");
+                window.toast("Opnieuw inloggen mislukt");
                 window.nav('scr-login');
             }
         } else {
@@ -339,7 +338,7 @@ export function initHRNchat(customConfig = {}) {
     window.stayOffline = () => {
         $('internet-detected-overlay').classList.remove('active');
         state.isOfflineMode = true;
-        window.toast("Staying in Offline Mode");
+        window.toast("Blijft in Offline Modus");
     };
 
     const handleReconnect = async () => {
@@ -366,14 +365,14 @@ export function initHRNchat(customConfig = {}) {
                     window.loadRooms();
                     
                     if(overlay) overlay.classList.remove('active');
-                    window.toast("Synced successfully");
+                    window.toast("Synchronisatie succesvol");
                 } else {
                     if(overlay) overlay.classList.remove('active');
-                    window.toast("Login failed. Try again.");
+                    window.toast("Inloggen mislukt. Probeer opnieuw.");
                 }
             } catch(e) {
                 if(overlay) overlay.classList.remove('active');
-                window.toast("Connection error.");
+                window.toast("Verbindingsfout.");
             }
         } else {
             if(overlay) overlay.classList.remove('active');
@@ -401,16 +400,16 @@ export function initHRNchat(customConfig = {}) {
                         
                         await localDB.put('messages', msgObj); 
                     }
-                } catch(e) { console.error("Decryption failed for new message", e); }
+                } catch(e) { console.error("Ontsleutelen mislukt voor nieuw bericht", e); }
             }
         }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
                 try {
                     const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
-                    if(deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; } const timeSpan = msgEl.querySelector('.msg-time'); if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); } msgEl.dataset.text = "";  }
+                    if(deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Bericht verwijderd"; } const timeSpan = msgEl.querySelector('.msg-time'); if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); } msgEl.dataset.text = "";  }
                     else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, room_id: m.room_id, updated_at: m.updated_at }, prevData, isDirect);  }
                     const cached = await localDB.get('messages', m.id); if(cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); }
-                } catch(e) { console.error("Decryption failed for update", e); }
+                } catch(e) { console.error("Ontsleutelen mislukt voor update", e); }
             }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
@@ -484,9 +483,9 @@ export function initHRNchat(customConfig = {}) {
     const showContextMenu = (e, msgEl) => { if(!msgEl || !state.user) return; if(msgEl.classList.contains('msg-deleted')) return; e.preventDefault(); const msgData = { id: msgEl.dataset.id, user_id: msgEl.dataset.uid, created_at: msgEl.dataset.time, text: msgEl.dataset.text }; const menu = $('context-menu'); const editBtn = $('ctx-edit'); const deleteBtn = $('ctx-delete'); const copyBtn = $('ctx-copy'); const isOwner = msgData.user_id === state.user.id; const msgDate = new Date(msgData.created_at); const now = new Date(); const diffMinutes = (now - msgDate) / 60000; const canEdit = isOwner && diffMinutes < 15; const canDelete = isOwner; editBtn.style.display = canEdit ? 'flex' : 'none'; deleteBtn.style.display = canDelete ? 'flex' : 'none'; copyBtn.style.display = 'flex'; state.contextTarget = msgData; let x = e.clientX || e.touches?.[0]?.clientX; let y = e.clientY || e.touches?.[0]?.clientY; menu.style.left = `${x}px`; menu.style.top = `${y}px`; setTimeout(() => { const rect = menu.getBoundingClientRect(); if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`; if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`; menu.classList.add('active');  }, 10); };
     const hideContextMenu = () => { const menu = $('context-menu'); menu.classList.remove('active'); state.contextTarget = null; };
     $('ctx-edit').onclick = () => { if(!state.contextTarget) return; state.editingMessage = state.contextTarget; $('edit-msg-input').value = state.contextTarget.text; window.showOverlayView('edit-message'); $('overlay-container').classList.add('active'); hideContextMenu();  };
-    $('ctx-copy').onclick = () => { if(!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Copied to clipboard"); hideContextMenu(); };
-    $('ctx-delete').onclick = async () => { if(!state.contextTarget || !state.user) return; const idToDelete = state.contextTarget.id; hideContextMenu(); window.setLoading(true, "Deleting..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); if(error) window.toast("Failed: " + error.message); window.setLoading(false); };
-    window.saveEditMessage = async () => { if(!state.editingMessage) return; const v = $('edit-msg-input').value.trim(); if(!v) return window.toast("Message cannot be empty"); const msgDate = new Date(state.editingMessage.created_at); const now = new Date(); if((now - msgDate) / 60000 >= 15) { window.toast("Edit time expired"); window.closeOverlay(); state.editingMessage = null; return; } window.setLoading(true, "Saving..."); try { const enc = await encryptMessage(v); const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id); if (error) window.toast("Failed to edit: " + error.message); else window.toast("Message updated"); } catch(e) { window.toast("Encryption failed"); } state.editingMessage = null; window.setLoading(false); window.closeOverlay(); };
+    $('ctx-copy').onclick = () => { if(!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Gekopieerd naar klembord"); hideContextMenu(); };
+    $('ctx-delete').onclick = async () => { if(!state.contextTarget || !state.user) return; const idToDelete = state.contextTarget.id; hideContextMenu(); window.setLoading(true, "Verwijderen..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); if(error) window.toast("Mislukt: " + error.message); window.setLoading(false); };
+    window.saveEditMessage = async () => { if(!state.editingMessage) return; const v = $('edit-msg-input').value.trim(); if(!v) return window.toast("Bericht mag niet leeg zijn"); const msgDate = new Date(state.editingMessage.created_at); const now = new Date(); if((now - msgDate) / 60000 >= 15) { window.toast("Bewerkingstijd verlopen"); window.closeOverlay(); state.editingMessage = null; return; } window.setLoading(true, "Opslaan..."); try { const enc = await encryptMessage(v); const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id); if (error) window.toast("Bewerken mislukt: " + error.message); else window.toast("Bericht bijgewerkt"); } catch(e) { window.toast("Versleuteling mislukt"); } state.editingMessage = null; window.setLoading(false); window.closeOverlay(); };
     document.addEventListener('click', (e) => { if (state.preventNextClose) { state.preventNextClose = false; return; } hideContextMenu(); });
     const chatContainer = $('chat-messages');
     chatContainer.addEventListener('touchstart', (e) => { const msg = e.target.closest('.msg'); if (!msg) return; state.longPressTimer = setTimeout(() => { showContextMenu(e, msg); state.preventNextClose = true; }, 500); }, {passive: true});
@@ -494,15 +493,15 @@ export function initHRNchat(customConfig = {}) {
     chatContainer.addEventListener('touchmove', () => clearTimeout(state.longPressTimer));
     chatContainer.addEventListener('contextmenu', (e) => { const msg = e.target.closest('.msg'); if (msg) { e.preventDefault(); showContextMenu(e, msg); } });
 
-    const updateAccessSummary = (prefix) => { const summaryEl = $(`${prefix}-access-summary`); if (!summaryEl) return; const count = state.selectedAllowedUsers.length; const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`; summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;  };
+    const updateAccessSummary = (prefix) => { const summaryEl = $(`${prefix}-access-summary`); if (!summaryEl) return; const count = state.selectedAllowedUsers.length; const text = count === 0 ? "Openbare Kamer" : `${count} Gebruiker${count > 1 ? 's' : ''}`; summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`;  };
     const updateStepUI = (context) => { const current = state.currentStep[context]; const indicator = $(`${context}-step-indicator`); if(!indicator) return; indicator.querySelectorAll('.step-dot').forEach((dot, index) => { if(index < current) dot.classList.add('active'); else dot.classList.remove('active'); }); if(context === 'reg') { $('reg-step-1').classList.toggle('active', current === 1); $('reg-step-2').classList.toggle('active', current === 2); $('reg-step-3').classList.toggle('active', current === 3); if(current === 3) initAvatarCarousel(); } else { $(`${context}-step-1`).classList.toggle('active', current === 1); $(`${context}-step-2`).classList.toggle('active', current === 2); }  };
     const initAvatarCarousel = () => { if(!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; updateCarouselPreview(); };
     const updateCarouselPreview = () => { const preview = $('avatar-preview-el'); if(state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`;  };
     window.carouselNav = (direction) => { let index = AVATARS.indexOf(state.selectedAvatar); if(index === -1) index = 0; index += direction; if(index < 0) index = AVATARS.length - 1; if(index >= AVATARS.length) index = 0; state.selectedAvatar = AVATARS[index]; $('r-avatar-url').value = ''; updateCarouselPreview(); };
-    window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar added to carousel"); }; img.src = e.target.result; }; reader.readAsDataURL(file); } };
+    window.handleAvatarUpload = (event) => { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height; const max = 250; if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } } canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); const dataUrl = canvas.toDataURL('image/jpeg', 0.85); state.selectedAvatar = dataUrl; AVATARS.push(dataUrl); $('r-avatar-url').value = ''; updateCarouselPreview(); window.toast("Avatar toegevoegd aan carousel"); }; img.src = e.target.result; }; reader.readAsDataURL(file); } };
 
     window.selectCreateType = (type) => { state.createType = type; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $(`type-${type}`).classList.add('selected'); };
-    window.nextRegStep = () => { if(state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if(!em || p.length < 8) return window.toast("Email and valid password required"); } if(state.currentStep.reg === 2) { const n = $('r-name').value; if(!n) return window.toast("Name required"); } state.currentStep.reg++; updateStepUI('reg'); };
+    window.nextRegStep = () => { if(state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if(!em || p.length < 8) return window.toast("E-mail en geldig wachtwoord vereist"); } if(state.currentStep.reg === 2) { const n = $('r-name').value; if(!n) return window.toast("Naam vereist"); } state.currentStep.reg++; updateStepUI('reg'); };
     window.prevRegStep = () => { state.currentStep.reg--; updateStepUI('reg'); };
     
     window.nextCreateStep = () => { 
@@ -515,9 +514,8 @@ export function initHRNchat(customConfig = {}) {
         const titleEl = $('create-step2-title');
         const subEl = $('create-step2-sub');
 
-        // Safety check to prevent crash
         if (!groupFields || !directFields || !accessSummary || !titleEl || !subEl) {
-            console.error("Create step elements not found");
+            console.error("Creëer stap elementen niet gevonden");
             return;
         }
 
@@ -525,38 +523,38 @@ export function initHRNchat(customConfig = {}) {
             groupFields.classList.add('dn');
             directFields.classList.remove('dn');
             accessSummary.classList.add('dn');
-            titleEl.innerText = "Direct Message";
-            subEl.innerText = "Who are you messaging?";
+            titleEl.innerText = "Direct Bericht";
+            subEl.innerText = "Naar wie stuur je een bericht?";
         } else {
             groupFields.classList.remove('dn');
             directFields.classList.add('dn');
             accessSummary.classList.remove('dn');
-            titleEl.innerText = "Setup";
+            titleEl.innerText = "Instellingen";
             subEl.innerText = "Details";
         }
         updateAccessSummary('create');
     };
     
     window.prevCreateStep = () => { state.currentStep.create = 1; updateStepUI('create'); };
-    window.nextEditStep = () => { const name = $('edit-room-name').value.trim(); if(!name) return window.toast("Name required"); state.currentStep.edit = 2; updateStepUI('edit'); updateAccessSummary('edit'); };
+    window.nextEditStep = () => { const name = $('edit-room-name').value.trim(); if(!name) return window.toast("Naam vereist"); state.currentStep.edit = 2; updateStepUI('edit'); updateAccessSummary('edit'); };
     window.prevEditStep = () => { state.currentStep.edit = 1; updateStepUI('edit'); };
-    window.openAccessManager = async (prefix) => { state.currentPickerContext = prefix; if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) { const ids = state.currentRoomData.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } } renderPickerSelectedUsers(); $('overlay-container').classList.add('active'); window.showOverlayView('access-manager'); $('picker-id-input').value = ''; $('picker-id-input').focus(); };
+    window.openAccessManager = async (prefix) => { state.currentPickerContext = prefix; if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) { const ids = state.currentRoomData.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Onbekend', avatar: p?.avatar_url }; }); } } renderPickerSelectedUsers(); $('overlay-container').classList.add('active'); window.showOverlayView('access-manager'); $('picker-id-input').value = ''; $('picker-id-input').focus(); };
     window.closeAccessManager = () => { if (state.currentPickerContext === 'edit-room') window.showOverlayView('room-settings'); else window.closeOverlay(); updateAccessSummary(state.currentPickerContext); };
-    const renderPickerSelectedUsers = () => { const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers; if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users selected.</div>`; $('picker-count').innerText = '0'; return; } $('picker-count').innerText = displayUsers.length; container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join('');  };
+    const renderPickerSelectedUsers = () => { const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers; if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">Geen gebruikers geselecteerd.</div>`; $('picker-count').innerText = '0'; return; } $('picker-count').innerText = displayUsers.length; container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(Jij)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join('');  };
     window.removePickerUser = (id) => { state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id); renderPickerSelectedUsers(); };
-    window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Enter ID"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added"); window.setLoading(true, "Fetching..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("User not found"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Added"); };
+    window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Voer ID in"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("Gebruiker al toegevoegd"); window.setLoading(true, "Ophalen..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("Gebruiker niet gevonden"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Toegevoegd"); };
     
     const checkMaster = () => new Promise((resolve) => { let masterFound = false; const handler = (ev) => { if (ev.data.type === 'PONG_MASTER') masterFound = true; }; tabChannel.addEventListener('message', handler); tabChannel.postMessage({ type: 'PING_MASTER' }); setTimeout(() => { tabChannel.removeEventListener('message', handler); resolve(masterFound); }, 300); });
     window.forceClaimMaster = () => { if (!state.isMasterTab) { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); $('block-overlay').classList.remove('active'); if(state.user) { setupGlobalPresence(state.user.id); if(state.currentRoomId) attemptHardReconnect(); } } };
-    tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active');  } } if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } };
+    tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Sessie Verplaatst</h1><p class="subtitle" style="margin-bottom:48px">Je bent overgeschakeld naar een nieuw tabblad.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Gebruik Hier</button>`; overlay.classList.add('active');  } } if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } };
     window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
     window.closeOverlay = () => $('overlay-container').classList.remove('active');
     window.showOverlayView = (viewId) => { const panel = document.querySelector('.panel-card'); if(!panel) return; panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); const target = $(`view-${viewId}`); if(target) { target.classList.add('active');  } };
-    window.prepareAccountPage = async () => { if(!state.user) return; const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); const name = profile?.full_name || state.user.user_metadata?.full_name || "User"; const avatar = profile?.avatar_url || state.user.user_metadata?.avatar_url; $('acc-page-name').innerText = name; $('acc-page-type').innerText = "Full Account"; $('acc-page-id').innerText = state.user.id; const avPrev = $('acc-page-avatar'); if(avatar) avPrev.innerHTML = `<img src="${avatar}">`; else avPrev.innerText = name.charAt(0); $('acc-email-wrapper').style.display = 'block'; $('acc-page-email').innerText = state.user.email || "Not set";  };
-    window.copyAccountId = () => { if(!state.user) return; navigator.clipboard.writeText(state.user.id); window.toast("ID Copied"); };
-    window.copyInfoId = () => { if(!state.currentRoomId) return; navigator.clipboard.writeText(state.currentRoomId); window.toast("Room ID Copied"); };
-    const updateLobbyAvatar = async () => { if(!state.user) return; const btn = $('lobby-avatar-btn'); if(!btn) return; let avatar = state.user.user_metadata?.avatar_url; let name = state.user.user_metadata?.full_name; if(!avatar || !name) { const { data } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); if(data) { avatar = data.avatar_url; name = data.full_name; } } if (avatar) btn.innerHTML = `<img src="${avatar}">`; else btn.innerText = (name || "U").charAt(0); };
-    const getDateLabel = (d) => { const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const diff = Math.round((today - target) / 86400000); if (diff === 0) return "Today"; if (diff === 1) return "Yesterday"; if (diff < 7) return d.toLocaleDateString('en-GB', { weekday: 'long' }); return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
+    window.prepareAccountPage = async () => { if(!state.user) return; const { data: profile } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); const name = profile?.full_name || state.user.user_metadata?.full_name || "Gebruiker"; const avatar = profile?.avatar_url || state.user.user_metadata?.avatar_url; $('acc-page-name').innerText = name; $('acc-page-type').innerText = "Volledig Account"; $('acc-page-id').innerText = state.user.id; const avPrev = $('acc-page-avatar'); if(avatar) avPrev.innerHTML = `<img src="${avatar}">`; else avPrev.innerText = name.charAt(0); $('acc-email-wrapper').style.display = 'block'; $('acc-page-email').innerText = state.user.email || "Niet ingesteld";  };
+    window.copyAccountId = () => { if(!state.user) return; navigator.clipboard.writeText(state.user.id); window.toast("ID Gekopieerd"); };
+    window.copyInfoId = () => { if(!state.currentRoomId) return; navigator.clipboard.writeText(state.currentRoomId); window.toast("Kamer ID Gekopieerd"); };
+    const updateLobbyAvatar = async () => { if(!state.user) return; const btn = $('lobby-avatar-btn'); if(!btn) return; let avatar = state.user.user_metadata?.avatar_url; let name = state.user.user_metadata?.full_name; if(!avatar || !name) { const { data } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single(); if(data) { avatar = data.avatar_url; name = data.full_name; } } if (avatar) btn.innerHTML = `<img src="${avatar}">`; else btn.innerText = (name || "G").charAt(0); };
+    const getDateLabel = (d) => { const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const diff = Math.round((today - target) / 86400000); if (diff === 0) return "Vandaag"; if (diff === 1) return "Gisteren"; if (diff < 7) return d.toLocaleDateString('nl-NL', { weekday: 'long' }); return d.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' }); };
     const processText = (text) => { let t = esc(text); const urlRegex = /(https?:\/\/[^\s]+)/g; t = t.replace(urlRegex, (url) => { const safeUrl = url.replace(/[<>"']/g, ''); return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${safeUrl}</a>`; }); return t; };
     const checkChatEmpty = () => { const container = $('chat-messages'); const emptyState = $('chat-empty-state'); const hasMessages = container.querySelector('.msg'); if (emptyState) emptyState.style.display = hasMessages ? 'none' : 'flex'; };
 
@@ -564,51 +562,51 @@ export function initHRNchat(customConfig = {}) {
         const isDeleted = m.deleted === true; const isEdited = m.updated_at && !isDeleted && new Date(m.updated_at).getTime() > new Date(m.created_at).getTime() + 1000; let html = ""; const msgDateObj = new Date(m.created_at); const currentLabel = getDateLabel(msgDateObj);
         const isGroupStart = !prevMsg || prevMsg.user_id !== m.user_id || getDateLabel(new Date(prevMsg.created_at)) !== currentLabel;
         if (isGroupStart && currentLabel !== state.lastRenderedDateLabel) { html += `<div class="date-divider"><span class="date-label">${currentLabel}</span></div>`; state.lastRenderedDateLabel = currentLabel; }
-        const displayName = truncateText(m.user_name || 'User', 18); const msgClass = isOptimistic ? 'msg-optimistic' : (isGroupStart ? 'group-start' : 'msg-continuation'); const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
+        const displayName = truncateText(m.user_name || 'Gebruiker', 18); const msgClass = isOptimistic ? 'msg-optimistic' : (isGroupStart ? 'group-start' : 'msg-continuation'); const sideClass = m.user_id === state.user?.id ? 'me' : 'not-me'; 
         
         const safeText = isDeleted ? '' : esc(m.text || '').replace(/"/g, '&quot;');
         const dataAttrs = `data-id="${m.id}" data-uid="${m.user_id}" data-time="${m.created_at}" data-text="${safeText}"`; 
         
         const timeString = m.time || getTimeFromDate(m.created_at);
         html += `<div class="msg ${sideClass} ${msgClass} ${isDeleted ? 'msg-deleted' : ''} ${isOptimistic ? 'msg-pending' : ''} pop-in" ${dataAttrs}>`;
-        if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Message deleted</div><span class="msg-time">${timeString}</span>`;
-        else { const processedText = processText(m.text); html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Edited)</span>' : ''}</span>`; }
+        if (isDeleted) html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div class="deleted-text">Bericht verwijderd</div><span class="msg-time">${timeString}</span>`;
+        else { const processedText = processText(m.text); html += `${isGroupStart && !isDirect ? `<div class="msg-header"><span class="msg-user">${esc(displayName)}</span></div>` : ''}<div>${processedText}</div><span class="msg-time">${timeString}${isEdited ? '<span class="edited-tag">(Bewerkt)</span>' : ''}</span>`; }
         html += `</div>`; return html;
     };
 
     const handleScroll = () => { const container = $('chat-messages'); if (!container) return; if (container.scrollTop < 50 && !state.isLoadingHistory && state.hasMoreHistory) loadMoreHistory(); };
-    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Loading...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight;  const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
+    const loadMoreHistory = async () => { if (!state.oldestMessageTimestamp || !state.currentRoomId) return; state.isLoadingHistory = true; const container = $('chat-messages'); const oldScrollHeight = container.scrollHeight; container.insertAdjacentHTML('afterbegin', '<div id="history-loader" style="text-align:center;padding:10px;font-size:11px;color:var(--text-mute)">Laden...</div>'); const { data, error } = await db.from('messages').select('*').eq('room_id', state.currentRoomId).lt('created_at', state.oldestMessageTimestamp).order('created_at', { ascending: false }).limit(CONFIG.historyLoadLimit); $('history-loader')?.remove(); if (error || !data || data.length === 0) { state.hasMoreHistory = false; state.isLoadingHistory = false; return; } data.reverse(); try { const res = await workerExec('decryptHistory', { messages: data }); const validMsgs = res.results.filter(m => !m.error); if (validMsgs.length > 0) { state.oldestMessageTimestamp = validMsgs[0].created_at; let html = "", prev = null; validMsgs.forEach(m => { html += renderMsg(m, prev, state.currentRoomData?.is_direct); prev = m; }); container.insertAdjacentHTML('afterbegin', html); container.scrollTop = container.scrollHeight - oldScrollHeight;  const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: state.currentRoomId })); await localDB.putAll('messages', messagesWithRoomId); } } catch(e) { console.error(e); } state.isLoadingHistory = false; };
 
     window.openRoomInfo = async () => { 
         if (!state.currentRoomData) return; 
-        window.setLoading(true, "Loading info..."); 
+        window.setLoading(true, "Info laden..."); 
         const room = state.currentRoomData; 
         const delBtn = $('info-delete-btn'); 
         const creatorRow = $('info-creator-row'); 
         delBtn.style.display = 'none'; 
-        delBtn.innerText = "Delete Chat"; 
+        delBtn.innerText = "Verwijder Chat"; 
         delBtn.classList.remove('active'); 
         if(state.deleteConfirmTimeout) clearTimeout(state.deleteConfirmTimeout); 
         $('info-id').innerText = room.id; 
         const date = new Date(room.created_at); 
         $('info-date').innerText = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`; 
         if (room.is_direct) { 
-            $('info-type').innerText = "Direct Message"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { 
+            $('info-type').innerText = "Direct Bericht"; creatorRow.style.display = 'none'; const otherId = room.allowed_users?.find(id => id !== state.user.id); if (otherId) { 
                 const profile = await getProfile(otherId);
                 if(profile) {
                     $('info-name').innerText = profile.full_name;
                     const avEl = $('info-avatar');
-                    if (profile.cached_avatar || profile.avatar_url) avEl.innerHTML = `<img src="${profile.cached_avatar || profile.avatar_url}">`; else avEl.innerText = (profile.full_name || 'U').charAt(0);
+                    if (profile.cached_avatar || profile.avatar_url) avEl.innerHTML = `<img src="${profile.cached_avatar || profile.avatar_url}">`; else avEl.innerText = (profile.full_name || 'G').charAt(0);
                 } else {
-                    $('info-name').innerText = 'User';
+                    $('info-name').innerText = 'Gebruiker';
                 }
-            } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Group Chat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Unknown'; } else $('info-creator').innerText = 'Unknown'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info');  
+            } delBtn.style.display = 'flex'; } else { $('info-type').innerText = "Groepschat"; $('info-name').innerText = room.name; const avEl = $('info-avatar'); if(room.avatar_url) avEl.innerHTML = `<img src="${room.avatar_url}">`; else avEl.innerText = room.name.charAt(0); creatorRow.style.display = 'flex'; if (room.created_by) { let profile = state.profileCache[room.created_by]; if(!profile) { const { data } = await db.from('profiles').select('full_name').eq('id', room.created_by).single(); profile = data; if(data) state.profileCache[room.created_by] = data; } $('info-creator').innerText = profile?.full_name || 'Onbekend'; } else $('info-creator').innerText = 'Onbekend'; if (room.created_by === state.user.id) delBtn.style.display = 'flex'; } updatePresenceUI(); window.setLoading(false); $('overlay-container').classList.add('active'); window.showOverlayView('room-info');  
     };
-    window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tap again to confirm"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Delete Chat"; }, 3000); } };
+    window.initiateDeleteRoom = () => { const btn = $('info-delete-btn'); if (btn.classList.contains('active')) window.deleteRoom(); else { btn.classList.add('active'); btn.innerText = "Tik opnieuw om te bevestigen"; state.deleteConfirmTimeout = setTimeout(() => { btn.classList.remove('active'); btn.innerText = "Verwijder Chat"; }, 3000); } };
     window.openRoomSettings = async () => { 
         window.closeOverlay(); 
-        if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner"); 
-        window.setLoading(true, "Loading..."); 
+        if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Niet eigenaar"); 
+        window.setLoading(true, "Laden..."); 
         const room = state.currentRoomData; 
         state.currentStep.edit = 1; 
         updateStepUI('edit'); 
@@ -618,11 +616,11 @@ export function initHRNchat(customConfig = {}) {
         const passStatusLabel = $('pass-status-label'); 
         const removePassBtn = $('btn-remove-pass'); 
         if (room.has_password) { 
-            passStatusLabel.innerText = "Active"; 
+            passStatusLabel.innerText = "Actief"; 
             passStatusLabel.style.color = "var(--success)"; 
             removePassBtn.style.display = 'block'; 
         } else { 
-            passStatusLabel.innerText = "Not Set"; 
+            passStatusLabel.innerText = "Niet Ingesteld"; 
             passStatusLabel.style.color = "var(--text-mute)"; 
             removePassBtn.style.display = 'none'; 
         } 
@@ -633,7 +631,7 @@ export function initHRNchat(customConfig = {}) {
             const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); 
             state.selectedAllowedUsers = ids.map(id => { 
                 const p = profiles?.find(pro => pro.id === id); 
-                return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; 
+                return { id: id, name: p?.full_name || 'Onbekend', avatar: p?.avatar_url }; 
             }); 
         } 
         $('overlay-container').classList.add('active'); 
@@ -643,7 +641,7 @@ export function initHRNchat(customConfig = {}) {
     
     window.prepareRemovePassword = () => { 
         state.removePasswordFlag = true; 
-        $('pass-status-label').innerText = "Will be removed"; 
+        $('pass-status-label').innerText = "Wordt verwijderd"; 
         $('pass-status-label').style.color = "var(--danger)"; 
         $('edit-room-pass').value = ''; 
         $('edit-room-pass').disabled = true; 
@@ -659,20 +657,20 @@ export function initHRNchat(customConfig = {}) {
         let allowedUsers = state.selectedAllowedUsers.length > 0 ? state.selectedAllowedUsers.map(u => u.id) : ['*']; 
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); 
         if (!name) { 
-            window.toast("Name required"); 
+            window.toast("Naam vereist"); 
             state.processingAction = false; 
             return; 
         } 
         const room = state.currentRoomData; 
         const isChangingPass = newPass.length > 0; 
         const isRemovingPass = state.removePasswordFlag; 
-        window.setLoading(true, "Saving..."); 
+        window.setLoading(true, "Opslaan..."); 
         const updates = { name, is_visible: isVisible, allowed_users: allowedUsers }; 
         if (isRemovingPass) updates.has_password = false; 
         else if (isChangingPass) updates.has_password = true; 
         const { error: updateError } = await db.from('rooms').update(updates).eq('id', state.currentRoomId); 
         if (updateError) { 
-            window.toast("Failed: " + updateError.message); 
+            window.toast("Mislukt: " + updateError.message); 
             window.setLoading(false); 
             state.processingAction = false; 
             return; 
@@ -689,7 +687,7 @@ export function initHRNchat(customConfig = {}) {
         const { data: updatedRoom } = await db.from('rooms').select('*').eq('id', state.currentRoomId).single(); 
         state.currentRoomData = updatedRoom; 
         $('chat-title').innerText = updatedRoom.name; 
-        window.toast("Saved"); 
+        window.toast("Opgeslagen"); 
         window.closeOverlay(); 
         state.processingAction = false; 
         window.setLoading(false); 
@@ -697,14 +695,14 @@ export function initHRNchat(customConfig = {}) {
     
     window.deleteRoom = async () => { 
         if (!state.currentRoomId) return; 
-        window.setLoading(true, "Deleting..."); 
+        window.setLoading(true, "Verwijderen..."); 
         const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); 
         if (error) { 
-            window.toast("Failed: " + error.message); 
+            window.toast("Mislukt: " + error.message); 
             window.setLoading(false); 
             return; 
         } 
-        window.toast("Deleted"); 
+        window.toast("Verwijderd"); 
         state.currentRoomId = null; 
         state.currentRoomData = null; 
         window.closeOverlay(); 
@@ -714,7 +712,7 @@ export function initHRNchat(customConfig = {}) {
     };
 
     window.openVault = async (id, n, rawPassword, roomSalt) => { 
-        if (!state.user) return window.toast("Please login first"); 
+        if (!state.user) return window.toast("Log eerst in"); 
         state.currentRoomPassword = rawPassword; 
         if (state.chatChannel) state.chatChannel.unsubscribe(); 
         state.currentRoomId = id; 
@@ -728,12 +726,12 @@ export function initHRNchat(customConfig = {}) {
         let roomData = await localDB.get('rooms', id);
         
         if(!roomData && !navigator.onLine && !state.isOfflineMode) {
-            return window.toast("Offline & No Cache");
+            return window.toast("Offline & Geen Cache");
         }
 
         if (navigator.onLine && !state.isOfflineMode) {
             setConnectionVisuals('connecting');
-            window.setLoading(true, "Syncing Room...");
+            window.setLoading(true, "Kamer Synchroniseren...");
             const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
             if(netRoom && netRoom.id) {
                 roomData = netRoom;
@@ -745,7 +743,7 @@ export function initHRNchat(customConfig = {}) {
             state.currentRoomData = roomData;
         }
 
-        if (!roomData) return window.toast("Room data not found");
+        if (!roomData) return window.toast("Kamer data niet gevonden");
 
         const isDirect = roomData?.is_direct; 
         let displayTitle = roomData.name; 
@@ -759,10 +757,10 @@ export function initHRNchat(customConfig = {}) {
                     displayTitle = profile.full_name; 
                     displayAvatar = profile.cached_avatar || profile.avatar_url; 
                 } else {
-                    displayTitle = "Unknown User";
+                    displayTitle = "Onbekende Gebruiker";
                 }
             } else {
-                displayTitle = "Private Chat";
+                displayTitle = "Privéchat";
             }
         } 
         
@@ -835,7 +833,7 @@ export function initHRNchat(customConfig = {}) {
         if (!state.user || !state.currentRoomId || state.processingAction) return; 
         
         if (!navigator.onLine || !state.isChatChannelReady || state.isOfflineMode) {
-            return window.toast("Offline or Reconnecting...");
+            return window.toast("Offline of Opnieuw Verbinden...");
         }
         
         if (!applyRateLimit()) return; 
@@ -844,7 +842,7 @@ export function initHRNchat(customConfig = {}) {
         if(!v) return; 
 
         if (v.length > CONFIG.maxMessageLength) {
-            return window.toast(`Message too long (max ${CONFIG.maxMessageLength} chars)`);
+            return window.toast(`Bericht te lang (max ${CONFIG.maxMessageLength} tekens)`);
         }
 
         state.processingAction = true; 
@@ -861,17 +859,17 @@ export function initHRNchat(customConfig = {}) {
             }]).select().single();
             
             if (error) {
-                window.toast("Failed to send message");
+                window.toast("Bericht verzenden mislukt");
             }
         } catch(err) {
-            window.toast("Encryption or Send failed");
+            window.toast("Versleuteling of Verzenden mislukt");
         }
         
         state.processingAction = false; 
     };
     
     window.leaveChat = async () => { 
-        window.setLoading(true, "Leaving..."); 
+        window.setLoading(true, "Verlaten..."); 
         if(state.chatChannel) state.chatChannel.unsubscribe(); 
         state.chatChannel = null; 
         state.currentRoomId = null; 
@@ -891,11 +889,11 @@ export function initHRNchat(customConfig = {}) {
     window.handleLogin = async (e) => { 
         if (!e || !e.isTrusted) return; 
         if(state.processingAction) return; 
-        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) return window.toast("Server is full. Please try again later."); 
+        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) return window.toast("Server is vol. Probeer het later opnieuw."); 
         state.processingAction = true; 
         const em = $('l-email').value, p = $('l-pass').value; 
-        if(!em || !p) { window.toast("Input missing"); state.processingAction = false; return; } 
-        window.setLoading(true, "Signing In..."); 
+        if(!em || !p) { window.toast("Invoer ontbreekt"); state.processingAction = false; return; } 
+        window.setLoading(true, "Inloggen..."); 
         
         if (!navigator.onLine) {
             const knownUser = await localDB.get('known_users', em);
@@ -908,11 +906,11 @@ export function initHRNchat(customConfig = {}) {
                     window.loadRooms(); 
                     window.setLoading(false); 
                     state.processingAction = false; 
-                    window.toast("Offline Login Successful");
+                    window.toast("Offline Inloggen Succesvol");
                     return;
                 }
             }
-            window.toast("Offline login failed. Check credentials or go online.");
+            window.toast("Offline inloggen mislukt. Controleer gegevens of ga online.");
             window.setLoading(false);
             state.processingAction = false;
             return;
@@ -945,12 +943,12 @@ export function initHRNchat(customConfig = {}) {
         const n=$('r-name').value, em=$('r-email').value.trim().toLowerCase(), p=$('r-pass').value; 
         const customAvatar = $('r-avatar-url').value.trim(); 
         const avatarUrl = customAvatar || state.selectedAvatar; 
-        if(!n || !em || p.length < 8) { window.toast("Check inputs"); state.processingAction = false; return; } 
-        window.setLoading(true, "Sending Code..."); 
+        if(!n || !em || p.length < 8) { window.toast("Controleer invoer"); state.processingAction = false; return; } 
+        window.setLoading(true, "Code Verzenden..."); 
         try { 
             const [r, err] = await safeAwait(fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", email: em }) })); 
             if(r) { 
-                if(r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } 
+                if(r.status === 429) { window.toast "Te vaak geprobeerd"); state.processingAction = false; window.setLoading(false); return; } 
                 const j = await r.json(); 
                 if(j.message === "Code sent") { 
                     sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); 
@@ -958,14 +956,14 @@ export function initHRNchat(customConfig = {}) {
                     startVTimer(); 
                     window.setLoading(false); 
                 } else { 
-                    window.toast(j.message || "Error"); 
+                    window.toast(j.message || "Fout"); 
                     window.setLoading(false); 
                 } 
             } else { 
-                throw new Error("Network error"); 
+                throw new Error("Netwerkfout"); 
             } 
         } catch(err) { 
-            window.toast("API Fallback: Proceeding without code (Dev Mode)"); 
+            window.toast("API Terugval: Doorgaan zonder code (Ontwikkelaarsmodus)"); 
             sessionStorage.setItem('temp_reg', JSON.stringify({n, em, p, avatar: avatarUrl})); 
             window.nav('scr-verify'); 
             startVTimer(); 
@@ -981,20 +979,20 @@ export function initHRNchat(customConfig = {}) {
         if(state.processingAction) return; 
         state.processingAction = true; 
         const code = $('v-code').value, temp = JSON.parse(sessionStorage.getItem('temp_reg')); 
-        if(!temp) { window.toast("Session expired"); state.processingAction = false; return; } 
-        window.setLoading(true, "Verifying..."); 
+        if(!temp) { window.toast("Sessie verlopen"); state.processingAction = false; return; } 
+        window.setLoading(true, "Verifiëren..."); 
         try { 
             const r = await fetch(CONFIG.mailApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", email: temp.em, code: code }) }); 
-            if (r.status === 429) { window.toast("Rate limited"); state.processingAction = false; window.setLoading(false); return; } 
+            if (r.status === 429) { window.toast("Te vaak geprobeerd"); state.processingAction = false; window.setLoading(false); return; } 
             const j = await r.json(); 
             if(j.message === "Verified") { 
                 await finishReg(temp); 
             } else { 
-                window.toast(j.message || "Wrong code"); 
+                window.toast(j.message || "Verkeerde code"); 
                 window.setLoading(false); 
             } 
         } catch(err) { 
-            window.toast("API Fallback: Auto-verifying (Dev Mode)"); 
+            window.toast("API Terugval: Auto-verifiëren (Ontwikkelaarsmodus)"); 
             await finishReg(temp); 
         } 
         state.processingAction = false; 
@@ -1021,17 +1019,17 @@ export function initHRNchat(customConfig = {}) {
         let rawPass = null; 
         if(isDirect) { 
             targetUser = $('c-target-user').value.trim(); 
-            if(!targetUser) { window.toast("User ID required"); state.processingAction = false; return; } 
+            if(!targetUser) { window.toast("Gebruiker ID vereist"); state.processingAction = false; return; } 
             const { data: profile, error } = await db.from('profiles').select('full_name').eq('id', targetUser).single(); 
-            if(error || !profile) { window.toast("User not found"); state.processingAction = false; return; } 
-            n = "Direct Message"; 
+            if(error || !profile) { window.toast("Gebruiker niet gevonden"); state.processingAction = false; return; } 
+            n = "Direct Bericht"; 
             isVisible = true; 
         } else { 
             n = $('c-name').value.trim(); 
             avatarUrl = $('c-avatar').value.trim() || null; 
             rawPass = $('c-pass').value; 
             isVisible = $('c-visible').checked; 
-            if(!n) { window.toast("Name required"); state.processingAction = false; return; } 
+            if(!n) { window.toast("Naam vereist"); state.processingAction = false; return; } 
         } 
         let allowedUsers = ['*']; 
         if (isDirect) allowedUsers = [state.user.id, targetUser]; 
@@ -1041,11 +1039,11 @@ export function initHRNchat(customConfig = {}) {
                 if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id); 
             } 
         } 
-        window.setLoading(true, "Creating..."); 
+        window.setLoading(true, "Maken..."); 
         const roomSalt = generateSalt(); 
         const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect }; 
         const {data, error} = await db.from('rooms').insert([insertData]).select(); 
-        if(error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; } 
+        if(error) { window.toast("Fout: " + error.message); state.processingAction = false; window.setLoading(false); return; } 
         if(data && data.length > 0) { 
             const newRoom = data[0]; 
             if (rawPass) { 
@@ -1066,27 +1064,27 @@ export function initHRNchat(customConfig = {}) {
         if (!e || !e.isTrusted) return; 
         const inputPass = $('gate-pass').value; 
         const inputHash = await sha256(inputPass + state.pending.salt); 
-        window.setLoading(true, "Verifying..."); 
+        window.setLoading(true, "Verifiëren..."); 
         const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash }); 
         window.setLoading(false); 
         if(data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); 
-        else window.toast("Access Denied"); 
+        else window.toast("Toegang Geweigerd"); 
     };
     
     window.handleLogout = async (e) => { 
         if (!e || !e.isTrusted) return; 
-        window.setLoading(true, "Leaving..."); 
+        window.setLoading(true, "Uitloggen..."); 
         await cleanupChannels(); 
         localStorage.removeItem('hrn_auth_email'); 
         localStorage.removeItem('hrn_auth_pass'); 
         state.user = null; 
-        state.isOfflineMode = false; 
+        state.isOfflineMode = false;
         await db.auth.signOut(); 
         window.nav('scr-start'); 
         window.setLoading(false); 
     };
     
-    window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
+    window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Gekopieerd"); };
     window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
 
     db.auth.onAuthStateChange(async (ev, ses) => { 
@@ -1129,7 +1127,7 @@ export function initHRNchat(customConfig = {}) {
         });
     };
     
-    window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
+    window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wacht ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
     
     window.loadRooms = async () => { 
         if(!state.user) return; 
@@ -1157,9 +1155,9 @@ export function initHRNchat(customConfig = {}) {
 
         if (!navigator.onLine || state.isOfflineMode) return;
 
-        window.setLoading(true, "Syncing..."); 
+        window.setLoading(true, "Synchroniseren..."); 
         const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false }); 
-        if (error) { window.toast("Sync failed"); window.setLoading(false); return; } 
+        if (error) { window.toast("Sync mislukt"); window.setLoading(false); return; } 
         if (rooms && rooms.length > 0) {
             const uid = state.user.id; const processedRooms = []; 
             for(const r of rooms) { 
@@ -1171,9 +1169,9 @@ export function initHRNchat(customConfig = {}) {
                         await localDB.put('profiles', profile);
                         processedRooms.push({ ...r, display_name: profile.full_name, display_avatar: profile.cached_avatar || profile.avatar_url }); 
                     } else { 
-                        processedRooms.push({ ...r, display_name: 'Unknown', display_avatar: null }); 
+                        processedRooms.push({ ...r, display_name: 'Onbekend', display_avatar: null }); 
                     }
-                } else processedRooms.push({ ...r, display_name: 'User', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
+                } else processedRooms.push({ ...r, display_name: 'Gebruiker', display_avatar: null }); } else processedRooms.push({ ...r, display_name: r.name, display_avatar: r.avatar_url }); 
             } 
             state.allRooms = processedRooms; 
             
@@ -1187,7 +1185,7 @@ export function initHRNchat(customConfig = {}) {
         updateLobbyAvatar(); 
     };
     
-    window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join('');  };
+    window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">Nog geen groepen</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join('');  };
     
     window.joinAttempt = async (id) => { 
         const meta = await localDB.get('rooms', id);
@@ -1200,18 +1198,18 @@ export function initHRNchat(customConfig = {}) {
                 window.openVault(meta.id, meta.name, null, meta.salt);
             }
         } else if (!navigator.onLine || state.isOfflineMode) {
-            window.toast("Offline data not found");
+            window.toast("Offline data niet gevonden");
             return;
         }
 
         if (!navigator.onLine || state.isOfflineMode) return;
 
-        window.setLoading(true, "Checking..."); 
+        window.setLoading(true, "Controleren..."); 
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); 
-        if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); } 
+        if (!canAccess) { window.setLoading(false); return window.toast("Toegang geweigerd"); } 
         const { data, error } = await db.from('rooms').select('*').eq('id', id).single(); 
         window.setLoading(false); 
-        if (error || !data) return window.toast("Not found"); 
+        if (error || !data) return window.toast("Niet gevonden"); 
         if(data && data.id) await localDB.put('rooms', data); 
         state.pending = { id: data.id, name: data.name, salt: data.salt }; 
         state.currentRoomData = data; 
@@ -1219,7 +1217,7 @@ export function initHRNchat(customConfig = {}) {
         else window.openVault(data.id, data.name, null, data.salt); 
     };
     
-    window.joinPrivate = async () => { if(!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
+    window.joinPrivate = async () => { if(!state.user) return window.toast("Inloggen vereist"); const id = $('join-id').value.trim(); if(!id) return; window.setLoading(true, "Controleren..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Toegang geweigerd of niet gevonden"); } const { data } = await db.from('rooms').select('*').eq('id',id).single(); window.setLoading(false); if(data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if(data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Niet gevonden"); };
 
     const init = async () => { 
         await localDB.init();
@@ -1252,11 +1250,10 @@ export function initHRNchat(customConfig = {}) {
                     $('l-pass').value = storedPass;
                 }
             } else {
-                window.setLoading(true, "Auto-logging in...");
+                window.setLoading(true, "Automatisch inloggen...");
                 $('l-email').value = storedEmail;
                 $('l-pass').value = storedPass;
                 const {error} = await db.auth.signInWithPassword({email:storedEmail, password:storedPass});
-                window.setLoading(false);
                 if(!error) {
                     const { data: { user } } = await db.auth.getUser();
                     state.user = user;
@@ -1275,7 +1272,10 @@ export function initHRNchat(customConfig = {}) {
             window.nav('scr-start');
         }
          
-        window.setLoading(false); 
+        setTimeout(() => {
+            window.setLoading(false);
+            $('app').classList.add('ready');
+        }, 500);
     };
     init();
 }
