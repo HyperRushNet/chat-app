@@ -23,7 +23,7 @@ export function initHRNchat(customConfig = {}) {
 		verificationCodeExpiry: customConfig.verificationCodeExpiry || 600,
 		maxMessageLength: customConfig.maxMessageLength || 2000
 	};
-	const AVATARS = ['https://cdn-icons-png.flaticon.com/512/6997/6997676.png', 'https://cdn-icons-png.flaticon.com/512/236/236831.png', 'https://cdn-icons-png.freepik.com/256/6997/6997667.png', 'https://cdn-icons-png.flaticon.com/512/6997/6997668.png', 'https://img.freepik.com/free-photo/sunset-time-tropical-beach-sea-with-coconut-palm-tree_74190-1075.jpg', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTECqduTKufgQgmfy7ZUMpWOrFXNyHpNWQvPA&s'];
+	const AVATARS = ['./assets/avatars/1.png', './assets/avatars/2.png', './assets/avatars/3.png', './assets/avatars/4.png', './assets/avatars/5.jpg'];
 	const DB_NAME = 'HRN_LOCAL_DB';
 	const DB_VERSION = 4;
 	const localDB = {
