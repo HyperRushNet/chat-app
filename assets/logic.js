@@ -806,6 +806,10 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
         finalMessages = await localDB.getRoomMessages(id);
     }
 
+    // Eerst het scherm wisselen (zodat de container zichtbaar wordt)
+    window.nav('scr-chat');
+
+    // Daarna pas renderen en scrollen (loader zit er nog overheen)
     if (finalMessages.length > 0) {
         if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
         
@@ -887,7 +891,6 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
         });
     }
 
-    window.nav('scr-chat');
     window.setLoading(false); 
 };
     
