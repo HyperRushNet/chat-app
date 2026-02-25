@@ -827,10 +827,65 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
         setConnectionVisuals('offline');
     } else {
         setConnectionVisuals('connecting');
-    }
+        
+        await new Promise((resolve) => {
+            if(state.presenceChannel) state.presenceChannel.unsubscribe(); 
+            const myId = state.user.id; 
+            state.presenceChannel = db.channel(`room_presence:${id}`, { config: { presence: { key: myId } } }); 
+            state.presenceChannel.on('presence', { event: 'sync' }, queryOnlineCountImmediately)
+            .subscribe(async (status) => { 
+                if (status === 'SUBSCRIBED') { 
+                    state.isPresenceSubscribed = true; 
+                    queryOnlineCountImmediately(); 
+                    await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); 
+                    queryOnlineCountImmediately(); 
+                    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); 
+                    state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); 
+                }
+                if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') resolve();
+            });
+        });
 
-    if(!state.isOfflineMode) setupChatChannel(id); 
-    if(!state.isOfflineMode) initRoomPresence(id); 
+        await new Promise((resolve) => {
+            if (state.chatChannel) state.chatChannel.unsubscribe(); 
+            state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
+            state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+                const m = payload.new; if (m && state.currentRoomId) {
+                    if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) {
+                        state.recentlySentIds.delete(m.id);
+                        return;
+                    }
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: m.content });
+                        if(decRes.result) { 
+                            const msgObj = { ...m, ...decRes.result, room_id: m.room_id }; 
+                            const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
+                            container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); 
+                            container.scrollTop = container.scrollHeight;
+                            checkChatEmpty(); 
+                            await localDB.put('messages', msgObj); 
+                        }
+                    } catch(e) { console.error("Decryption failed for new message", e); }
+                }
+            }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
+                const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) {
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/';
+                        if(deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if(contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; } const timeSpan = msgEl.querySelector('.msg-time'); if(timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if(editedTag) editedTag.remove(); } msgEl.dataset.text = "";  }
+                        else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, room_id: m.room_id, updated_at: m.updated_at }, prevData, isDirect);  }
+                        const cached = await localDB.get('messages', m.id); if(cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); }
+                    } catch(e) { console.error("Decryption failed for update", e); }
+                }
+            }).subscribe((status) => {
+                state.isChatChannelReady = (status === 'SUBSCRIBED');
+                if (status === 'SUBSCRIBED') { 
+                    state.isReconnecting = false; 
+                    setConnectionVisuals('connected'); 
+                }
+                if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') resolve();
+            });
+        });
+    }
 
     window.nav('scr-chat');
     window.setLoading(false); 
