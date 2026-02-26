@@ -1763,593 +1763,27 @@ export function initHRNchat(customConfig = {}) {
 		window.setLoading(false);
 	};
 	window.handleLogin = async (e) => {
-    if (!e || !e.isTrusted) return;
-    if (state.processingAction) return;
-    
-    // FIX: Wacht tot de aanwezigheidsdata geladen is, anders is de teller onbetrouwbaar (0)
-    if (navigator.onLine && !state.isOfflineMode && !state.globalPresenceReady) {
-        return window.toast("Connecting to server, please wait...");
-    }
-
-    // Nu is de check betrouwbaar
-    if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) {
-        return window.toast("Server is full. Please try again later.");
-    }
-    
-    state.processingAction = true;
-    const em = $('l-email').value,
-        p = $('l-pass').value;
-    if (!em || !p) {
-        window.toast("Input missing");
-        state.processingAction = false;
-        return;
-    }
-    window.setLoading(true, "Signing In...");
-    if (!navigator.onLine) {
-        const knownUser = await localDB.get('known_users', em);
-        if (knownUser && knownUser.metadata) {
-            const hashInput = await sha256(p + em);
-            if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                state.user = {
-                    id: knownUser.userId,
-                    email: knownUser.email,
-                    user_metadata: knownUser.metadata
-                };
-                state.isOfflineMode = true;
-                window.nav('scr-lobby');
-                window.loadRooms();
-                window.setLoading(false);
-                state.processingAction = false;
-                window.toast("Offline Login Successful");
-                return;
-            }
-        }
-        window.toast("Offline login failed. Check credentials or go online.");
-        window.setLoading(false);
-        state.processingAction = false;
-        return;
-    }
-    const {
-        error
-    } = await db.auth.signInWithPassword({
-        email: em,
-        password: p
-    });
-    if (error) {
-        window.toast(error.message);
-        window.setLoading(false);
-        state.processingAction = false;
-    } else {
-        localStorage.setItem('hrn_auth_email', em);
-        localStorage.setItem('hrn_auth_pass', p);
-        const {
-            data: {
-                user
-            }
-        } = await db.auth.getUser();
-        state.user = user;
-        state.isOfflineMode = false;
-        const hashInput = await sha256(p + em);
-        await localDB.put('known_users', {
-            id: em,
-            pass_hash: hashInput,
-            email: em,
-            metadata: user.user_metadata,
-            userId: user.id
-        });
-        window.nav('scr-lobby');
-        window.loadRooms();
-        window.setLoading(false);
-        state.processingAction = false;
-    }
-};
-window.handleRegister = async (e) => {
-	if (!e || !e.isTrusted) return;
-	if (state.processingAction) return;
-	state.processingAction = true;
-	const n = $('r-name').value,
-		em = $('r-email').value.trim().toLowerCase(),
-		p = $('r-pass').value;
-	const customAvatar = $('r-avatar-url').value.trim();
-	const avatarUrl = customAvatar || state.selectedAvatar;
-	if (!n || !em || p.length < 8) {
-		window.toast("Check inputs");
-		state.processingAction = false;
-		return;
-	}
-	window.setLoading(true, "Sending Code...");
-	try {
-		const [r, err] = await safeAwait(fetch(CONFIG.mailApi, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json"
-			},
-			body: JSON.stringify({
-				action: "send",
-				email: em
-			})
-		}));
-		if (r) {
-			if (r.status === 429) {
-				window.toast("Rate limited");
-				state.processingAction = false;
-				window.setLoading(false);
-				return;
-			}
-			const j = await r.json();
-			if (j.message === "Code sent") {
-				sessionStorage.setItem('temp_reg', JSON.stringify({
-					n,
-					em,
-					p,
-					avatar: avatarUrl
-				}));
-				window.nav('scr-verify');
-				startVTimer();
-				window.setLoading(false);
-			} else {
-				window.toast(j.message || "Error");
-				window.setLoading(false);
-			}
-		} else {
-			throw new Error("Network error");
+		if (!e || !e.isTrusted) return;
+		if (state.processingAction) return;
+		if (navigator.onLine && !state.isOfflineMode && !state.globalPresenceReady) {
+			return window.toast("Connecting to server, please wait...");
 		}
-	} catch (err) {
-		window.toast("API Fallback: Proceeding without code (Dev Mode)");
-		sessionStorage.setItem('temp_reg', JSON.stringify({
-			n,
-			em,
-			p,
-			avatar: avatarUrl
-		}));
-		window.nav('scr-verify');
-		startVTimer();
-		window.setLoading(false);
-	}
-	state.processingAction = false;
-};
-const startVTimer = () => {
-	let left = CONFIG.verificationCodeExpiry;
-	if (state.vTimer) clearInterval(state.vTimer);
-	state.vTimer = setInterval(
-		() => {
-			left--;
-			$('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`;
-			if (left <= 0) {
-				clearInterval(state.vTimer);
-				window.nav('scr-register');
-			}
-		}, 1000);
-};
-window.handleVerify = async (e) => {
-	if (!e || !e.isTrusted) return;
-	if (state.processingAction) return;
-	state.processingAction = true;
-	const code = $('v-code').value,
-		temp = JSON.parse(sessionStorage.getItem('temp_reg'));
-	if (!temp) {
-		window.toast("Session expired");
-		state.processingAction = false;
-		return;
-	}
-	window.setLoading(true, "Verifying...");
-	try {
-		const r = await fetch(CONFIG.mailApi, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json"
-			},
-			body: JSON.stringify({
-				action: "verify",
-				email: temp.em,
-				code: code
-			})
-		});
-		if (r.status === 429) {
-			window.toast("Rate limited");
-			state.processingAction = false;
-			window.setLoading(false);
-			return;
+		if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) {
+			return window.toast("Server is full. Please try again later.");
 		}
-		const j = await r.json();
-		if (j.message === "Verified") {
-			await finishReg(temp);
-		} else {
-			window.toast(j.message || "Wrong code");
-			window.setLoading(false);
-		}
-	} catch (err) {
-		window.toast("API Fallback: Auto-verifying (Dev Mode)");
-		await finishReg(temp);
-	}
-	state.processingAction = false;
-};
-const finishReg = async (temp) => {
-	const {
-		error
-	} = await db.auth.signUp({
-		email: temp.em,
-		password: temp.p,
-		options: {
-			data: {
-				full_name: temp.n,
-				avatar_url: temp.avatar
-			}
-		}
-	});
-	if (error) {
-		window.toast(error.message);
-		window.setLoading(false);
-	} else {
-		localStorage.setItem('hrn_auth_email', temp.em);
-		localStorage.setItem('hrn_auth_pass', temp.p);
-		window.nav('scr-lobby');
-		window.loadRooms();
-		window.setLoading(false);
-	}
-};
-window.handleCreate = async (e) => {
-	if (!e || !e.isTrusted) return;
-	if (state.processingAction) return;
-	state.processingAction = true;
-	const isDirect = state.createType === 'direct';
-	let n, isVisible = true,
-		targetUser = null;
-	let avatarUrl = null;
-	let rawPass = null;
-	if (isDirect) {
-		targetUser = $('c-target-user').value.trim();
-		if (!targetUser) {
-			window.toast("User ID required");
+		state.processingAction = true;
+		const em = $('l-email').value,
+			p = $('l-pass').value;
+		if (!em || !p) {
+			window.toast("Input missing");
 			state.processingAction = false;
 			return;
 		}
-		const {
-			data: profile,
-			error
-		} = await db.from('profiles').select('full_name').eq('id', targetUser).single();
-		if (error || !profile) {
-			window.toast("User not found");
-			state.processingAction = false;
-			return;
-		}
-		n = "Direct Message";
-		isVisible = true;
-	} else {
-		n = $('c-name').value.trim();
-		avatarUrl = $('c-avatar').value.trim() || null;
-		rawPass = $('c-pass').value;
-		isVisible = $('c-visible').checked;
-		if (!n) {
-			window.toast("Name required");
-			state.processingAction = false;
-			return;
-		}
-	}
-	let allowedUsers = ['*'];
-	if (isDirect) allowedUsers = [
-		state.user.id, targetUser
-	];
-	else {
-		if (state.selectedAllowedUsers.length > 0) {
-			allowedUsers = state.selectedAllowedUsers.map(u => u.id);
-			if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
-		}
-	}
-	window.setLoading(true, "Creating...");
-	const roomSalt = generateSalt();
-	const insertData = {
-		name: n,
-		avatar_url: avatarUrl,
-		has_password: !!rawPass,
-		is_visible: isVisible,
-		salt: roomSalt,
-		created_by: state.user.id,
-		allowed_users: allowedUsers,
-		is_direct: isDirect
-	};
-	const {
-		data,
-		error
-	} = await db.from('rooms').insert([
-		insertData
-	]).select();
-	if (error) {
-		window.toast("Error: " + error.message);
-		state.processingAction = false;
-		window.setLoading(false);
-		return;
-	}
-	if (data && data.length > 0) {
-		const newRoom = data[0];
-		if (rawPass) {
-			const accessHash = await sha256(rawPass + roomSalt);
-			await db.rpc('set_room_password', {
-				p_room_id: newRoom.id,
-				p_hash: accessHash
-			});
-		}
-		state.lastCreated = newRoom;
-		state.lastCreatedPass = rawPass;
-		$('s-id').innerText = newRoom.id;
-		window.nav('scr-success');
-		state.selectedAllowedUsers = [];
-	}
-	state.processingAction = false;
-	window.setLoading(false);
-};
-window.submitGate = async (e) => {
-	if (!e || !e.isTrusted) return;
-	const inputPass = $('gate-pass').value;
-	const inputHash = await sha256(inputPass + state.pending.salt);
-	window.setLoading(true, "Verifying...");
-	const {
-		data
-	} = await db.rpc('verify_room_password', {
-		p_room_id: state.pending.id,
-		p_hash: inputHash
-	});
-	window.setLoading(false);
-	if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
-	else window.toast("Access Denied");
-};
-window.handleLogout = async (e) => {
-	if (!e || !e.isTrusted) return;
-	window.setLoading(true, "Leaving...");
-	await cleanupChannels();
-	localStorage.removeItem('hrn_auth_email');
-	localStorage.removeItem('hrn_auth_pass');
-	state.user = null;
-	state.isOfflineMode = false;
-	await db.auth.signOut();
-	window.nav('scr-start');
-	window.setLoading(false);
-};
-window.copySId = () => {
-	navigator.clipboard.writeText(state.lastCreated.id);
-	window.toast("ID Copied");
-};
-window.enterCreated = () => {
-	window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt);
-	state.lastCreatedPass = null;
-};
-db.auth.onAuthStateChange(async (ev, ses) => {
-	state.user = ses?.user;
-	if (state.user && !state.isOfflineMode) setupGlobalPresence(state.user.id);
-	const createBtn = $('icon-plus-lobby');
-	if (createBtn) createBtn.style.display = 'flex';
-	if (ev === 'SIGNED_OUT') {
-		if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-		if (state.presenceChannel) state.presenceChannel.unsubscribe();
-		if (state.chatChannel) state.chatChannel.unsubscribe();
-		if (state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
-		window.nav('scr-start');
-	}
-});
-window.nav = (id, direction = null) => {
-	if (state.isNavigating) return;
-	state.isNavigating = true;
-	requestAnimationFrame(
-		() => {
-			const current = document.querySelector('.screen.active');
-			const next = $(id);
-			if (!next) {
-				state.isNavigating = false;
-				return;
-			}
-			if (id === 'scr-create') {
-				state.currentStep.create = 1;
-				state.selectedAllowedUsers = [];
-				state.createType = 'group';
-				updateStepUI('create');
-				$('c-name').value = '';
-				$('c-target-user').value = '';
-				$('c-pass').value = '';
-				$('c-avatar').value = '';
-				document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected'));
-				$('type-group').classList.add('selected');
-			}
-			if (id === 'scr-register') {
-				state.currentStep.reg = 1;
-				state.selectedAvatar = null;
-				$('r-name').value = '';
-				$('r-email').value = '';
-				$('r-pass').value = '';
-				$('r-avatar-url').value = '';
-				updateStepUI('reg');
-			}
-			if (id === 'scr-account') window.prepareAccountPage();
-			document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
-			if (direction === 'left') {
-				if (current) current.classList.add('slide-left');
-				next.classList.remove('slide-right');
-			} else if (direction === 'right') {
-				if (current) current.classList.add('slide-right');
-				next.classList.remove('slide-left');
-			} else {
-				document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-			}
-			document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-			next.classList.add('active');
-			const createBtn = $('icon-plus-lobby');
-			if (createBtn) createBtn.style.display = 'flex';
-			if (id === 'scr-lobby') updateLobbyAvatar();
-			setTimeout(
-				() => {
-					state.isNavigating = false;
-				}, 400);
-		});
-};
-window.refreshLobby = async () => {
-	const now = Date.now();
-	if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`);
-	state.lastLobbyRefresh = now;
-	await window.loadRooms();
-};
-window.loadRooms = async () => {
-	if (!state.user) return;
-	const uid = state.user.id;
-	const processRooms = async (rooms) => {
-		const processed = [];
-		for (const r of rooms) {
-			if (!r || !r.id) continue;
-			let name = r.name,
-				avatar = r.avatar_url;
-			if (r.is_direct && r.allowed_users) {
-				const otherId = r.allowed_users.find(id => id !== uid);
-				if (otherId) {
-					const profile = await getProfile(otherId);
-					if (profile) {
-						name = profile.full_name;
-						avatar = profile.cached_avatar || profile.avatar_url;
-					}
-				}
-			}
-			processed.push({
-				...r,
-				display_name: name,
-				display_avatar: avatar
-			});
-		}
-		return processed;
-	};
-	const localRooms = await localDB.getAll('rooms');
-	if (localRooms.length > 0) {
-		state.allRooms = await processRooms(localRooms);
-		window.filterRooms();
-	}
-	if (!navigator.onLine || state.isOfflineMode) return;
-	window.setLoading(true, "Syncing...");
-	const {
-		data: rooms,
-		error
-	} = await db.from('rooms').select('*').order('created_at', {
-		ascending: false
-	});
-	if (error) {
-		window.toast("Sync failed");
-		window.setLoading(false);
-		return;
-	}
-	if (rooms && rooms.length > 0) {
-		await localDB.clear('rooms');
-		await localDB.putAll('rooms', rooms);
-		state.allRooms = await processRooms(rooms);
-		await localDB.saveUserTree(uid, rooms);
-		window.filterRooms();
-	}
-	window.setLoading(false);
-	updateLobbyAvatar();
-};
-window.filterRooms = () => {
-	const q = $('search-bar').value.toLowerCase();
-	const list = $('room-list');
-	const uid = state.user?.id;
-	const filtered = state.allRooms.filter(r => {
-		if (!r.is_direct && !r.is_visible) return false;
-		const name = r.display_name || r.name || '';
-		if (!name.toLowerCase().includes(q)) return false;
-		return true;
-	});
-	if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`;
-	else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join('');
-};
-window.joinAttempt = async (id) => {
-	const meta = await localDB.get('rooms', id);
-	if (meta && meta.id) {
-		state.pending = {
-			id: meta.id,
-			name: meta.name,
-			salt: meta.salt
-		};
-		state.currentRoomData = meta;
-		if (meta.has_password) {
-			window.nav('scr-gate');
-		} else {
-			window.openVault(meta.id, meta.name, null, meta.salt);
-		}
-	} else if (!navigator.onLine || state.isOfflineMode) {
-		window.toast("Offline data not found");
-		return;
-	}
-	if (!navigator.onLine || state.isOfflineMode) return;
-	window.setLoading(true, "Checking...");
-	const {
-		data: canAccess
-	} = await db.rpc('can_access_room', {
-		p_room_id: id
-	});
-	if (!canAccess) {
-		window.setLoading(false);
-		return window.toast("Access denied");
-	}
-	const {
-		data,
-		error
-	} = await db.from('rooms').select('*').eq('id', id).single();
-	window.setLoading(false);
-	if (error || !data) return window.toast("Not found");
-	if (data && data.id) await localDB.put('rooms', data);
-	state.pending = {
-		id: data.id,
-		name: data.name,
-		salt: data.salt
-	};
-	state.currentRoomData = data;
-	if (data.has_password) window.nav('scr-gate');
-	else window.openVault(data.id, data.name, null, data.salt);
-};
-window.joinPrivate = async () => {
-	if (!state.user) return window.toast("Login required");
-	const id = $('join-id').value.trim();
-	if (!id) return;
-	window.setLoading(true, "Checking...");
-	const {
-		data: canAccess
-	} = await db.rpc('can_access_room', {
-		p_room_id: id
-	});
-	if (!canAccess) {
-		window.setLoading(false);
-		return window.toast("Access denied or not found");
-	}
-	const {
-		data
-	} = await db.from('rooms').select('*').eq('id', id).single();
-	window.setLoading(false);
-	if (data) {
-		state.pending = {
-			id: data.id,
-			name: data.name,
-			salt: data.salt
-		};
-		state.currentRoomData = data;
-		if (data.has_password) window.nav('scr-gate');
-		else window.openVault(data.id, data.name, null, data.salt);
-	} else window.toast("Not found");
-};
-const init = async () => {
-	await localDB.init();
-	monitorConnection();
-	const hasMaster = await checkMaster();
-	if (hasMaster) {
-		state.isMasterTab = false;
-		$('block-overlay').classList.add('active');
-	} else {
-		state.isMasterTab = true;
-		tabChannel.postMessage({
-			type: 'CLAIM_MASTER',
-			id: state.tabId
-		});
-		if (navigator.onLine) setupGlobalPresence(null);
-	}
-	const storedEmail = localStorage.getItem('hrn_auth_email');
-	const storedPass = localStorage.getItem('hrn_auth_pass');
-	if (storedEmail && storedPass) {
+		window.setLoading(true, "Signing In...");
 		if (!navigator.onLine) {
-			const knownUser = await localDB.get('known_users', storedEmail);
+			const knownUser = await localDB.get('known_users', em);
 			if (knownUser && knownUser.metadata) {
-				const hashInput = await sha256(storedPass + storedEmail);
+				const hashInput = await sha256(p + em);
 				if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
 					state.user = {
 						id: knownUser.userId,
@@ -2359,55 +1793,616 @@ const init = async () => {
 					state.isOfflineMode = true;
 					window.nav('scr-lobby');
 					window.loadRooms();
+					window.setLoading(false);
+					state.processingAction = false;
+					window.toast("Offline Login Successful");
+					return;
+				}
+			}
+			window.toast("Offline login failed. Check credentials or go online.");
+			window.setLoading(false);
+			state.processingAction = false;
+			return;
+		}
+		const {
+			error
+		} = await db.auth.signInWithPassword({
+			email: em,
+			password: p
+		});
+		if (error) {
+			window.toast(error.message);
+			window.setLoading(false);
+			state.processingAction = false;
+		} else {
+			localStorage.setItem('hrn_auth_email', em);
+			localStorage.setItem('hrn_auth_pass', p);
+			const {
+				data: {
+					user
+				}
+			} = await db.auth.getUser();
+			state.user = user;
+			state.isOfflineMode = false;
+			const hashInput = await sha256(p + em);
+			await localDB.put('known_users', {
+				id: em,
+				pass_hash: hashInput,
+				email: em,
+				metadata: user.user_metadata,
+				userId: user.id
+			});
+			window.nav('scr-lobby');
+			window.loadRooms();
+			window.setLoading(false);
+			state.processingAction = false;
+		}
+	};
+	window.handleRegister = async (e) => {
+		if (!e || !e.isTrusted) return;
+		if (state.processingAction) return;
+		state.processingAction = true;
+		const n = $('r-name').value,
+			em = $('r-email').value.trim().toLowerCase(),
+			p = $('r-pass').value;
+		const customAvatar = $('r-avatar-url').value.trim();
+		const avatarUrl = customAvatar || state.selectedAvatar;
+		if (!n || !em || p.length < 8) {
+			window.toast("Check inputs");
+			state.processingAction = false;
+			return;
+		}
+		window.setLoading(true, "Sending Code...");
+		try {
+			const [r, err] = await safeAwait(fetch(CONFIG.mailApi, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify({
+					action: "send",
+					email: em
+				})
+			}));
+			if (r) {
+				if (r.status === 429) {
+					window.toast("Rate limited");
+					state.processingAction = false;
+					window.setLoading(false);
+					return;
+				}
+				const j = await r.json();
+				if (j.message === "Code sent") {
+					sessionStorage.setItem('temp_reg', JSON.stringify({
+						n,
+						em,
+						p,
+						avatar: avatarUrl
+					}));
+					window.nav('scr-verify');
+					startVTimer();
+					window.setLoading(false);
+				} else {
+					window.toast(j.message || "Error");
+					window.setLoading(false);
+				}
+			} else {
+				throw new Error("Network error");
+			}
+		} catch (err) {
+			window.toast("API Fallback: Proceeding without code (Dev Mode)");
+			sessionStorage.setItem('temp_reg', JSON.stringify({
+				n,
+				em,
+				p,
+				avatar: avatarUrl
+			}));
+			window.nav('scr-verify');
+			startVTimer();
+			window.setLoading(false);
+		}
+		state.processingAction = false;
+	};
+	const startVTimer = () => {
+		let left = CONFIG.verificationCodeExpiry;
+		if (state.vTimer) clearInterval(state.vTimer);
+		state.vTimer = setInterval(
+			() => {
+				left--;
+				$('v-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`;
+				if (left <= 0) {
+					clearInterval(state.vTimer);
+					window.nav('scr-register');
+				}
+			}, 1000);
+	};
+	window.handleVerify = async (e) => {
+		if (!e || !e.isTrusted) return;
+		if (state.processingAction) return;
+		state.processingAction = true;
+		const code = $('v-code').value,
+			temp = JSON.parse(sessionStorage.getItem('temp_reg'));
+		if (!temp) {
+			window.toast("Session expired");
+			state.processingAction = false;
+			return;
+		}
+		window.setLoading(true, "Verifying...");
+		try {
+			const r = await fetch(CONFIG.mailApi, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify({
+					action: "verify",
+					email: temp.em,
+					code: code
+				})
+			});
+			if (r.status === 429) {
+				window.toast("Rate limited");
+				state.processingAction = false;
+				window.setLoading(false);
+				return;
+			}
+			const j = await r.json();
+			if (j.message === "Verified") {
+				await finishReg(temp);
+			} else {
+				window.toast(j.message || "Wrong code");
+				window.setLoading(false);
+			}
+		} catch (err) {
+			window.toast("API Fallback: Auto-verifying (Dev Mode)");
+			await finishReg(temp);
+		}
+		state.processingAction = false;
+	};
+	const finishReg = async (temp) => {
+		const {
+			error
+		} = await db.auth.signUp({
+			email: temp.em,
+			password: temp.p,
+			options: {
+				data: {
+					full_name: temp.n,
+					avatar_url: temp.avatar
+				}
+			}
+		});
+		if (error) {
+			window.toast(error.message);
+			window.setLoading(false);
+		} else {
+			localStorage.setItem('hrn_auth_email', temp.em);
+			localStorage.setItem('hrn_auth_pass', temp.p);
+			window.nav('scr-lobby');
+			window.loadRooms();
+			window.setLoading(false);
+		}
+	};
+	window.handleCreate = async (e) => {
+		if (!e || !e.isTrusted) return;
+		if (state.processingAction) return;
+		state.processingAction = true;
+		const isDirect = state.createType === 'direct';
+		let n, isVisible = true,
+			targetUser = null;
+		let avatarUrl = null;
+		let rawPass = null;
+		if (isDirect) {
+			targetUser = $('c-target-user').value.trim();
+			if (!targetUser) {
+				window.toast("User ID required");
+				state.processingAction = false;
+				return;
+			}
+			const {
+				data: profile,
+				error
+			} = await db.from('profiles').select('full_name').eq('id', targetUser).single();
+			if (error || !profile) {
+				window.toast("User not found");
+				state.processingAction = false;
+				return;
+			}
+			n = "Direct Message";
+			isVisible = true;
+		} else {
+			n = $('c-name').value.trim();
+			avatarUrl = $('c-avatar').value.trim() || null;
+			rawPass = $('c-pass').value;
+			isVisible = $('c-visible').checked;
+			if (!n) {
+				window.toast("Name required");
+				state.processingAction = false;
+				return;
+			}
+		}
+		let allowedUsers = ['*'];
+		if (isDirect) allowedUsers = [
+			state.user.id, targetUser
+		];
+		else {
+			if (state.selectedAllowedUsers.length > 0) {
+				allowedUsers = state.selectedAllowedUsers.map(u => u.id);
+				if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
+			}
+		}
+		window.setLoading(true, "Creating...");
+		const roomSalt = generateSalt();
+		const insertData = {
+			name: n,
+			avatar_url: avatarUrl,
+			has_password: !!rawPass,
+			is_visible: isVisible,
+			salt: roomSalt,
+			created_by: state.user.id,
+			allowed_users: allowedUsers,
+			is_direct: isDirect
+		};
+		const {
+			data,
+			error
+		} = await db.from('rooms').insert([
+			insertData
+		]).select();
+		if (error) {
+			window.toast("Error: " + error.message);
+			state.processingAction = false;
+			window.setLoading(false);
+			return;
+		}
+		if (data && data.length > 0) {
+			const newRoom = data[0];
+			if (rawPass) {
+				const accessHash = await sha256(rawPass + roomSalt);
+				await db.rpc('set_room_password', {
+					p_room_id: newRoom.id,
+					p_hash: accessHash
+				});
+			}
+			state.lastCreated = newRoom;
+			state.lastCreatedPass = rawPass;
+			$('s-id').innerText = newRoom.id;
+			window.nav('scr-success');
+			state.selectedAllowedUsers = [];
+		}
+		state.processingAction = false;
+		window.setLoading(false);
+	};
+	window.submitGate = async (e) => {
+		if (!e || !e.isTrusted) return;
+		const inputPass = $('gate-pass').value;
+		const inputHash = await sha256(inputPass + state.pending.salt);
+		window.setLoading(true, "Verifying...");
+		const {
+			data
+		} = await db.rpc('verify_room_password', {
+			p_room_id: state.pending.id,
+			p_hash: inputHash
+		});
+		window.setLoading(false);
+		if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt);
+		else window.toast("Access Denied");
+	};
+	window.handleLogout = async (e) => {
+		if (!e || !e.isTrusted) return;
+		window.setLoading(true, "Leaving...");
+		await cleanupChannels();
+		localStorage.removeItem('hrn_auth_email');
+		localStorage.removeItem('hrn_auth_pass');
+		state.user = null;
+		state.isOfflineMode = false;
+		await db.auth.signOut();
+		window.nav('scr-start');
+		window.setLoading(false);
+	};
+	window.copySId = () => {
+		navigator.clipboard.writeText(state.lastCreated.id);
+		window.toast("ID Copied");
+	};
+	window.enterCreated = () => {
+		window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt);
+		state.lastCreatedPass = null;
+	};
+	db.auth.onAuthStateChange(async (ev, ses) => {
+		state.user = ses?.user;
+		if (state.user && !state.isOfflineMode) setupGlobalPresence(state.user.id);
+		const createBtn = $('icon-plus-lobby');
+		if (createBtn) createBtn.style.display = 'flex';
+		if (ev === 'SIGNED_OUT') {
+			if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+			if (state.presenceChannel) state.presenceChannel.unsubscribe();
+			if (state.chatChannel) state.chatChannel.unsubscribe();
+			if (state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
+			window.nav('scr-start');
+		}
+	});
+	window.nav = (id, direction = null) => {
+		if (state.isNavigating) return;
+		state.isNavigating = true;
+		requestAnimationFrame(
+			() => {
+				const current = document.querySelector('.screen.active');
+				const next = $(id);
+				if (!next) {
+					state.isNavigating = false;
+					return;
+				}
+				if (id === 'scr-create') {
+					state.currentStep.create = 1;
+					state.selectedAllowedUsers = [];
+					state.createType = 'group';
+					updateStepUI('create');
+					$('c-name').value = '';
+					$('c-target-user').value = '';
+					$('c-pass').value = '';
+					$('c-avatar').value = '';
+					document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected'));
+					$('type-group').classList.add('selected');
+				}
+				if (id === 'scr-register') {
+					state.currentStep.reg = 1;
+					state.selectedAvatar = null;
+					$('r-name').value = '';
+					$('r-email').value = '';
+					$('r-pass').value = '';
+					$('r-avatar-url').value = '';
+					updateStepUI('reg');
+				}
+				if (id === 'scr-account') window.prepareAccountPage();
+				document.querySelectorAll('.screen').forEach(s => s.classList.remove('slide-left', 'slide-right'));
+				if (direction === 'left') {
+					if (current) current.classList.add('slide-left');
+					next.classList.remove('slide-right');
+				} else if (direction === 'right') {
+					if (current) current.classList.add('slide-right');
+					next.classList.remove('slide-left');
+				} else {
+					document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+				}
+				document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+				next.classList.add('active');
+				const createBtn = $('icon-plus-lobby');
+				if (createBtn) createBtn.style.display = 'flex';
+				if (id === 'scr-lobby') updateLobbyAvatar();
+				setTimeout(
+					() => {
+						state.isNavigating = false;
+					}, 400);
+			});
+	};
+	window.refreshLobby = async () => {
+		const now = Date.now();
+		if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`);
+		state.lastLobbyRefresh = now;
+		await window.loadRooms();
+	};
+	window.loadRooms = async () => {
+		if (!state.user) return;
+		const uid = state.user.id;
+		const processRooms = async (rooms) => {
+			const processed = [];
+			for (const r of rooms) {
+				if (!r || !r.id) continue;
+				let name = r.name,
+					avatar = r.avatar_url;
+				if (r.is_direct && r.allowed_users) {
+					const otherId = r.allowed_users.find(id => id !== uid);
+					if (otherId) {
+						const profile = await getProfile(otherId);
+						if (profile) {
+							name = profile.full_name;
+							avatar = profile.cached_avatar || profile.avatar_url;
+						}
+					}
+				}
+				processed.push({
+					...r,
+					display_name: name,
+					display_avatar: avatar
+				});
+			}
+			return processed;
+		};
+		const localRooms = await localDB.getAll('rooms');
+		if (localRooms.length > 0) {
+			state.allRooms = await processRooms(localRooms);
+			window.filterRooms();
+		}
+		if (!navigator.onLine || state.isOfflineMode) return;
+		window.setLoading(true, "Syncing...");
+		const {
+			data: rooms,
+			error
+		} = await db.from('rooms').select('*').order('created_at', {
+			ascending: false
+		});
+		if (error) {
+			window.toast("Sync failed");
+			window.setLoading(false);
+			return;
+		}
+		if (rooms && rooms.length > 0) {
+			await localDB.clear('rooms');
+			await localDB.putAll('rooms', rooms);
+			state.allRooms = await processRooms(rooms);
+			await localDB.saveUserTree(uid, rooms);
+			window.filterRooms();
+		}
+		window.setLoading(false);
+		updateLobbyAvatar();
+	};
+	window.filterRooms = () => {
+		const q = $('search-bar').value.toLowerCase();
+		const list = $('room-list');
+		const uid = state.user?.id;
+		const filtered = state.allRooms.filter(r => {
+			if (!r.is_direct && !r.is_visible) return false;
+			const name = r.display_name || r.name || '';
+			if (!name.toLowerCase().includes(q)) return false;
+			return true;
+		});
+		if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`;
+		else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join('');
+	};
+	window.joinAttempt = async (id) => {
+		const meta = await localDB.get('rooms', id);
+		if (meta && meta.id) {
+			state.pending = {
+				id: meta.id,
+				name: meta.name,
+				salt: meta.salt
+			};
+			state.currentRoomData = meta;
+			if (meta.has_password) {
+				window.nav('scr-gate');
+			} else {
+				window.openVault(meta.id, meta.name, null, meta.salt);
+			}
+		} else if (!navigator.onLine || state.isOfflineMode) {
+			window.toast("Offline data not found");
+			return;
+		}
+		if (!navigator.onLine || state.isOfflineMode) return;
+		window.setLoading(true, "Checking...");
+		const {
+			data: canAccess
+		} = await db.rpc('can_access_room', {
+			p_room_id: id
+		});
+		if (!canAccess) {
+			window.setLoading(false);
+			return window.toast("Access denied");
+		}
+		const {
+			data,
+			error
+		} = await db.from('rooms').select('*').eq('id', id).single();
+		window.setLoading(false);
+		if (error || !data) return window.toast("Not found");
+		if (data && data.id) await localDB.put('rooms', data);
+		state.pending = {
+			id: data.id,
+			name: data.name,
+			salt: data.salt
+		};
+		state.currentRoomData = data;
+		if (data.has_password) window.nav('scr-gate');
+		else window.openVault(data.id, data.name, null, data.salt);
+	};
+	window.joinPrivate = async () => {
+		if (!state.user) return window.toast("Login required");
+		const id = $('join-id').value.trim();
+		if (!id) return;
+		window.setLoading(true, "Checking...");
+		const {
+			data: canAccess
+		} = await db.rpc('can_access_room', {
+			p_room_id: id
+		});
+		if (!canAccess) {
+			window.setLoading(false);
+			return window.toast("Access denied or not found");
+		}
+		const {
+			data
+		} = await db.from('rooms').select('*').eq('id', id).single();
+		window.setLoading(false);
+		if (data) {
+			state.pending = {
+				id: data.id,
+				name: data.name,
+				salt: data.salt
+			};
+			state.currentRoomData = data;
+			if (data.has_password) window.nav('scr-gate');
+			else window.openVault(data.id, data.name, null, data.salt);
+		} else window.toast("Not found");
+	};
+	const init = async () => {
+		await localDB.init();
+		monitorConnection();
+		const hasMaster = await checkMaster();
+		if (hasMaster) {
+			state.isMasterTab = false;
+			$('block-overlay').classList.add('active');
+		} else {
+			state.isMasterTab = true;
+			tabChannel.postMessage({
+				type: 'CLAIM_MASTER',
+				id: state.tabId
+			});
+			if (navigator.onLine) setupGlobalPresence(null);
+		}
+		const storedEmail = localStorage.getItem('hrn_auth_email');
+		const storedPass = localStorage.getItem('hrn_auth_pass');
+		if (storedEmail && storedPass) {
+			if (!navigator.onLine) {
+				const knownUser = await localDB.get('known_users', storedEmail);
+				if (knownUser && knownUser.metadata) {
+					const hashInput = await sha256(storedPass + storedEmail);
+					if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
+						state.user = {
+							id: knownUser.userId,
+							email: knownUser.email,
+							user_metadata: knownUser.metadata
+						};
+						state.isOfflineMode = true;
+						window.nav('scr-lobby');
+						window.loadRooms();
+					} else {
+						window.nav('scr-login');
+						$('l-email').value = storedEmail;
+						$('l-pass').value = storedPass;
+					}
 				} else {
 					window.nav('scr-login');
 					$('l-email').value = storedEmail;
 					$('l-pass').value = storedPass;
 				}
 			} else {
-				window.nav('scr-login');
+				window.setLoading(true, "Auto-logging in...");
 				$('l-email').value = storedEmail;
 				$('l-pass').value = storedPass;
+				const {
+					error
+				} = await db.auth.signInWithPassword({
+					email: storedEmail,
+					password: storedPass
+				});
+				window.setLoading(false);
+				if (!error) {
+					const {
+						data: {
+							user
+						}
+					} = await db.auth.getUser();
+					state.user = user;
+					state.isOfflineMode = false;
+					const hashInput = await sha256(storedPass + storedEmail);
+					await localDB.put('known_users', {
+						id: storedEmail,
+						pass_hash: hashInput,
+						email: storedEmail,
+						metadata: user.user_metadata,
+						userId: user.id
+					});
+					window.nav('scr-lobby');
+					window.loadRooms();
+				} else {
+					localStorage.removeItem('hrn_auth_email');
+					localStorage.removeItem('hrn_auth_pass');
+					window.nav('scr-start');
+				}
 			}
 		} else {
-			window.setLoading(true, "Auto-logging in...");
-			$('l-email').value = storedEmail;
-			$('l-pass').value = storedPass;
-			const {
-				error
-			} = await db.auth.signInWithPassword({
-				email: storedEmail,
-				password: storedPass
-			});
-			window.setLoading(false);
-			if (!error) {
-				const {
-					data: {
-						user
-					}
-				} = await db.auth.getUser();
-				state.user = user;
-				state.isOfflineMode = false;
-				const hashInput = await sha256(storedPass + storedEmail);
-				await localDB.put('known_users', {
-					id: storedEmail,
-					pass_hash: hashInput,
-					email: storedEmail,
-					metadata: user.user_metadata,
-					userId: user.id
-				});
-				window.nav('scr-lobby');
-				window.loadRooms();
-			} else {
-				localStorage.removeItem('hrn_auth_email');
-				localStorage.removeItem('hrn_auth_pass');
-				window.nav('scr-start');
-			}
+			window.nav('scr-start');
 		}
-	} else {
-		window.nav('scr-start');
-	}
-	window.setLoading(false);
-};
-init();
+		window.setLoading(false);
+	};
+	init();
 }
