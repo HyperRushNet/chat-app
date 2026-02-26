@@ -1763,134 +1763,85 @@ export function initHRNchat(customConfig = {}) {
 		window.setLoading(false);
 	};
 	window.handleLogin = async (e) => {
-		if (!e || !e.isTrusted) return;
-		if (state.processingAction) return;
-		if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) return window.toast("Server is full. Please try again later.");
-		state.processingAction = true;
-		const em = $('l-email').value,
-			p = $('l-pass').value;
-		if (!em || !p) {
-			window.toast("Input missing");
-			state.processingAction = false;
-			return;
-		}
-		window.setLoading(true, "Signing In...");
-		if (!navigator.onLine) {
-			const knownUser = await localDB.get('known_users', em);
-			if (knownUser && knownUser.metadata) {
-				const hashInput = await sha256(p + em);
-				if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-					state.user = {
-						id: knownUser.userId,
-						email: knownUser.email,
-						user_metadata: knownUser.metadata
-					};
-					state.isOfflineMode = true;
-					window.nav('scr-lobby');
-					window.loadRooms();
-					window.setLoading(false);
-					state.processingAction = false;
-					window.toast("Offline Login Successful");
-					return;
-				}
-			}
-			window.toast("Offline login failed. Check credentials or go online.");
-			window.setLoading(false);
-			state.processingAction = false;
-			return;
-		}
-		const {
-			error
-		} = await db.auth.signInWithPassword({
-			email: em,
-			password: p
-		});
-		if (error) {
-			window.toast(error.message);
-			window.setLoading(false);
-			state.processingAction = false;
-		} else {
-			localStorage.setItem('hrn_auth_email', em);
-			localStorage.setItem('hrn_auth_pass', p);
-			const {
-				data: {
-					user
-				}
-			} = await db.auth.getUser();
-			state.user = user;
-			state.isOfflineMode = false;
-			const hashInput = await sha256(p + em);
-			await localDB.put('known_users', {
-				id: em,
-				pass_hash: hashInput,
-				email: em,
-				metadata: user.user_metadata,
-				userId: user.id
-			});
-			window.nav('scr-lobby');
-			window.loadRooms();
-			window.setLoading(false);
-			state.processingAction = false;
-		}
-	};
-	window.setLoading(true, "Signing In...");
-	if (!navigator.onLine) {
-		const knownUser = await localDB.get('known_users', em);
-		if (knownUser && knownUser.metadata) {
-			const hashInput = await sha256(p + em);
-			if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-				state.user = {
-					id: knownUser.userId,
-					email: knownUser.email,
-					user_metadata: knownUser.metadata
-				};
-				state.isOfflineMode = true;
-				window.nav('scr-lobby');
-				window.loadRooms();
-				window.setLoading(false);
-				state.processingAction = false;
-				window.toast("Offline Login Successful");
-				return;
-			}
-		}
-		window.toast("Offline login failed. Check credentials or go online.");
-		window.setLoading(false);
-		state.processingAction = false;
-		return;
-	}
-	const {
-		error
-	} = await db.auth.signInWithPassword({
-		email: em,
-		password: p
-	});
-	if (error) {
-		window.toast(error.message);
-		window.setLoading(false);
-		state.processingAction = false;
-	} else {
-		localStorage.setItem('hrn_auth_email', em);
-		localStorage.setItem('hrn_auth_pass', p);
-		const {
-			data: {
-				user
-			}
-		} = await db.auth.getUser();
-		state.user = user;
-		state.isOfflineMode = false;
-		const hashInput = await sha256(p + em);
-		await localDB.put('known_users', {
-			id: em,
-			pass_hash: hashInput,
-			email: em,
-			metadata: user.user_metadata,
-			userId: user.id
-		});
-		window.nav('scr-lobby');
-		window.loadRooms();
-		window.setLoading(false);
-		state.processingAction = false;
-	}
+    if (!e || !e.isTrusted) return;
+    if (state.processingAction) return;
+    
+    // FIX: Wacht tot de aanwezigheidsdata geladen is, anders is de teller onbetrouwbaar (0)
+    if (navigator.onLine && !state.isOfflineMode && !state.globalPresenceReady) {
+        return window.toast("Connecting to server, please wait...");
+    }
+
+    // Nu is de check betrouwbaar
+    if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) {
+        return window.toast("Server is full. Please try again later.");
+    }
+    
+    state.processingAction = true;
+    const em = $('l-email').value,
+        p = $('l-pass').value;
+    if (!em || !p) {
+        window.toast("Input missing");
+        state.processingAction = false;
+        return;
+    }
+    window.setLoading(true, "Signing In...");
+    if (!navigator.onLine) {
+        const knownUser = await localDB.get('known_users', em);
+        if (knownUser && knownUser.metadata) {
+            const hashInput = await sha256(p + em);
+            if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
+                state.user = {
+                    id: knownUser.userId,
+                    email: knownUser.email,
+                    user_metadata: knownUser.metadata
+                };
+                state.isOfflineMode = true;
+                window.nav('scr-lobby');
+                window.loadRooms();
+                window.setLoading(false);
+                state.processingAction = false;
+                window.toast("Offline Login Successful");
+                return;
+            }
+        }
+        window.toast("Offline login failed. Check credentials or go online.");
+        window.setLoading(false);
+        state.processingAction = false;
+        return;
+    }
+    const {
+        error
+    } = await db.auth.signInWithPassword({
+        email: em,
+        password: p
+    });
+    if (error) {
+        window.toast(error.message);
+        window.setLoading(false);
+        state.processingAction = false;
+    } else {
+        localStorage.setItem('hrn_auth_email', em);
+        localStorage.setItem('hrn_auth_pass', p);
+        const {
+            data: {
+                user
+            }
+        } = await db.auth.getUser();
+        state.user = user;
+        state.isOfflineMode = false;
+        const hashInput = await sha256(p + em);
+        await localDB.put('known_users', {
+            id: em,
+            pass_hash: hashInput,
+            email: em,
+            metadata: user.user_metadata,
+            userId: user.id
+        });
+        window.nav('scr-lobby');
+        window.loadRooms();
+        window.setLoading(false);
+        state.processingAction = false;
+    }
 };
 window.handleRegister = async (e) => {
 	if (!e || !e.isTrusted) return;
