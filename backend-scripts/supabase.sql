@@ -59,31 +59,31 @@ ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.room_passwords ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "profiles_insert_self" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "profiles_update_self" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY profiles_select_all ON public.profiles FOR SELECT USING (true);
+CREATE POLICY profiles_insert_self ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY profiles_update_self ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "rooms_select_visible" ON public.rooms FOR SELECT USING (
+CREATE POLICY rooms_select_visible ON public.rooms FOR SELECT USING (
     auth.uid() = created_by 
     OR allowed_users @> ARRAY[auth.uid()::text]
     OR allowed_users @> ARRAY['*']
 );
 
-CREATE POLICY "rooms_insert_authenticated" ON public.rooms FOR INSERT WITH CHECK (
+CREATE POLICY rooms_insert_authenticated ON public.rooms FOR INSERT WITH CHECK (
     auth.role() = 'authenticated' 
     AND auth.uid() = created_by
 );
 
-CREATE POLICY "rooms_delete_policy" ON public.rooms FOR DELETE USING (
+CREATE POLICY rooms_delete_policy ON public.rooms FOR DELETE USING (
     auth.uid() = created_by 
     OR (is_direct = true AND allowed_users @> ARRAY[auth.uid()::text])
 );
 
-CREATE POLICY "rooms_update_creator" ON public.rooms FOR UPDATE USING (auth.uid() = created_by);
+CREATE POLICY rooms_update_creator ON public.rooms FOR UPDATE USING (auth.uid() = created_by);
 
-CREATE POLICY "room_passwords_block_direct" ON public.room_passwords FOR ALL USING (false);
+CREATE POLICY room_passwords_block_direct ON public.room_passwords FOR ALL USING (false);
 
-CREATE POLICY "messages_select_room" ON public.messages FOR SELECT USING (
+CREATE POLICY messages_select_room ON public.messages FOR SELECT USING (
     EXISTS (
         SELECT 1 FROM public.rooms 
         WHERE rooms.id = messages.room_id 
@@ -95,12 +95,12 @@ CREATE POLICY "messages_select_room" ON public.messages FOR SELECT USING (
     )
 );
 
-CREATE POLICY "messages_insert_authenticated" ON public.messages FOR INSERT WITH CHECK (
+CREATE POLICY messages_insert_authenticated ON public.messages FOR INSERT WITH CHECK (
     auth.role() = 'authenticated'
     AND auth.uid() = user_id
 );
 
-CREATE POLICY "messages_update_own" ON public.messages FOR UPDATE
+CREATE POLICY messages_update_own ON public.messages FOR UPDATE
 USING (auth.uid() = user_id)
 WITH CHECK (
     auth.uid() = user_id 
@@ -128,29 +128,36 @@ BEGIN
         full_name = COALESCE(NEW.raw_user_meta_data ->> 'full_name', profiles.full_name),
         avatar_url = COALESCE(NEW.raw_user_meta_data ->> 'avatar_url', profiles.avatar_url),
         updated_at = NOW();
-
     RETURN NEW;
 END;
- $$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $$ BEGIN
+AS $$ 
+BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
- $$;
+$$;
+
+DROP TRIGGER IF EXISTS on_profiles_updated ON public.profiles;
+CREATE TRIGGER on_profiles_updated
+BEFORE UPDATE ON public.profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS on_message_update ON public.messages;
+CREATE TRIGGER on_message_update
+BEFORE UPDATE ON public.messages
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT OR UPDATE OF raw_user_meta_data ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_new_user();
-
-CREATE TRIGGER on_message_update
-BEFORE UPDATE ON public.messages
-FOR EACH ROW
-EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE OR REPLACE FUNCTION public.set_room_password(p_room_id uuid, p_hash text)
 RETURNS void
@@ -175,7 +182,7 @@ BEGIN
         DO UPDATE SET password_hash = EXCLUDED.password_hash;
     END IF;
 END;
- $$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.verify_room_password(p_room_id uuid, p_hash text)
 RETURNS boolean
@@ -192,7 +199,7 @@ BEGIN
         AND password_hash = p_hash
     );
 END;
- $$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.can_access_room(p_room_id uuid)
 RETURNS boolean
@@ -200,7 +207,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
 SET search_path = public
-AS $$ DECLARE
+AS $$ 
+DECLARE
     r_allowed text[];
     r_creator uuid;
 BEGIN
@@ -211,13 +219,11 @@ BEGIN
 
     IF r_creator IS NULL THEN RETURN false; END IF;
     IF r_creator = auth.uid() THEN RETURN true; END IF;
-    
     IF r_allowed @> ARRAY[auth.uid()::text] THEN RETURN true; END IF;
-    
     IF r_allowed @> ARRAY['*'] THEN RETURN true; END IF;
 
     RETURN false;
 END;
- $$;
+$$;
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
