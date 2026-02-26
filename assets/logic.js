@@ -24,7 +24,7 @@ export function initHRNchat(customConfig = {}) {
 		maxMessageLength: customConfig.maxMessageLength || 2000,
 		proxyUrl: customConfig.proxyUrl || "https://vercel-serverless-hrn.vercel.app/api/CORSproxy.js?url="
 	};
-	const AVATARS = ['./assets/avatars/1.png', './assets/avatars/2.png', './assets/avatars/3.png', './assets/avatars/4.png', './assets/avatars/5.jpg'];
+	const AVATARS = ['./assets/avatars/1.png', './assets/avatars/2.png', './assets/avatars/3.avif', './assets/avatars/4.jpg', './assets/avatars/5.jpg'];
 	const DB_NAME = 'HRN_LOCAL_DB';
 	const DB_VERSION = 4;
 	const localDB = {
