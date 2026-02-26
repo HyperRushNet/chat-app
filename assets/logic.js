@@ -357,100 +357,67 @@ export function initHRNchat(customConfig = {}) {
 			return [null, error];
 		}
 	};
-const cacheAvatar = async (profile) => {
-    if (!profile || !profile.avatar_url) return profile;
-    
-    try {
-        // Gebruik de proxy om CORS errors te omzeilen
-        const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
-        if (!response.ok) throw new Error("Invalid image response");
-        
-        const blob = await response.blob();
-        
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = async () => {
-                // Voeg de base64 string toe aan het profiel object
-                profile.cached_avatar = reader.result;
-                
-                // Sla het gehele object op in IndexedDB
-                await localDB.put('profiles', profile);
-                
-                // Update ook de memory cache direct
-                state.profileCache[profile.id] = profile;
-                
-                resolve(profile);
-            };
-            reader.onerror = () => resolve(profile);
-            reader.readAsDataURL(blob);
-        });
-    } catch (e) {
-        console.warn("Avatar caching mislukt:", e);
-        return profile;
-    }
-};
-const getProfile = async (userId) => {
-    if (!userId) return null;
-    
-    // 1. Haal profiel op uit geheugen cache (state)
-    if (state.profileCache[userId]) return state.profileCache[userId];
-
-    // 2. Haal profiel op uit IndexedDB
-    let profile = await localDB.get('profiles', userId);
-
-    // 3. Als we online zijn, controleer op updates
-    if (navigator.onLine && !state.isOfflineMode) {
-        try {
-            // Haal de nieuwste data van de server (inclusief updated_at)
-            const { data: serverProfile, error } = await db.from('profiles')
-                .select('id, full_name, avatar_url, updated_at')
-                .eq('id', userId)
-                .single();
-
-            if (serverProfile) {
-                // Controleer of we een update nodig hebben:
-                // - Nog geen lokaal profiel
-                // - OF server is nieuwer dan lokaal (timestamp check)
-                // - OF avatar URL is veranderd
-                const localTime = profile?.updated_at ? new Date(profile.updated_at).getTime() : 0;
-                const serverTime = serverProfile.updated_at ? new Date(serverProfile.updated_at).getTime() : 0;
-                
-                const needsUpdate = !profile || 
-                                    serverTime > localTime || 
-                                    profile.avatar_url !== serverProfile.avatar_url;
-
-                if (needsUpdate) {
-                    // Maak een schoon object klaar voor opslag
-                    const newProfileData = { ...serverProfile };
-                    
-                    // Als de avatar URL veranderd is OF we nog geen cached avatar hebben, download hem opnieuw
-                    const urlChanged = !profile || profile.avatar_url !== serverProfile.avatar_url;
-                    const needsImageCache = urlChanged || !profile.cached_avatar;
-
-                    if (needsImageCache && serverProfile.avatar_url) {
-                        // Download en cache de avatar (dit slaat zelf op in IDB)
-                        await cacheAvatar(newProfileData);
-                        // Haal het profiel opnieuw op uit IDB zodat de cached_avatar base64 string erin zit
-                        profile = await localDB.get('profiles', userId);
-                    } else {
-                        if (profile?.cached_avatar) {
-                            newProfileData.cached_avatar = profile.cached_avatar;
-                        }
-                        await localDB.put('profiles', newProfileData);
-                        profile = newProfileData;
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn("Kon profiel niet updaten van server:", e);
-        }
-    }
-
-    // Update de memory cache
-    if (profile) state.profileCache[userId] = profile;
-    
-    return profile;
-};
+	const cacheAvatar = async (profile) => {
+		if (!profile || !profile.avatar_url) return profile;
+		try {
+			const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
+			if (!response.ok) throw new Error("Invalid image response");
+			const blob = await response.blob();
+			return new Promise((resolve) => {
+				const reader = new FileReader();
+				reader.onload = async () => {
+					profile.cached_avatar = reader.result;
+					await localDB.put('profiles', profile);
+					state.profileCache[profile.id] = profile;
+					resolve(profile);
+				};
+				reader.onerror = () => resolve(profile);
+				reader.readAsDataURL(blob);
+			});
+		} catch (e) {
+			console.warn("Avatar caching mislukt:", e);
+			return profile;
+		}
+	};
+	const getProfile = async (userId) => {
+		if (!userId) return null;
+		if (state.profileCache[userId]) return state.profileCache[userId];
+		let profile = await localDB.get('profiles', userId);
+		if (navigator.onLine && !state.isOfflineMode) {
+			try {
+				const {
+					data: serverProfile,
+					error
+				} = await db.from('profiles').select('id, full_name, avatar_url, updated_at').eq('id', userId).single();
+				if (serverProfile) {
+					const localTime = profile?.updated_at ? new Date(profile.updated_at).getTime() : 0;
+					const serverTime = serverProfile.updated_at ? new Date(serverProfile.updated_at).getTime() : 0;
+					const needsUpdate = !profile || serverTime > localTime || profile.avatar_url !== serverProfile.avatar_url;
+					if (needsUpdate) {
+						const newProfileData = {
+							...serverProfile
+						};
+						const urlChanged = !profile || profile.avatar_url !== serverProfile.avatar_url;
+						const needsImageCache = urlChanged || !profile.cached_avatar;
+						if (needsImageCache && serverProfile.avatar_url) {
+							await cacheAvatar(newProfileData);
+							profile = await localDB.get('profiles', userId);
+						} else {
+							if (profile?.cached_avatar) {
+								newProfileData.cached_avatar = profile.cached_avatar;
+							}
+							await localDB.put('profiles', newProfileData);
+							profile = newProfileData;
+						}
+					}
+				}
+			} catch (e) {
+				console.warn("Kon profiel niet updaten van server:", e);
+			}
+		}
+		if (profile) state.profileCache[userId] = profile;
+		return profile;
+	};
 	const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
 	const workerBlob = new Blob([
 		workerCode
@@ -1317,21 +1284,26 @@ const getProfile = async (userId) => {
 		navigator.clipboard.writeText(state.currentRoomId);
 		window.toast("Room ID Copied");
 	};
-const updateLobbyAvatar = async () => {
-    if (!state.user) return;
-    const btn = $('lobby-avatar-btn');
-    if (!btn) return;
-    let avatar = state.user.user_metadata?.avatar_url;
-    let name = state.user.user_metadata?.full_name;
-    if (!avatar || !name) {
-        const { data } = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single();
-        if (data) { avatar = data.avatar_url; name = data.full_name; }
-    }
-    const profile = await getProfile(state.user.id);
-    if (profile && profile.cached_avatar) avatar = profile.cached_avatar;
-    if (avatar) btn.innerHTML = `<img src="${avatar}">`;
-    else btn.innerText = (name || "U").charAt(0);
-};
+	const updateLobbyAvatar = async () => {
+		if (!state.user) return;
+		const btn = $('lobby-avatar-btn');
+		if (!btn) return;
+		let avatar = state.user.user_metadata?.avatar_url;
+		let name = state.user.user_metadata?.full_name;
+		if (!avatar || !name) {
+			const {
+				data
+			} = await db.from('profiles').select('avatar_url, full_name').eq('id', state.user.id).single();
+			if (data) {
+				avatar = data.avatar_url;
+				name = data.full_name;
+			}
+		}
+		const profile = await getProfile(state.user.id);
+		if (profile && profile.cached_avatar) avatar = profile.cached_avatar;
+		if (avatar) btn.innerHTML = `<img src="${avatar}">`;
+		else btn.innerText = (name || "U").charAt(0);
+	};
 	const getDateLabel = (d) => {
 		const now = new Date();
 		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1632,82 +1604,108 @@ const updateLobbyAvatar = async () => {
 		window.loadRooms();
 		window.setLoading(false);
 	};
-window.openVault = async (id, n, rawPassword, roomSalt) => {
-    if (!state.user) return window.toast("Please login first");
-    window.setLoading(true, "Opening chat...");
-    state.currentRoomPassword = rawPassword;
-    if (state.chatChannel) state.chatChannel.unsubscribe();
-    state.currentRoomId = id;
-    state.lastRenderedDateLabel = null;
-    state.oldestMessageTimestamp = null;
-    state.hasMoreHistory = true;
-    state.isLoadingHistory = false;
-    const chatContainer = $('chat-messages');
-    chatContainer.innerHTML = '';
-    chatContainer.onscroll = handleScroll;
-    let roomData = await localDB.get('rooms', id);
-    if (navigator.onLine && !state.isOfflineMode) {
-        const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
-        if (netRoom && netRoom.id) { roomData = netRoom; await localDB.put('rooms', roomData); }
-    }
-    if (!roomData) { window.setLoading(false); return window.toast("Room data not found"); }
-    state.currentRoomData = roomData;
-    const isDirect = roomData?.is_direct;
-    let displayTitle = roomData.name;
-    let displayAvatar = roomData?.avatar_url;
-    if (isDirect) {
-        const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id);
-        if (otherUserId) {
-            const profile = await getProfile(otherUserId);
-            if (profile) {
-                displayTitle = profile.full_name;
-                displayAvatar = profile.cached_avatar || profile.avatar_url;
-            }
-        }
-    }
-    $('chat-title').innerText = displayTitle;
-    const avEl = $('chat-avatar-display');
-    if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`;
-    else avEl.innerText = displayTitle.charAt(0).toUpperCase();
-    const editBtn = $('info-edit-btn');
-    if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex';
-    else editBtn.style.display = 'none';
-    const keySource = rawPassword ? (rawPassword + id) : id;
-    await deriveKey(keySource, roomData?.salt);
-    let finalMessages = [];
-    if (navigator.onLine && !state.isOfflineMode) {
-        const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages);
-        if (data && data.length > 0) {
-            data.reverse();
-            try {
-                const res = await workerExec('decryptHistory', { messages: data });
-                const validMsgs = res.results.filter(m => !m.error);
-                const messagesWithRoomId = validMsgs.map(m => ({ ...m, room_id: id }));
-                await localDB.clearRoomMessages(id);
-                await localDB.putAll('messages', messagesWithRoomId);
-                finalMessages = validMsgs;
-            } catch (e) { console.error(e); }
-        }
-    }
-    if (finalMessages.length === 0) finalMessages = await localDB.getRoomMessages(id);
-    window.nav('scr-chat');
-    if (finalMessages.length > 0) {
-        if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
-        let html = '', prev = null;
-        finalMessages.forEach(m => { html += renderMsg(m, prev, isDirect); prev = m; });
-        chatContainer.innerHTML = html;
-    }
-    checkChatEmpty();
-    $('chat-input').style.display = 'block';
-    $('send-btn').style.display = 'flex';
-    if (!navigator.onLine || state.isOfflineMode) setConnectionVisuals('offline');
-    else {
-        setConnectionVisuals('connecting');
-        await initRoomPresence(id);
-        await setupChatChannel(id);
-    }
-    setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; window.setLoading(false); }, 100);
-};
+	window.openVault = async (id, n, rawPassword, roomSalt) => {
+		if (!state.user) return window.toast("Please login first");
+		window.setLoading(true, "Opening chat...");
+		state.currentRoomPassword = rawPassword;
+		if (state.chatChannel) state.chatChannel.unsubscribe();
+		state.currentRoomId = id;
+		state.lastRenderedDateLabel = null;
+		state.oldestMessageTimestamp = null;
+		state.hasMoreHistory = true;
+		state.isLoadingHistory = false;
+		const chatContainer = $('chat-messages');
+		chatContainer.innerHTML = '';
+		chatContainer.onscroll = handleScroll;
+		let roomData = await localDB.get('rooms', id);
+		if (navigator.onLine && !state.isOfflineMode) {
+			const {
+				data: netRoom
+			} = await db.from('rooms').select('*').eq('id', id).single();
+			if (netRoom && netRoom.id) {
+				roomData = netRoom;
+				await localDB.put('rooms', roomData);
+			}
+		}
+		if (!roomData) {
+			window.setLoading(false);
+			return window.toast("Room data not found");
+		}
+		state.currentRoomData = roomData;
+		const isDirect = roomData?.is_direct;
+		let displayTitle = roomData.name;
+		let displayAvatar = roomData?.avatar_url;
+		if (isDirect) {
+			const otherUserId = roomData?.allowed_users?.find(uid => uid !== state.user.id);
+			if (otherUserId) {
+				const profile = await getProfile(otherUserId);
+				if (profile) {
+					displayTitle = profile.full_name;
+					displayAvatar = profile.cached_avatar || profile.avatar_url;
+				}
+			}
+		}
+		$('chat-title').innerText = displayTitle;
+		const avEl = $('chat-avatar-display');
+		if (displayAvatar) avEl.innerHTML = `<img src="${displayAvatar}">`;
+		else avEl.innerText = displayTitle.charAt(0).toUpperCase();
+		const editBtn = $('info-edit-btn');
+		if (!isDirect && roomData?.created_by === state.user.id) editBtn.style.display = 'flex';
+		else editBtn.style.display = 'none';
+		const keySource = rawPassword ? (rawPassword + id) : id;
+		await deriveKey(keySource, roomData?.salt);
+		let finalMessages = [];
+		if (navigator.onLine && !state.isOfflineMode) {
+			const {
+				data
+			} = await db.from('messages').select('*').eq('room_id', id).order('created_at', {
+				ascending: false
+			}).limit(CONFIG.maxMessages);
+			if (data && data.length > 0) {
+				data.reverse();
+				try {
+					const res = await workerExec('decryptHistory', {
+						messages: data
+					});
+					const validMsgs = res.results.filter(m => !m.error);
+					const messagesWithRoomId = validMsgs.map(m => ({
+						...m,
+						room_id: id
+					}));
+					await localDB.clearRoomMessages(id);
+					await localDB.putAll('messages', messagesWithRoomId);
+					finalMessages = validMsgs;
+				} catch (e) {
+					console.error(e);
+				}
+			}
+		}
+		if (finalMessages.length === 0) finalMessages = await localDB.getRoomMessages(id);
+		window.nav('scr-chat');
+		if (finalMessages.length > 0) {
+			if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
+			let html = '',
+				prev = null;
+			finalMessages.forEach(m => {
+				html += renderMsg(m, prev, isDirect);
+				prev = m;
+			});
+			chatContainer.innerHTML = html;
+		}
+		checkChatEmpty();
+		$('chat-input').style.display = 'block';
+		$('send-btn').style.display = 'flex';
+		if (!navigator.onLine || state.isOfflineMode) setConnectionVisuals('offline');
+		else {
+			setConnectionVisuals('connecting');
+			await initRoomPresence(id);
+			await setupChatChannel(id);
+		}
+		setTimeout(() => {
+			chatContainer.scrollTop = chatContainer.scrollHeight;
+			window.setLoading(false);
+		}, 100);
+	};
 	const applyRateLimit = () => {
 		const now = Date.now();
 		if (now - state.lastMessageTime < CONFIG.rateLimitMs) return false;
@@ -2178,42 +2176,61 @@ window.openVault = async (id, n, rawPassword, roomSalt) => {
 		state.lastLobbyRefresh = now;
 		await window.loadRooms();
 	};
-window.loadRooms = async () => {
-    if (!state.user) return;
-    const uid = state.user.id;
-    const processRooms = async (rooms) => {
-        const processed = [];
-        for (const r of rooms) {
-            if (!r || !r.id) continue;
-            let name = r.name, avatar = r.avatar_url;
-            if (r.is_direct && r.allowed_users) {
-                const otherId = r.allowed_users.find(id => id !== uid);
-                if (otherId) {
-                    const profile = await getProfile(otherId);
-                    if (profile) {
-                        name = profile.full_name;
-                        avatar = profile.cached_avatar || profile.avatar_url;
-                    }
-                }
-            }
-            processed.push({ ...r, display_name: name, display_avatar: avatar });
-        }
-        return processed;
-    };
-    const localRooms = await localDB.getAll('rooms');
-    if (localRooms.length > 0) { state.allRooms = await processRooms(localRooms); window.filterRooms(); }
-    if (!navigator.onLine || state.isOfflineMode) return;
-    window.setLoading(true, "Syncing...");
-    const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false });
-    if (error) { window.toast("Sync failed"); window.setLoading(false); return; }
-    if (rooms && rooms.length > 0) {
-        await localDB.clear('rooms'); await localDB.putAll('rooms', rooms);
-        state.allRooms = await processRooms(rooms);
-        await localDB.saveUserTree(uid, rooms);
-        window.filterRooms();
-    }
-    window.setLoading(false); updateLobbyAvatar();
-};
+	window.loadRooms = async () => {
+		if (!state.user) return;
+		const uid = state.user.id;
+		const processRooms = async (rooms) => {
+			const processed = [];
+			for (const r of rooms) {
+				if (!r || !r.id) continue;
+				let name = r.name,
+					avatar = r.avatar_url;
+				if (r.is_direct && r.allowed_users) {
+					const otherId = r.allowed_users.find(id => id !== uid);
+					if (otherId) {
+						const profile = await getProfile(otherId);
+						if (profile) {
+							name = profile.full_name;
+							avatar = profile.cached_avatar || profile.avatar_url;
+						}
+					}
+				}
+				processed.push({
+					...r,
+					display_name: name,
+					display_avatar: avatar
+				});
+			}
+			return processed;
+		};
+		const localRooms = await localDB.getAll('rooms');
+		if (localRooms.length > 0) {
+			state.allRooms = await processRooms(localRooms);
+			window.filterRooms();
+		}
+		if (!navigator.onLine || state.isOfflineMode) return;
+		window.setLoading(true, "Syncing...");
+		const {
+			data: rooms,
+			error
+		} = await db.from('rooms').select('*').order('created_at', {
+			ascending: false
+		});
+		if (error) {
+			window.toast("Sync failed");
+			window.setLoading(false);
+			return;
+		}
+		if (rooms && rooms.length > 0) {
+			await localDB.clear('rooms');
+			await localDB.putAll('rooms', rooms);
+			state.allRooms = await processRooms(rooms);
+			await localDB.saveUserTree(uid, rooms);
+			window.filterRooms();
+		}
+		window.setLoading(false);
+		updateLobbyAvatar();
+	};
 	window.filterRooms = () => {
 		const q = $('search-bar').value.toLowerCase();
 		const list = $('room-list');
