@@ -358,46 +358,98 @@ export function initHRNchat(customConfig = {}) {
 		}
 	};
 const cacheAvatar = async (profile) => {
-    if (!profile || !profile.avatar_url || profile.cached_avatar) return profile;
+    if (!profile || !profile.avatar_url) return profile;
+    
     try {
+        // Gebruik de proxy om CORS errors te omzeilen
         const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
         if (!response.ok) throw new Error("Invalid image response");
+        
         const blob = await response.blob();
+        
         return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = async () => {
+                // Voeg de base64 string toe aan het profiel object
                 profile.cached_avatar = reader.result;
+                
+                // Sla het gehele object op in IndexedDB
                 await localDB.put('profiles', profile);
+                
+                // Update ook de memory cache direct
+                state.profileCache[profile.id] = profile;
+                
                 resolve(profile);
             };
             reader.onerror = () => resolve(profile);
             reader.readAsDataURL(blob);
         });
     } catch (e) {
+        console.warn("Avatar caching mislukt:", e);
         return profile;
     }
 };
 const getProfile = async (userId) => {
     if (!userId) return null;
+    
+    // 1. Haal profiel op uit geheugen cache (state)
     if (state.profileCache[userId]) return state.profileCache[userId];
+
+    // 2. Haal profiel op uit IndexedDB
     let profile = await localDB.get('profiles', userId);
-    if (profile) {
-        state.profileCache[userId] = profile;
-        if (navigator.onLine && !state.isOfflineMode && profile.avatar_url && !profile.cached_avatar) cacheAvatar(profile).then(updated => state.profileCache[userId] = updated);
-        return profile;
-    }
+
+    // 3. Als we online zijn, controleer op updates
     if (navigator.onLine && !state.isOfflineMode) {
         try {
-            const { data } = await db.from('profiles').select('full_name, avatar_url').eq('id', userId).single();
-            if (data) {
-                state.profileCache[userId] = data;
-                await localDB.put('profiles', data);
-                if (data.avatar_url) cacheAvatar(data);
-                return data;
+            // Haal de nieuwste data van de server (inclusief updated_at)
+            const { data: serverProfile, error } = await db.from('profiles')
+                .select('id, full_name, avatar_url, updated_at')
+                .eq('id', userId)
+                .single();
+
+            if (serverProfile) {
+                // Controleer of we een update nodig hebben:
+                // - Nog geen lokaal profiel
+                // - OF server is nieuwer dan lokaal (timestamp check)
+                // - OF avatar URL is veranderd
+                const localTime = profile?.updated_at ? new Date(profile.updated_at).getTime() : 0;
+                const serverTime = serverProfile.updated_at ? new Date(serverProfile.updated_at).getTime() : 0;
+                
+                const needsUpdate = !profile || 
+                                    serverTime > localTime || 
+                                    profile.avatar_url !== serverProfile.avatar_url;
+
+                if (needsUpdate) {
+                    // Maak een schoon object klaar voor opslag
+                    const newProfileData = { ...serverProfile };
+                    
+                    // Als de avatar URL veranderd is OF we nog geen cached avatar hebben, download hem opnieuw
+                    const urlChanged = !profile || profile.avatar_url !== serverProfile.avatar_url;
+                    const needsImageCache = urlChanged || !profile.cached_avatar;
+
+                    if (needsImageCache && serverProfile.avatar_url) {
+                        // Download en cache de avatar (dit slaat zelf op in IDB)
+                        await cacheAvatar(newProfileData);
+                        // Haal het profiel opnieuw op uit IDB zodat de cached_avatar base64 string erin zit
+                        profile = await localDB.get('profiles', userId);
+                    } else {
+                        if (profile?.cached_avatar) {
+                            newProfileData.cached_avatar = profile.cached_avatar;
+                        }
+                        await localDB.put('profiles', newProfileData);
+                        profile = newProfileData;
+                    }
+                }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn("Kon profiel niet updaten van server:", e);
+        }
     }
-    return null;
+
+    // Update de memory cache
+    if (profile) state.profileCache[userId] = profile;
+    
+    return profile;
 };
 	const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
 	const workerBlob = new Blob([
