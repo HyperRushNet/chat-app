@@ -26,7 +26,7 @@ export function initHRNchat(customConfig = {}) {
 	};
 	const AVATARS = ['./assets/avatars/1.png', './assets/avatars/2.png', './assets/avatars/3.avif', './assets/avatars/4.jpg', './assets/avatars/5.jpg'];
 	const DB_NAME = 'HRN_LOCAL_DB';
-	const DB_VERSION = 4;
+	const DB_VERSION = 5;
 	const localDB = {
 		db: null,
 		async init() {
