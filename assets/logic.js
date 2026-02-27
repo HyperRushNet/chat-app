@@ -1,11 +1,3 @@
-/* 
- *  © 2026 
- *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.5 
- *  assets/logic.js 
- *  MIT License
- */
-
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 export function initHRNchat(customConfig = {}) {
     const CONFIG = {
@@ -493,6 +485,13 @@ export function initHRNchat(customConfig = {}) {
             state.globalOnlineCount = uniqueUserIds.size;
             state.globalPresenceReady = true;
             schedulePresenceUpdate();
+            if (state.user && uniqueUserIds.size >= CONFIG.maxUsers) {
+                if (!uniqueUserIds.has(state.user.id)) {
+                    window.toast("Server is full. Connection closed.");
+                    window.handleLogout();
+                    return;
+                }
+            }
         }).subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 if (userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() });
