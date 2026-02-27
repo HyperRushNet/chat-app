@@ -4,7 +4,7 @@ export function initHRNchat(customConfig = {}) {
         supabaseUrl: customConfig.supabaseUrl || "https://jnhsuniduzvhkpexorqk.supabase.co",
         supabaseKey: customConfig.supabaseKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaHN1bmlkdXp2aGtwZXhvcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NjAxMDYsImV4cCI6MjA4NzEzNjEwNn0.9I5bbqskCgksUaNWYlFFo0-6Odht28pOMdxTGZECahY",
         mailApi: customConfig.mailApi || "https://vercel-serverless-hrn.vercel.app/api/mailAPI",
-        maxUsers: customConfig.maxUsers || 1,
+        maxUsers: customConfig.maxUsers || 150,
         maxMessages: customConfig.maxMessages || 50,
         historyLoadLimit: customConfig.historyLoadLimit || 20,
         rateLimitMs: customConfig.rateLimitMs || 1000,
@@ -485,13 +485,6 @@ export function initHRNchat(customConfig = {}) {
             state.globalOnlineCount = uniqueUserIds.size;
             state.globalPresenceReady = true;
             schedulePresenceUpdate();
-            if (state.user && uniqueUserIds.size >= CONFIG.maxUsers) {
-                if (!uniqueUserIds.has(state.user.id)) {
-                    window.toast("Server is full. Connection closed.");
-                    window.handleLogout();
-                    return;
-                }
-            }
         }).subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 if (userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() });
@@ -1536,9 +1529,6 @@ export function initHRNchat(customConfig = {}) {
         if (navigator.onLine && !state.isOfflineMode && !state.globalPresenceReady) {
             return window.toast("Connecting to server, please wait...");
         }
-        if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) {
-            return window.toast("Server is full. Please try again later.");
-        }
         state.processingAction = true;
         const em = $('l-email').value, p = $('l-pass').value;
         if (!em || !p) {
@@ -1596,6 +1586,22 @@ export function initHRNchat(customConfig = {}) {
         if (!n || !em || p.length < 8) {
             window.toast("Check inputs");
             state.processingAction = false;
+            return;
+        }
+        window.setLoading(true, "Checking capacity...");
+        try {
+            const { count, error: countError } = await db.from('profiles').select('*', { count: 'exact', head: true });
+            if (countError) throw countError;
+            if (count !== null && count >= CONFIG.maxUsers) {
+                window.toast("Registration limit reached.");
+                state.processingAction = false;
+                window.setLoading(false);
+                return;
+            }
+        } catch (err) {
+            window.toast("Could not verify server status. Try again.");
+            state.processingAction = false;
+            window.setLoading(false);
             return;
         }
         window.setLoading(true, "Sending Code...");
