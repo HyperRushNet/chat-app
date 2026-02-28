@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkUp - Crystal Audio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #06060a;
+            --card: rgba(12, 12, 20, 0.9);
+            --border: rgba(255, 255, 255, 0.06);
+            --text: #f0f0f5;
+            --muted: #5a5a70;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.4);
+            --success: #10b981;
+            --danger: #f43f5e;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html, body {
+            height: 100%;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            min-height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            color: var(--text);
+            position: relative;
+            overflow-x: hidden;
+            background: var(--bg);
+        }
+        
+        .bg-mesh {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background: 
+                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 50% at 100% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+                var(--bg);
+        }
+        
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 20%, transparent 70%);
+        }
+        
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 360px;
+            backdrop-filter: blur(40px);
+            box-shadow: 
+                0 0 0 1px rgba(255,255,255,0.03) inset,
+                0 30px 60px -20px rgba(0,0,0,0.6),
+                0 0 100px -30px var(--accent-glow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        }
+        
+        .input-field {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+            border-radius: 14px;
+        }
+        
+        .input-field:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+        }
+        
+        .input-field::placeholder {
+            color: var(--muted);
+        }
+        
+        .btn {
+            cursor: pointer;
+            font-weight: 600;
+            font-family: inherit;
+            border: none;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-radius: 14px;
+            user-select: none;
+        }
+        
+        .btn:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+        
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
+            color: white;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
+            transform: translateY(-1px);
+        }
+        
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-ghost:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #e11d48 0%, var(--danger) 100%);
+            color: white;
+            box-shadow: 0 4px 20px rgba(244, 63, 94, 0.3);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #059669 0%, var(--success) 100%);
+            color: white;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+        }
+        
+        .screen {
+            display: none;
+            animation: screenIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        @keyframes screenIn {
+            from {
+                opacity: 0;
+                transform: translateY(16px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        @keyframes pulseRing {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        
+        .pulse-ring {
+            position: absolute;
+            inset: -6px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            animation: pulseRing 1.8s ease-out infinite;
+            pointer-events: none;
+        }
+        
+        .visualizer-canvas {
+            width: 100%;
+            height: 56px;
+            display: block;
+            border-radius: 12px;
+            background: rgba(0,0,0,0.3);
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            position: relative;
+        }
+        
+        .status-indicator.error {
+            background: var(--danger);
+        }
+        
+        .status-indicator.error .pulse-ring {
+            border-color: var(--danger);
+        }
+        
+        #toastContainer {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .toast {
+            background: rgba(20, 20, 30, 0.95);
+            color: var(--text);
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            animation: toastSlide 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        @keyframes toastSlide {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+        
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.25s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-overlay.active .card {
+            animation: modalPop 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes modalPop {
+            from {
+                opacity: 0;
+                transform: scale(0.92) translateY(20px);
+            }
+        }
+        
+        .peer-id-display {
+            font-family: 'Space Grotesk', monospace;
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.3px;
+        }
+        
+        .section-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.8px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        
+        .icon-box {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        
+        .quality-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-mesh"></div>
+    <div class="bg-grid"></div>
+    <div id="toastContainer"></div>
+    
+    <!-- Lobby Screen -->
+    <div id="lobbyScreen" class="screen active">
+        <div class="card">
+            <div class="p-8 text-center">
+                <div class="icon-box mx-auto mb-5">
+                    <i data-lucide="headphones" class="w-6 h-6 text-purple-400"></i>
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight mb-1">LinkUp</h1>
+                <p class="text-sm text-zinc-500 mb-4">Crystal Clear Audio</p>
+                <div class="quality-badge">
+                    <i data-lucide="sparkles" class="w-3 h-3"></i>
+                    HD Audio
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="section-label block mb-2.5">Custom ID (optional)</label>
+                    <input 
+                        type="text" 
+                        id="customIdInput" 
+                        class="input-field w-full px-4 py-3.5" 
+                        placeholder="Leave empty for auto..."
+                        maxlength="20"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
+                <button id="connectBtn" class="btn btn-primary w-full py-4 text-sm">
+                    <i data-lucide="wifi" class="w-4 h-4"></i>
+                    Connect to Network
+                </button>
+                <p id="lobbyStatus" class="text-center text-xs text-zinc-600 h-4"></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Screen -->
+    <div id="mainScreen" class="screen">
+        <div class="card">
+            <div class="p-4 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="status-indicator">
+                        <div class="pulse-ring" style="color: var(--success);"></div>
+                    </div>
+                    <span class="text-xs text-zinc-500 font-medium">Connected</span>
+                </div>
+                <button id="copyIdBtn" class="btn btn-ghost text-xs px-3.5 py-2">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    Copy
+                </button>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="p-6 text-center">
+                <p class="section-label mb-2">Your Peer ID</p>
+                <p id="myPeerId" class="peer-id-display truncate">---</p>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="p-6 space-y-3">
+                <label class="section-label block">Partner ID</label>
+                <div class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="remoteIdInput" 
+                        class="input-field flex-1 px-4 py-3.5 min-w-0" 
+                        placeholder="Enter peer ID..."
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    <button id="callBtn" class="btn btn-primary px-5" aria-label="Start call">
+                        <i data-lucide="phone" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <p id="mainStatus" class="text-center text-xs h-4 pt-0.5"></p>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="p-4">
+                <button id="disconnectBtn" class="btn btn-ghost w-full py-3 text-sm text-zinc-500">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    Disconnect
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Call Screen -->
+    <div id="callScreen" class="screen">
+        <div class="card">
+            <div class="p-6 text-center">
+                <p class="section-label mb-1.5">In Call With</p>
+                <h2 id="remotePeerName" class="peer-id-display text-xl truncate px-2 mb-3">Partner</h2>
+                <div class="flex items-center justify-center gap-3">
+                    <span id="callDuration" class="text-xs font-mono text-zinc-400 bg-black/40 px-4 py-2 rounded-lg border border-white/5">00:00</span>
+                    <div class="quality-badge">
+                        <i data-lucide="activity" class="w-3 h-3"></i>
+                        <span id="qualityIndicator">Excellent</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="p-3">
+                <canvas id="visualizer" class="visualizer-canvas"></canvas>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="p-5">
+                <div class="flex items-center justify-between bg-black/30 rounded-2xl p-4 mb-6 border border-white/5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center">
+                            <i data-lucide="user" class="w-4 h-4 text-zinc-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium">You</p>
+                            <p id="localStatusText" class="text-xs text-emerald-400">Microphone active</p>
+                        </div>
+                    </div>
+                    <div id="localMuteIndicator" class="w-3 h-3 rounded-full bg-emerald-500 transition-colors"></div>
+                </div>
+                
+                <div class="flex justify-center items-center gap-5">
+                    <button id="muteBtn" class="btn w-14 h-14 rounded-full bg-zinc-800/80 border border-white/10 hover:bg-zinc-700/80 transition-all" aria-label="Toggle mute">
+                        <i data-lucide="mic" class="w-5 h-5" id="muteIcon"></i>
+                    </button>
+                    <button id="hangupBtn" class="btn btn-danger w-16 h-16 rounded-full" aria-label="End call">
+                        <i data-lucide="phone-off" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Incoming Call Modal -->
+    <div id="incomingModal" class="modal-overlay">
+        <div class="card">
+            <div class="p-8 text-center">
+                <div class="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mx-auto mb-6 relative">
+                    <div class="pulse-ring" style="color: var(--success);"></div>
+                    <i data-lucide="phone-incoming" class="w-7 h-7 text-white"></i>
+                </div>
+                <p class="section-label mb-1.5">Incoming Call</p>
+                <p id="callerId" class="peer-id-display text-lg truncate mb-8 px-2">Unknown</p>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="declineBtn" class="btn btn-danger py-3.5 text-sm">
+                        <i data-lucide="phone-off" class="w-4 h-4"></i>
+                        Decline
+                    </button>
+                    <button id="acceptBtn" class="btn btn-success py-3.5 text-sm">
+                        <i data-lucide="phone" class="w-4 h-4"></i>
+                        Accept
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    (function() {
+        'use strict';
+        
+        // Signal types for communication
+        const SIGNAL = Object.freeze({
+            REJECT: 'reject',
+            BUSY: 'busy',
+            HANGUP: 'hangup',
+            MUTE: 'mute'
+        });
+        
+        // High-quality audio constraints
+        const AUDIO_CONSTRAINTS = Object.freeze({
+            audio: {
+                echoCancellation: { ideal: true },
+                noiseSuppression: { ideal: true },
+                autoGainControl: { ideal: true },
+                sampleRate: { ideal: 48000 },
+                channelCount: { ideal: 2 },
+                latency: { ideal: 0.01 }
+            },
+            video: false
+        });
+        
+        // Application state - initialized before any function calls
+        const state = {
+            peer: null,
+            localStream: null,
+            currentCall: null,
+            remotePeerId: null,
+            activeConn: null,
+            audioCtx: null,
+            analyser: null,
+            animationId: null,
+            timerInterval: null,
+            startTime: null,
+            isMuted: false,
+            timeoutTimer: null,
+            audioElement: null,
+            isCallActive: false
+        };
+        
+        // DOM element cache
+        const $ = (id) => document.getElementById(id);
+        
+        const ui = {
+            screens: {
+                lobby: $('lobbyScreen'),
+                main: $('mainScreen'),
+                call: $('callScreen')
+            },
+            lobby: {
+                input: $('customIdInput'),
+                btn: $('connectBtn'),
+                status: $('lobbyStatus')
+            },
+            main: {
+                id: $('myPeerId'),
+                copyBtn: $('copyIdBtn'),
+                remoteInput: $('remoteIdInput'),
+                callBtn: $('callBtn'),
+                status: $('mainStatus'),
+                disconnectBtn: $('disconnectBtn')
+            },
+            call: {
+                remoteName: $('remotePeerName'),
+                localStatus: $('localStatusText'),
+                localInd: $('localMuteIndicator'),
+                muteBtn: $('muteBtn'),
+                muteIcon: $('muteIcon'),
+                hangup: $('hangupBtn'),
+                duration: $('callDuration'),
+                canvas: $('visualizer'),
+                qualityIndicator: $('qualityIndicator')
+            },
+            modal: {
+                el: $('incomingModal'),
+                callerId: $('callerId'),
+                accept: $('acceptBtn'),
+                decline: $('declineBtn')
+            },
+            toasts: $('toastContainer')
+        };
+        
+        // Initialize icons
+        lucide.createIcons();
+        
+        // Utility: Show screen with transition
+        function showScreen(name) {
+            Object.values(ui.screens).forEach(s => s.classList.remove('active'));
+            ui.screens[name].classList.add('active');
+        }
+        
+        // Utility: Show toast notification
+        function toast(msg, type = 'info') {
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.textContent = msg;
+            
+            if (type === 'error') {
+                t.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+            } else if (type === 'success') {
+                t.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            }
+            
+            ui.toasts.appendChild(t);
+            
+            const timeout = setTimeout(() => {
+                t.style.opacity = '0';
+                t.style.transform = 'translateY(-10px)';
+                setTimeout(() => t.remove(), 200);
+            }, 3000);
+            
+            // Cleanup timeout if toast is removed early
+            t.dataset.timeout = timeout;
+        }
+        
+        // Utility: Format duration
+        function formatDuration(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+        
+        // Utility: Set main status message
+        function setMainStatus(msg, type = 'neutral') {
+            ui.main.status.textContent = msg;
+            ui.main.status.style.color = type === 'error' ? '#f43f5e' : 
+                                          type === 'success' ? '#10b981' : '#5a5a70';
+        }
+        
+        // Initialize peer connection
+        function initPeer(customId) {
+            ui.lobby.btn.disabled = true;
+            ui.lobby.status.textContent = 'Establishing connection...';
+            
+            const peerConfig = {
+                debug: 0,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ],
+                    sdpSemantics: 'unified-plan'
+                }
+            };
+            
+            state.peer = new Peer(customId || undefined, peerConfig);
+            
+            state.peer.on('open', (peerId) => {
+                ui.main.id.textContent = peerId;
+                showScreen('main');
+                toast('Connected to network', 'success');
+            });
+            
+            state.peer.on('connection', (conn) => {
+                if (state.isCallActive) {
+                    conn.on('open', () => conn.send({ type: SIGNAL.BUSY }));
+                    setTimeout(() => conn.close(), 100);
+                    return;
+                }
+                handleDataConnection(conn);
+            });
+            
+            state.peer.on('call', (call) => {
+                if (state.isCallActive) {
+                    call.close();
+                    toast('Missed call (busy)', 'error');
+                    return;
+                }
+                
+                state.currentCall = call;
+                state.remotePeerId = call.peer;
+                ui.modal.callerId.textContent = call.peer;
+                ui.modal.el.classList.add('active');
+            });
+            
+            state.peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                ui.lobby.btn.disabled = false;
+                ui.lobby.status.textContent = '';
+                
+                const messages = {
+                    'unavailable-id': 'This ID is already in use',
+                    'invalid-id': 'Invalid ID format',
+                    'peer-unavailable': 'Could not connect to peer',
+                    'network': 'Network connection unavailable',
+                    'server-error': 'Server error occurred'
+                };
+                
+                toast(messages[err.type] || 'Connection error', 'error');
+            });
+            
+            state.peer.on('disconnected', () => {
+                // Attempt reconnection
+                setTimeout(() => {
+                    if (state.peer && !state.peer.destroyed) {
+                        state.peer.reconnect();
+                    }
+                }, 1000);
+            });
+        }
+        
+        // Handle data connection
+        function handleDataConnection(conn) {
+            conn.on('open', () => {
+                state.activeConn = conn;
+            });
+            
+            conn.on('data', (data) => handleSignal(data));
+            
+            conn.on('close', () => {
+                if (state.activeConn === conn) {
+                    state.activeConn = null;
+                }
+            });
+            
+            conn.on('error', () => {
+                if (state.activeConn === conn) {
+                    state.activeConn = null;
+                }
+            });
+        }
+        
+        // Handle incoming signals
+        function handleSignal(data) {
+            switch (data.type) {
+                case SIGNAL.REJECT:
+                    toast('Call declined', 'error');
+                    setMainStatus('Declined', 'error');
+                    cleanupCall(false);
+                    break;
+                    
+                case SIGNAL.BUSY:
+                    toast('User is currently busy', 'error');
+                    setMainStatus('Busy', 'error');
+                    cleanupCall(false);
+                    break;
+                    
+                case SIGNAL.HANGUP:
+                    toast('Call ended by partner');
+                    cleanupCall(false);
+                    break;
+                    
+                case SIGNAL.MUTE:
+                    // Could show remote mute status
+                    break;
+            }
+        }
+        
+        // Get user media with high quality settings
+        async function getHighQualityAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS);
+                return stream;
+            } catch (err) {
+                // Fallback to basic constraints
+                console.warn('High quality audio not available, using fallback');
+                return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            }
+        }
+        
+        // Start outgoing call
+        async function startCall(remoteId) {
+            if (!remoteId || !state.peer) return;
+            
+            ui.main.callBtn.disabled = true;
+            setMainStatus('Connecting...', 'neutral');
+            
+            try {
+                // Establish data connection first
+                const conn = state.peer.connect(remoteId, { 
+                    reliable: true,
+                    serialization: 'json'
+                });
+                
+                handleDataConnection(conn);
+                
+                conn.on('open', async () => {
+                    try {
+                        state.localStream = await getHighQualityAudio();
+                        initAudioContext();
+                        
+                        const call = state.peer.call(remoteId, state.localStream, {
+                            sdpTransform: (sdp) => {
+                                // Prefer high quality audio codecs
+                                return sdp;
+                            }
+                        });
+                        
+                        state.currentCall = call;
+                        state.remotePeerId = remoteId;
+                        state.isCallActive = true;
+                        setMainStatus('Ringing...', 'neutral');
+                        
+                        // 30 second timeout for no answer
+                        state.timeoutTimer = setTimeout(() => {
+                            if (!state.analyser) {
+                                toast('No answer', 'error');
+                                setMainStatus('No answer', 'error');
+                                conn.send({ type: SIGNAL.HANGUP });
+                                cleanupCall(false);
+                            }
+                        }, 30000);
+                        
+                        call.on('stream', (remoteStream) => {
+                            clearTimeout(state.timeoutTimer);
+                            handleRemoteStream(remoteStream);
+                        });
+                        
+                        call.on('close', () => cleanupCall(false));
+                        call.on('error', () => cleanupCall(false));
+                        
+                    } catch (err) {
+                        console.error('Media error:', err);
+                        toast('Microphone access required', 'error');
+                        cleanupCall(false);
+                    }
+                });
+                
+                conn.on('error', () => {
+                    toast('Connection failed', 'error');
+                    cleanupCall(false);
+                });
+                
+            } catch (err) {
+                console.error('Call error:', err);
+                toast('Failed to start call', 'error');
+                cleanupCall(false);
+            }
+        }
+        
+        // Accept incoming call
+        async function acceptCall() {
+            ui.modal.el.classList.remove('active');
+            
+            try {
+                state.localStream = await getHighQualityAudio();
+                initAudioContext();
+                
+                state.currentCall.answer(state.localStream);
+                state.isCallActive = true;
+                
+                // Ensure data connection
+                if (!state.activeConn || state.activeConn.peer !== state.remotePeerId) {
+                    const conn = state.peer.connect(state.remotePeerId);
+                    handleDataConnection(conn);
+                }
+                
+                state.currentCall.on('stream', (remoteStream) => {
+                    handleRemoteStream(remoteStream);
+                });
+                
+                state.currentCall.on('close', () => cleanupCall(false));
+                state.currentCall.on('error', () => cleanupCall(false));
+                
+            } catch (err) {
+                console.error('Media error:', err);
+                toast('Microphone access required', 'error');
+                cleanupCall(true);
+            }
+        }
+        
+        // Decline incoming call
+        function declineCall() {
+            if (state.activeConn && state.activeConn.open) {
+                state.activeConn.send({ type: SIGNAL.REJECT });
+            }
+            
+            ui.modal.el.classList.remove('active');
+            
+            if (state.currentCall) {
+                state.currentCall.close();
+            }
+            
+            resetCallState();
+        }
+        
+        // Handle remote audio stream
+        function handleRemoteStream(stream) {
+            // Clean up existing audio element
+            if (state.audioElement) {
+                state.audioElement.pause();
+                state.audioElement.srcObject = null;
+                state.audioElement.remove();
+            }
+            
+            // Create new audio element
+            state.audioElement = document.createElement('audio');
+            state.audioElement.srcObject = stream;
+            state.audioElement.autoplay = true;
+            state.audioElement.playsInline = true;
+            document.body.appendChild(state.audioElement);
+            
+            // Setup analyzer
+            if (state.audioCtx && state.audioCtx.state !== 'closed') {
+                try {
+                    const source = state.audioCtx.createMediaStreamSource(stream);
+                    state.analyser = state.audioCtx.createAnalyser();
+                    state.analyser.fftSize = 64;
+                    state.analyser.smoothingTimeConstant = 0.8;
+                    source.connect(state.analyser);
+                } catch (e) {
+                    console.warn('Analyzer setup failed:', e);
+                }
+            }
+            
+            enterCallUI();
+        }
+        
+        // Initialize audio context (must be after user gesture)
+        function initAudioContext() {
+            if (!state.audioCtx || state.audioCtx.state === 'closed') {
+                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                    latencyHint: 'interactive',
+                    sampleRate: 48000
+                });
+            }
+            
+            if (state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume();
+            }
+        }
+        
+        // Enter call UI
+        function enterCallUI() {
+            ui.call.remoteName.textContent = state.remotePeerId || 'Partner';
+            showScreen('call');
+            setMainStatus('');
+            
+            // Start timer
+            state.startTime = Date.now();
+            state.timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+                ui.call.duration.textContent = formatDuration(elapsed);
+            }, 1000);
+            
+            // Start visualizer
+            startVisualizer();
+        }
+        
+        // Optimized visualizer with frame limiting
+        function startVisualizer() {
+            const canvas = ui.call.canvas;
+            const ctx = canvas.getContext('2d');
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            
+            let lastDraw = 0;
+            const targetFPS = 30;
+            const frameInterval = 1000 / targetFPS;
+            
+            function draw(timestamp) {
+                state.animationId = requestAnimationFrame(draw);
+                
+                // Frame rate limiting
+                const delta = timestamp - lastDraw;
+                if (delta < frameInterval) return;
+                lastDraw = timestamp - (delta % frameInterval);
+                
+                const width = canvas.width = canvas.offsetWidth * dpr;
+                const height = canvas.height = canvas.offsetHeight * dpr;
+                
+                ctx.clearRect(0, 0, width, height);
+                
+                if (state.analyser) {
+                    const bufferLength = state.analyser.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+                    state.analyser.getByteFrequencyData(dataArray);
+                    
+                    const barWidth = (width / bufferLength) * 2;
+                    const gap = 3;
+                    let x = 0;
+                    
+                    for (let i = 0; i < bufferLength; i++) {
+                        const normalizedValue = dataArray[i] / 255;
+                        const barHeight = Math.max(4, normalizedValue * height * 0.85);
+                        
+                        // Gradient from purple to light purple
+                        const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
+                        gradient.addColorStop(0, 'rgba(139, 92, 246, 0.9)');
+                        gradient.addColorStop(1, 'rgba(196, 167, 255, 0.6)');
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.roundRect(x, height - barHeight, barWidth - gap, barHeight, 4);
+                        ctx.fill();
+                        
+                        x += barWidth;
+                    }
+                } else {
+                    // Idle animation
+                    ctx.fillStyle = 'rgba(139, 92, 246, 0.2)';
+                    const barCount = 16;
+                    const barWidth = width / barCount;
+                    const gap = 3;
+                    
+                    for (let i = 0; i < barCount; i++) {
+                        const barHeight = 8 + Math.sin(Date.now() / 500 + i) * 4;
+                        ctx.beginPath();
+                        ctx.roundRect(i * barWidth + gap/2, height - barHeight, barWidth - gap, barHeight, 3);
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            state.animationId = requestAnimationFrame(draw);
+        }
+        
+        // Toggle mute
+        function toggleMute() {
+            if (!state.localStream) return;
+            
+            state.isMuted = !state.isMuted;
+            
+            state.localStream.getAudioTracks().forEach(track => {
+                track.enabled = !state.isMuted;
+            });
+            
+            updateMuteUI(state.isMuted);
+            
+            if (state.activeConn && state.activeConn.open) {
+                state.activeConn.send({ type: SIGNAL.MUTE, isMuted: state.isMuted });
+            }
+        }
+        
+        // Update mute UI
+        function updateMuteUI(muted) {
+            ui.call.muteIcon.setAttribute('data-lucide', muted ? 'mic-off' : 'mic');
+            ui.call.muteBtn.style.background = muted ? 'linear-gradient(135deg, #e11d48, #f43f5e)' : '';
+            ui.call.muteBtn.style.borderColor = muted ? '#f43f5e' : '';
+            ui.call.localStatus.textContent = muted ? 'Muted' : 'Microphone active';
+            ui.call.localStatus.style.color = muted ? '#f43f5e' : '#10b981';
+            ui.call.localInd.style.background = muted ? '#f43f5e' : '#10b981';
+            lucide.createIcons();
+        }
+        
+        // Complete cleanup of call resources
+        function cleanupCall(notify = true) {
+            // Clear timers
+            clearTimeout(state.timeoutTimer);
+            clearInterval(state.timerInterval);
+            cancelAnimationFrame(state.animationId);
+            
+            // Notify peer
+            if (notify && state.activeConn && state.activeConn.open) {
+                try {
+                    state.activeConn.send({ type: SIGNAL.HANGUP });
+                } catch (e) {}
+            }
+            
+            // Close call
+            if (state.currentCall) {
+                state.currentCall.close();
+            }
+            
+            // Stop all tracks
+            if (state.localStream) {
+                state.localStream.getTracks().forEach(track => {
+                    track.stop();
+                    state.localStream.removeTrack(track);
+                });
+            }
+            
+            // Remove audio element
+            if (state.audioElement) {
+                state.audioElement.pause();
+                state.audioElement.srcObject = null;
+                state.audioElement.remove();
+                state.audioElement = null;
+            }
+            
+            // Close audio context
+            if (state.audioCtx && state.audioCtx.state !== 'closed') {
+                state.audioCtx.close().catch(() => {});
+            }
+            
+            // Reset state
+            resetCallState();
+            
+            // Update UI
+            ui.call.duration.textContent = '00:00';
+            updateMuteUI(false);
+            showScreen('main');
+            ui.main.callBtn.disabled = false;
+        }
+        
+        // Reset call state variables
+        function resetCallState() {
+            state.localStream = null;
+            state.currentCall = null;
+            state.isMuted = false;
+            state.analyser = null;
+            state.audioCtx = null;
+            state.activeConn = null;
+            state.isCallActive = false;
+            state.animationId = null;
+            state.timerInterval = null;
+            state.timeoutTimer = null;
+        }
+        
+        // Disconnect from network
+        function disconnectFromNetwork() {
+            cleanupCall(false);
+            
+            if (state.peer) {
+                state.peer.destroy();
+                state.peer = null;
+            }
+            
+            showScreen('lobby');
+            ui.lobby.btn.disabled = false;
+            ui.lobby.status.textContent = '';
+            toast('Disconnected from network');
+        }
+        
+        // Copy ID to clipboard
+        async function copyPeerId() {
+            const id = ui.main.id.textContent;
+            if (id && id !== '---') {
+                try {
+                    await navigator.clipboard.writeText(id);
+                    toast('ID copied to clipboard', 'success');
+                } catch (e) {
+                    toast('Failed to copy ID', 'error');
+                }
+            }
+        }
+        
+        // Event Listeners
+        ui.lobby.btn.addEventListener('click', () => {
+            const val = ui.lobby.input.value.trim().slice(0, 20);
+            if (val && !/^[a-zA-Z0-9_-]{2,}$/.test(val)) {
+                toast('ID can only contain letters, numbers, _ and -', 'error');
+                return;
+            }
+            initPeer(val);
+        });
+        
+        ui.main.copyBtn.addEventListener('click', copyPeerId);
+        
+        ui.main.callBtn.addEventListener('click', () => {
+            const id = ui.main.remoteInput.value.trim();
+            if (id) startCall(id);
+        });
+        
+        ui.main.disconnectBtn.addEventListener('click', disconnectFromNetwork);
+        
+        ui.modal.accept.addEventListener('click', acceptCall);
+        ui.modal.decline.addEventListener('click', declineCall);
+        
+        ui.call.muteBtn.addEventListener('click', toggleMute);
+        ui.call.hangup.addEventListener('click', () => cleanupCall(true));
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.repeat) {
+                if (ui.screens.lobby.classList.contains('active')) {
+                    ui.lobby.btn.click();
+                } else if (ui.screens.main.classList.contains('active')) {
+                    ui.main.callBtn.click();
+                }
+            }
+            
+            // Escape to decline call
+            if (e.key === 'Escape' && ui.modal.el.classList.contains('active')) {
+                declineCall();
+            }
+        });
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            cleanupCall(false);
+            if (state.peer) {
+                state.peer.destroy();
+            }
+        });
+        
+        // Handle visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && state.audioCtx && state.audioCtx.state === 'running') {
+                // Optionally suspend audio context when tab is hidden
+            } else if (!document.hidden && state.audioCtx && state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume();
+            }
+        });
+        
+    })();
+    </script>
+</body>
+</html>
