@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.2.0 (Unified Offline Mode Switch)
+ *  Version: 1.2.1 (Fix: Removed Intrusive Online Overlay & Async Safety)
  *  assets/logic.js 
  *  MIT License
  */
@@ -116,7 +116,7 @@ export function initHRNchat(customConfig = {}) {
         presenceUpdateTimer: null,
         recentlySentIds: new Set(),
         isNavigating: false,
-        isOfflineMode: false, // THE MASTER SWITCH
+        isOfflineMode: false,
         isProcessingQueue: false,
         isCapacityBlocked: false
     };
@@ -129,16 +129,11 @@ export function initHRNchat(customConfig = {}) {
     const $ = id => document.getElementById(id);
     const getTimeFromDate = (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     
-    // CENTRAL MODE SWITCH
     const setAppMode = (offline) => {
         state.isOfflineMode = offline;
         updatePresenceUI();
         updateSendButtonState();
         setConnectionVisuals(offline ? 'offline' : 'connected');
-        
-        const offlineIndicator = $('offline-mode-indicator'); // Assuming you might want a UI element
-        if(offlineIndicator) offlineIndicator.style.display = offline ? 'block' : 'none';
-        
         console.log(`App Mode Switched: ${offline ? 'OFFLINE' : 'ONLINE'}`);
     };
 
@@ -156,7 +151,6 @@ export function initHRNchat(customConfig = {}) {
         const btn = $('send-btn');
         const input = $('chat-input');
         if (!btn || !input) return;
-        // Simple logic: If offline mode, disable sending (or implement queue later)
         if (state.isOfflineMode) {
             btn.disabled = true; btn.style.opacity = "0.5"; input.disabled = true; input.placeholder = "Offline Mode (Read Only)";
         } else {
@@ -181,7 +175,6 @@ export function initHRNchat(customConfig = {}) {
             const dot = roomCountEl?.previousElementSibling;
             if (dot) dot.style.background = 'var(--text-mute)';
         } else {
-            // Online logic
             let displayRoomCount = state.lastKnownOnlineCount || 0;
             let displayGlobalCount = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
             
@@ -215,7 +208,7 @@ export function initHRNchat(customConfig = {}) {
     const handleServerFull = async () => {
         if (state.isCapacityBlocked) return; 
         state.isCapacityBlocked = true; 
-        setAppMode(true); // Force Offline
+        setAppMode(true);
         window.toast("Server is full. Switched to offline mode.");
         await cleanupChannels(false); 
         if (state.user) window.loadRooms();
@@ -234,7 +227,7 @@ export function initHRNchat(customConfig = {}) {
     const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; schedulePresenceUpdate(); };
     
     const setupGlobalPresence = async (userId) => {
-        if (state.isOfflineMode) return; // Don't setup if offline
+        if (state.isOfflineMode) return; 
         if (state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
         state.globalPresenceChannel = db.channel('global-presence', { config: { presence: { key: userId || `listener_${state.tabId}` } } });
         state.globalPresenceChannel.on('presence', { event: 'sync' }, async () => {
@@ -258,10 +251,8 @@ export function initHRNchat(customConfig = {}) {
     };
     
     window.goOnline = async () => { 
-        const overlay = $('internet-detected-overlay'); 
-        if (overlay) overlay.classList.remove('active'); 
         state.isCapacityBlocked = false; 
-        setAppMode(false); // Switch to Online
+        setAppMode(false);
         window.setLoading(true, "Connecting..."); 
         
         const storedEmail = localStorage.getItem('hrn_auth_email'); 
@@ -289,16 +280,14 @@ export function initHRNchat(customConfig = {}) {
     };
     
     window.stayOffline = () => { 
-        const overlay = $('internet-detected-overlay'); 
-        if (overlay) overlay.classList.remove('active'); 
-        setAppMode(true); // Switch to Offline
+        setAppMode(true); 
         window.toast("Staying in Offline Mode"); 
     };
     
     const handleReconnect = async () => { const overlay = $('reconnect-overlay'); if (overlay) overlay.classList.add('active'); const storedEmail = localStorage.getItem('hrn_auth_email'); const storedPass = localStorage.getItem('hrn_auth_pass'); if (storedEmail && storedPass) { try { const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass }); if (!error) { const { data: { user } } = await db.auth.getUser(); state.user = user; setAppMode(false); state.isCapacityBlocked = false; await localDB.put('known_users', { id: user.id, email: user.email, metadata: user.user_metadata }); if (state.user) setupGlobalPresence(state.user.id); if (state.currentRoomId) attemptHardReconnect(); window.loadRooms(); if (overlay) overlay.classList.remove('active'); window.toast("Synced successfully"); } else { if (overlay) overlay.classList.remove('active'); window.toast("Login failed. Try again."); } } catch (e) { if (overlay) overlay.classList.remove('active'); window.toast("Connection error."); } } else { if (overlay) overlay.classList.remove('active'); } };
     
     const setupChatChannel = (id) => {
-        if (state.isOfflineMode) return; // Don't setup if offline
+        if (state.isOfflineMode) return;
         if (state.chatChannel) state.chatChannel.unsubscribe();
         const isDirect = state.currentRoomData?.is_direct;
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
@@ -329,8 +318,8 @@ export function initHRNchat(customConfig = {}) {
     const monitorConnection = () => { 
         window.addEventListener('online', () => { 
             if (state.isOfflineMode) { 
-                const overlay = $('internet-detected-overlay'); 
-                if (overlay) overlay.classList.add('active'); 
+                // FIX: Don't show overlay. Just log or update subtle UI.
+                console.log("Internet detected, but user is in Offline Mode.");
             } else { 
                 setConnectionVisuals('connecting'); 
                 if (state.currentRoomId) attemptHardReconnect(); 
@@ -338,7 +327,7 @@ export function initHRNchat(customConfig = {}) {
             } 
         }); 
         window.addEventListener('offline', () => { 
-            setAppMode(true); // Auto switch to offline
+            setAppMode(true); 
             if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); 
             if (state.reconnectTimer) clearTimeout(state.reconnectTimer); 
             state.isReconnecting = false; 
@@ -490,7 +479,6 @@ export function initHRNchat(customConfig = {}) {
              roomData = await localDB.get('rooms', id);
         }
         
-        // ONLINE SYNC (Only if NOT in offline mode)
         if (!state.isOfflineMode) {
             try {
                 const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
@@ -532,7 +520,6 @@ export function initHRNchat(customConfig = {}) {
         await deriveKey(keySource, roomData?.salt);
         let finalMessages = [];
         
-        // ONLINE MESSAGES (Only if NOT in offline mode)
         if (!state.isOfflineMode) {
             try {
                 const { data } = await db.from('messages').select('*').eq('room_id', id).order('created_at', { ascending: false }).limit(CONFIG.maxMessages);
@@ -562,7 +549,6 @@ export function initHRNchat(customConfig = {}) {
         $('chat-input').style.display = 'block';
         $('send-btn').style.display = 'flex';
         
-        // CONNECTION SETUP (Only if NOT in offline mode)
         if (state.isOfflineMode) {
             setConnectionVisuals('offline');
         } else {
@@ -578,7 +564,7 @@ export function initHRNchat(customConfig = {}) {
     window.sendMsg = async (e) => {
         if (!e || !e.isTrusted) return;
         if (!state.user || !state.currentRoomId || state.processingAction) return;
-        if (state.isOfflineMode) return window.toast("Offline Mode: Cannot send"); // Block sending
+        if (state.isOfflineMode) return window.toast("Offline Mode: Cannot send");
         if (!state.isChatChannelReady) return window.toast("Reconnecting...");
         if (state.isCapacityBlocked) return window.toast("Server Full");
         if (!applyRateLimit()) return;
@@ -612,7 +598,6 @@ export function initHRNchat(customConfig = {}) {
         if (!em || !p) { window.toast("Input missing"); state.processingAction = false; return; }
         window.setLoading(true, "Signing In...");
         
-        // OFFLINE MODE LOGIN
         if (state.isOfflineMode) {
             const knownUser = await localDB.get('known_users', em);
             if (knownUser && knownUser.metadata) {
@@ -625,15 +610,13 @@ export function initHRNchat(customConfig = {}) {
             window.toast("Offline login failed. Check credentials."); window.setLoading(false); state.processingAction = false; return;
         }
         
-        // ONLINE MODE LOGIN
         const { error } = await db.auth.signInWithPassword({ email: em, password: p });
         if (error) {
-             // Check if we can fallback to offline
              const knownUser = await localDB.get('known_users', em);
              if (knownUser && knownUser.metadata) {
                  const hashInput = await sha256(p + em);
                  if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                     setAppMode(true); // Switch to offline
+                     setAppMode(true);
                      state.user = { id: knownUser.userId, email: knownUser.email, user_metadata: knownUser.metadata };
                      window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; window.toast("Server unreachable. Logged in Offline."); return;
                  }
@@ -767,82 +750,179 @@ export function initHRNchat(customConfig = {}) {
             setTimeout(() => { state.isNavigating = false; }, 400);
         });
     };
-    window.refreshLobby = async () => { const now = Date.now(); if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); state.lastLobbyRefresh = now; await window.loadRooms(); };
+    window.refreshLobby = async () => { 
+        const now = Date.now(); 
+        if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`); 
+        state.lastLobbyRefresh = now; 
+        await window.loadRooms(); 
+    };
+    
     window.loadRooms = async () => {
-        if (!state.user) return; const uid = state.user.id;
-        const processRooms = async (rooms) => { const processed = []; for (const r of rooms) { if (!r || !r.id) continue; let name = r.name, avatar = r.avatar_url; if (r.is_direct && r.allowed_users) { const otherId = r.allowed_users.find(id => id !== uid); if (otherId) { const profile = await getProfile(otherId); if (profile) { name = profile.full_name; avatar = profile.cached_avatar || profile.avatar_url; } } } processed.push({ ...r, display_name: name, display_avatar: avatar }); } return processed; };
+        if (!state.user) return; 
+        const uid = state.user.id;
         
-        // Always load local rooms first
+        const processRooms = async (rooms) => { 
+            const processed = []; 
+            for (const r of rooms) { 
+                if (!r || !r.id) continue; 
+                let name = r.name, avatar = r.avatar_url; 
+                if (r.is_direct && r.allowed_users) { 
+                    const otherId = r.allowed_users.find(id => id !== uid); 
+                    if (otherId) { 
+                        const profile = await getProfile(otherId); 
+                        if (profile) { 
+                            name = profile.full_name; 
+                            avatar = profile.cached_avatar || profile.avatar_url; 
+                        } 
+                    } 
+                } 
+                processed.push({ ...r, display_name: name, display_avatar: avatar }); 
+            } 
+            return processed; 
+        };
+        
+        // 1. Altijd eerst lokale kamers laden (snel)
         const localRooms = await localDB.getAll('rooms');
-        if (localRooms.length > 0) { state.allRooms = await processRooms(localRooms); window.filterRooms(); }
+        if (localRooms.length > 0) { 
+            state.allRooms = await processRooms(localRooms); 
+            window.filterRooms(); 
+        }
         
-        // If offline, stop here.
+        // 2. Als we offline zijn, stoppen we hier
         if (state.isOfflineMode) return;
-        
-        // Otherwise sync
+
+        // 3. Anders proberen we te syncen
         window.setLoading(true, "Syncing...");
         const { data: rooms, error } = await db.from('rooms').select('*').order('created_at', { ascending: false });
-        if (error) { window.toast("Sync failed"); window.setLoading(false); return; }
-        if (rooms && rooms.length > 0) { await localDB.clear('rooms'); await localDB.putAll('rooms', rooms); state.allRooms = await processRooms(rooms); await localDB.saveUserTree(uid, rooms); window.filterRooms(); }
-        window.setLoading(false); updateLobbyAvatar();
+        if (error) { 
+            window.toast("Sync failed"); 
+            window.setLoading(false); 
+            return; 
+        }
+        if (rooms && rooms.length > 0) { 
+            await localDB.clear('rooms'); 
+            await localDB.putAll('rooms', rooms); 
+            state.allRooms = await processRooms(rooms); 
+            await localDB.saveUserTree(uid, rooms); 
+            window.filterRooms(); 
+        }
+        window.setLoading(false); 
+        updateLobbyAvatar();
     };
-    window.filterRooms = () => { const q = $('search-bar').value.toLowerCase(); const list = $('room-list'); const uid = state.user?.id; const filtered = state.allRooms.filter(r => { if (!r.is_direct && !r.is_visible) return false; const name = r.display_name || r.name || ''; if (!name.toLowerCase().includes(q)) return false; return true; }); if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); };
+    
+    window.filterRooms = () => { 
+        const q = $('search-bar').value.toLowerCase(); 
+        const list = $('room-list'); 
+        const uid = state.user?.id; 
+        const filtered = state.allRooms.filter(r => { 
+            if (!r.is_direct && !r.is_visible) return false; 
+            const name = r.display_name || r.name || ''; 
+            if (!name.toLowerCase().includes(q)) return false; 
+            return true; 
+        }); 
+        if (filtered.length === 0) list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-mute)"><i data-lucide="folder" style="width:40px;height:40px;margin-bottom:12px;color:#d1d1d6"></i><div style="font-size:14px;font-weight:700;color:var(--text-main)">No groups yet</div></div>`; 
+        else list.innerHTML = filtered.map(r => `<div class="room-card" onclick="window.joinAttempt('${r.id}')"><div class="chat-avatar" style="width:36px;height:36px;margin-right:10px;font-size:13px">${r.display_avatar ? `<img src="${r.display_avatar}">` : (r.display_name||'G').charAt(0)}</div><span class="room-name">${esc(r.display_name)}</span><span class="room-icon">${r.is_direct ? '<i data-lucide="user" style="width:14px;height:14px"></i>' : ''}${r.has_password ? '<i data-lucide="lock" style="width:14px;height:14px"></i>' : ''}</span></div>`).join(''); 
+    };
     
     window.joinAttempt = async (id) => {
         const meta = await localDB.get('rooms', id);
         
-        // Helper for local open
+        // Helper functie om lokaal te openen
         const openLocal = async () => {
             if (meta && meta.id) {
                 state.pending = { id: meta.id, name: meta.name, salt: meta.salt };
-                if (meta.has_password) window.nav('scr-gate');
-                else window.openVault(meta.id, meta.name, null, meta.salt, meta);
-            } else window.toast("Room not cached for offline");
+                if (meta.has_password) {
+                    window.nav('scr-gate');
+                } else {
+                    await window.openVault(meta.id, meta.name, null, meta.salt, meta);
+                }
+            } else { 
+                window.toast("Room not found in cache"); 
+            }
         };
 
+        // Als we expliciet in offline modus zitten, direct lokaal openen
         if (state.isOfflineMode) {
             await openLocal();
             return;
         }
 
-        // Online attempt
-        window.setLoading(true, "Checking...");
+        // Online poging
+        window.setLoading(true, "Accessing...");
         try {
             const { data: canAccess, error: rpcError } = await db.rpc('can_access_room', { p_room_id: id });
+            
             if (rpcError) throw rpcError;
             if (!canAccess) throw new Error("Access denied");
+
             const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
             if (error) throw error;
+            
             window.setLoading(false);
+            
             if (data && data.id) await localDB.put('rooms', data);
             state.pending = { id: data.id, name: data.name, salt: data.salt };
+            
             if (data.has_password) window.nav('scr-gate');
             else window.openVault(data.id, data.name, null, data.salt, data);
-        } catch(e) {
+
+        } catch (e) {
             window.setLoading(false);
-            window.toast("Connection failed. Switching to Offline.");
-            setAppMode(true); // Switch to offline on failure
+            console.warn("Online join failed, switching to offline fallback:", e);
+            // Fallback naar offline modus als het misgaat
+            window.toast("Connection error. Switching to Offline.");
+            setAppMode(true);
             await openLocal();
         }
     };
     
-    window.joinPrivate = async () => { if (!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if (!id) return; window.setLoading(true, "Checking..."); try { const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (data) { await localDB.put('rooms', data); state.pending = { id: data.id, name: data.name, salt: data.salt }; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt, data); } else window.toast("Not found"); } catch(e) { window.setLoading(false); window.toast("Network error. Try offline."); } };
-    
+    window.joinPrivate = async () => { 
+        if (!state.user) return window.toast("Login required"); 
+        const id = $('join-id').value.trim(); 
+        if (!id) return; 
+        
+        if (state.isOfflineMode) {
+            const meta = await localDB.get('rooms', id);
+            if(meta) window.joinAttempt(id);
+            else window.toast("Cannot join new rooms offline");
+            return;
+        }
+
+        window.setLoading(true, "Checking..."); 
+        try {
+            const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); 
+            if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } 
+            const { data } = await db.from('rooms').select('*').eq('id', id).single(); 
+            window.setLoading(false); 
+            if (data) { 
+                await localDB.put('rooms', data); 
+                state.pending = { id: data.id, name: data.name, salt: data.salt }; 
+                if (data.has_password) window.nav('scr-gate'); 
+                else window.openVault(data.id, data.name, null, data.salt, data); 
+            } else window.toast("Not found"); 
+        } catch(e) { 
+            window.setLoading(false); 
+            window.toast("Network error."); 
+        } 
+    };
+
     const init = async () => {
         await localDB.init();
         monitorConnection();
+        
         const hasMaster = await checkMaster();
         if (hasMaster) { state.isMasterTab = false; $('block-overlay').classList.add('active'); }
         else { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); if (navigator.onLine) setupGlobalPresence(null); }
+        
         const storedEmail = localStorage.getItem('hrn_auth_email');
         const storedPass = localStorage.getItem('hrn_auth_pass');
         
-        // Initial Mode Check
+        // Bepaal initiele modus
         if (!navigator.onLine) setAppMode(true);
         
         if (storedEmail && storedPass) {
             if (state.isOfflineMode) {
-                // Immediately try offline login
+                // Probeer offline login
                 const knownUser = await localDB.get('known_users', storedEmail);
                 if (knownUser && knownUser.metadata) {
                     const hashInput = await sha256(storedPass + storedEmail);
@@ -852,7 +932,7 @@ export function initHRNchat(customConfig = {}) {
                     } else { window.nav('scr-login'); $('l-email').value = storedEmail; $('l-pass').value = storedPass; }
                 } else { window.nav('scr-login'); $('l-email').value = storedEmail; $('l-pass').value = storedPass; }
             } else {
-                // Try online login
+                // Probeer online login
                 window.setLoading(true, "Auto-logging in..."); $('l-email').value = storedEmail; $('l-pass').value = storedPass;
                 const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass });
                 window.setLoading(false);
@@ -863,7 +943,8 @@ export function initHRNchat(customConfig = {}) {
                     await localDB.put('known_users', { id: storedEmail, pass_hash: hashInput, email: storedEmail, metadata: user.user_metadata, userId: user.id });
                     window.nav('scr-lobby'); window.loadRooms();
                 } else {
-                    // Fallback to offline if online fails
+                    // Fallback naar offline als online faalt
+                    console.warn("Auto-login failed, trying offline fallback...", error);
                     const knownUser = await localDB.get('known_users', storedEmail);
                     if (knownUser && knownUser.metadata) {
                         const hashInput = await sha256(storedPass + storedEmail);
