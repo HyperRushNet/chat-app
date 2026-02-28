@@ -220,7 +220,6 @@ export function initHRNchat(customConfig = {}) {
                 <i data-lucide="users" style="width:48px;height:48px;margin-bottom:24px;color:var(--warning)"></i>
                 <h1 class="title">Server Full</h1>
                 <p class="subtitle" style="margin-bottom:48px;text-align:center">The maximum capacity of ${CONFIG.maxUsers} users has been reached.<br>Please try again later.</p>
-                <button class="btn btn-accent" onclick="window.stayOffline()">Switch to Offline Mode</button>
             `;
             overlay.classList.add('active');
         }
