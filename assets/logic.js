@@ -295,7 +295,7 @@ export function initHRNchat(customConfig = {}) {
             const roomCount = state.lastKnownOnlineCount || 0;
             displayRoomCount = state.currentRoomData?.is_direct ? (roomCount >= 2 ? "Online" : "Offline") : `${roomCount}`;
             displayGlobalCount = state.isOfflineMode ? "Local" : `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
-            roomStatusColor = state.currentRoomData?.is_direct ? (roomCount >= 2 ? 'var(--success)' : 'var(--text-mute)') : 'var(--success);
+            roomStatusColor = state.currentRoomData?.is_direct ? (roomCount >= 2 ? 'var(--success)' : 'var(--text-mute)') : 'var(--success)'
         }
         if (infoGlobalEl) infoGlobalEl.innerText = displayGlobalCount;
         if (roomCountEl) roomCountEl.innerText = displayRoomCount;
