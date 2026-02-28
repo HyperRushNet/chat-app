@@ -12,15 +12,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #06060a;
-            --card: rgba(12, 12, 20, 0.9);
+            --bg: #050508;
+            --card: rgba(10, 10, 18, 0.95);
+            --card-inner: rgba(0, 0, 0, 0.4);
             --border: rgba(255, 255, 255, 0.06);
             --text: #f0f0f5;
             --muted: #5a5a70;
             --accent: #8b5cf6;
-            --accent-glow: rgba(139, 92, 246, 0.4);
+            --accent-glow: rgba(139, 92, 246, 0.3);
             --success: #10b981;
             --danger: #f43f5e;
+            --warning: #f59e0b;
         }
         
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -42,18 +44,19 @@
         .bg-mesh {
             position: fixed; inset: 0; z-index: -2;
             background: 
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
-                radial-gradient(ellipse 60% 50% at 100% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 100% 80% at 50% -20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse 80% 60% at 100% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 0% 80%, rgba(244, 63, 94, 0.05) 0%, transparent 50%),
                 var(--bg);
         }
         
         .bg-grid {
             position: fixed; inset: 0; z-index: -1;
             background-image: 
-                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-            background-size: 60px 60px;
-            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 20%, transparent 70%);
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 10%, transparent 70%);
         }
         
         .card {
@@ -61,9 +64,12 @@
             border: 1px solid var(--border);
             border-radius: 24px;
             width: 100%;
-            max-width: 360px;
-            backdrop-filter: blur(40px);
-            box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 30px 60px -20px rgba(0,0,0,0.6), 0 0 100px -30px var(--accent-glow);
+            max-width: 380px;
+            backdrop-filter: blur(60px);
+            box-shadow: 
+                0 0 0 1px rgba(255,255,255,0.03) inset,
+                0 40px 80px -20px rgba(0,0,0,0.7),
+                0 0 120px -40px var(--accent-glow);
             position: relative;
             overflow: hidden;
         }
@@ -71,7 +77,7 @@
         .card::before {
             content: '';
             position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
         }
         
         .input-field {
@@ -80,14 +86,14 @@
             color: var(--text);
             font-family: inherit;
             font-size: 14px;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: all 0.2s ease;
             outline: none;
             border-radius: 14px;
         }
         
         .input-field:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
         }
         
         .input-field::placeholder { color: var(--muted); }
@@ -113,11 +119,11 @@
         .btn-primary {
             background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
             color: white;
-            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+            box-shadow: 0 4px 24px rgba(139, 92, 246, 0.35);
         }
         
         .btn-primary:hover:not(:disabled) {
-            box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
+            box-shadow: 0 6px 32px rgba(139, 92, 246, 0.45);
             transform: translateY(-1px);
         }
         
@@ -132,74 +138,36 @@
         .btn-danger {
             background: linear-gradient(135deg, #e11d48 0%, var(--danger) 100%);
             color: white;
-            box-shadow: 0 4px 20px rgba(244, 63, 94, 0.3);
+            box-shadow: 0 4px 24px rgba(244, 63, 94, 0.35);
         }
         
         .btn-success {
             background: linear-gradient(135deg, #059669 0%, var(--success) 100%);
             color: white;
-            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+            box-shadow: 0 4px 24px rgba(16, 185, 129, 0.35);
         }
         
         .screen {
             display: none;
-            animation: screenIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: screenIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .screen.active { display: block; }
         
         @keyframes screenIn {
-            from { opacity: 0; transform: translateY(16px) scale(0.98); }
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
         
         @keyframes pulseRing {
-            0% { transform: scale(1); opacity: 0.8; }
-            100% { transform: scale(1.6); opacity: 0; }
+            0% { transform: scale(1); opacity: 0.7; }
+            100% { transform: scale(1.7); opacity: 0; }
         }
         
         .pulse-ring {
-            position: absolute; inset: -6px; border-radius: 50%;
+            position: absolute; inset: -8px; border-radius: 50%;
             border: 2px solid currentColor;
-            animation: pulseRing 1.8s ease-out infinite;
+            animation: pulseRing 2s ease-out infinite;
             pointer-events: none;
-        }
-        
-        .visualizer-canvas {
-            width: 100%; height: 56px;
-            display: block;
-            border-radius: 12px;
-            background: rgba(0,0,0,0.3);
-        }
-        
-        .status-indicator {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: var(--success); position: relative;
-        }
-        .status-indicator.error { background: var(--danger); }
-        .status-indicator.error .pulse-ring { border-color: var(--danger); }
-        
-        #toastContainer {
-            position: fixed; top: 16px; left: 50%;
-            transform: translateX(-50%);
-            display: flex; flex-direction: column; gap: 8px;
-            z-index: 1000; pointer-events: none;
-        }
-        
-        .toast {
-            background: rgba(20, 20, 30, 0.95);
-            color: var(--text);
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-size: 13px;
-            font-weight: 500;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-            animation: toastSlide 0.3s ease;
-            backdrop-filter: blur(10px);
-        }
-        
-        @keyframes toastSlide {
-            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
         }
         
         .divider {
@@ -211,47 +179,195 @@
         
         .modal-overlay {
             position: fixed; inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(12px);
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(16px);
             display: flex; align-items: center; justify-content: center;
             padding: 1rem; z-index: 100;
             opacity: 0; visibility: hidden;
             transition: all 0.25s ease;
         }
         .modal-overlay.active { opacity: 1; visibility: visible; }
-        .modal-overlay.active .card { animation: modalPop 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+        .modal-overlay.active .card { animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         
         @keyframes modalPop {
-            from { opacity: 0; transform: scale(0.92) translateY(20px); }
+            from { opacity: 0; transform: scale(0.9) translateY(30px); }
         }
         
         .peer-id-display {
             font-family: 'Space Grotesk', monospace;
-            font-weight: 700; font-size: 20px;
-            color: var(--accent); letter-spacing: -0.3px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.3px;
         }
         
         .section-label {
             font-size: 10px; text-transform: uppercase;
-            letter-spacing: 1.8px; color: var(--muted);
+            letter-spacing: 2px; color: var(--muted);
             font-weight: 600;
         }
         
         .icon-box {
             display: inline-flex; align-items: center; justify-content: center;
-            width: 56px; height: 56px; border-radius: 18px;
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);
-            border: 1px solid rgba(139, 92, 246, 0.2);
+            width: 60px; height: 60px; border-radius: 20px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.25);
         }
         
         .quality-badge {
-            display: inline-flex; align-items: center; gap: 4px;
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.2);
+            display: inline-flex; align-items: center; gap: 5px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.25);
             color: var(--success);
-            padding: 4px 10px; border-radius: 20px;
+            padding: 5px 12px; border-radius: 20px;
             font-size: 10px; font-weight: 600;
-            text-transform: uppercase; letter-spacing: 0.5px;
+            text-transform: uppercase; letter-spacing: 0.8px;
+        }
+        
+        /* Volume Slider */
+        .volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(139, 92, 246, 0.5);
+            transition: transform 0.15s ease;
+        }
+        
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 10px rgba(139, 92, 246, 0.5);
+        }
+        
+        /* Audio Level Meter */
+        .audio-meter {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .audio-meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), var(--accent));
+            border-radius: 2px;
+            transition: width 0.05s linear;
+            min-width: 2%;
+        }
+        
+        .audio-meter-fill.muted {
+            background: var(--danger);
+        }
+        
+        /* Participant Card */
+        .participant-card {
+            background: var(--card-inner);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+        
+        .participant-card.muted {
+            border-color: rgba(244, 63, 94, 0.3);
+            background: rgba(244, 63, 94, 0.05);
+        }
+        
+        .participant-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+        
+        .participant-avatar.local {
+            background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
+            color: white;
+        }
+        
+        .participant-avatar.remote {
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+            color: white;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            position: relative;
+        }
+        
+        .status-dot.active {
+            background: var(--success);
+        }
+        
+        .status-dot.active::after {
+            content: '';
+            position: absolute; inset: -4px; border-radius: 50%;
+            border: 2px solid var(--success);
+            animation: pulseRing 2s ease-out infinite;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+        
+        .status-dot.muted {
+            background: var(--danger);
+        }
+        
+        .status-dot.muted::after {
+            display: none;
+        }
+        
+        /* Toast */
+        #toastContainer {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; flex-direction: column; gap: 10px;
+            z-index: 1000; pointer-events: none;
+        }
+        
+        .toast {
+            background: rgba(15, 15, 25, 0.95);
+            color: var(--text);
+            padding: 14px 22px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            animation: toastSlide 0.3s ease;
+            backdrop-filter: blur(20px);
+        }
+        
+        @keyframes toastSlide {
+            from { opacity: 0; transform: translateY(-25px) scale(0.95); }
         }
         
         @media (prefers-reduced-motion: reduce) {
@@ -260,6 +376,12 @@
                 animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
             }
+        }
+        
+        /* Focus states */
+        button:focus-visible, input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
     </style>
 </head>
@@ -273,13 +395,19 @@
         <div class="card">
             <div class="p-8 text-center">
                 <div class="icon-box mx-auto mb-5">
-                    <i data-lucide="headphones" class="w-6 h-6 text-purple-400"></i>
+                    <i data-lucide="headphones" class="w-7 h-7 text-purple-400"></i>
                 </div>
                 <h1 class="text-2xl font-bold tracking-tight mb-1">LinkUp</h1>
-                <p class="text-sm text-zinc-500 mb-4">Crystal Clear Audio</p>
-                <div class="quality-badge">
-                    <i data-lucide="sparkles" class="w-3 h-3"></i>
-                    HD Audio
+                <p class="text-sm text-zinc-500 mb-5">Crystal Clear Audio</p>
+                <div class="flex items-center justify-center gap-2">
+                    <div class="quality-badge">
+                        <i data-lucide="sparkles" class="w-3 h-3"></i>
+                        HD Audio
+                    </div>
+                    <div class="quality-badge" style="background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.25); color: var(--accent);">
+                        <i data-lucide="shield-check" class="w-3 h-3"></i>
+                        E2E Encryptie
+                    </div>
                 </div>
             </div>
             
@@ -312,14 +440,12 @@
         <div class="card">
             <div class="p-4 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
-                    <div class="status-indicator">
-                        <div class="pulse-ring" style="color: var(--success);"></div>
-                    </div>
+                    <div class="status-dot active" id="connectionDot"></div>
                     <span class="text-xs text-zinc-500 font-medium">Verbonden</span>
                 </div>
                 <button id="copyIdBtn" class="btn btn-ghost text-xs px-3.5 py-2">
                     <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-                    Kopieer
+                    Kopieer ID
                 </button>
             </div>
             
@@ -327,7 +453,7 @@
             
             <div class="p-6 text-center">
                 <p class="section-label mb-2">Jouw ID</p>
-                <p id="myPeerId" class="peer-id-display truncate">---</p>
+                <p id="myPeerId" class="peer-id-display text-xl truncate">---</p>
             </div>
             
             <div class="divider"></div>
@@ -364,41 +490,95 @@
     <!-- Call Screen -->
     <div id="callScreen" class="screen">
         <div class="card">
-            <div class="p-6 text-center">
-                <p class="section-label mb-1.5">In Gesprek Met</p>
-                <h2 id="remotePeerName" class="peer-id-display text-xl truncate px-2 mb-3">Partner</h2>
-                <div class="flex items-center justify-center gap-3">
-                    <span id="callDuration" class="text-xs font-mono text-zinc-400 bg-black/40 px-4 py-2 rounded-lg border border-white/5">00:00</span>
-                    <div class="quality-badge">
-                        <i data-lucide="activity" class="w-3 h-3"></i>
-                        <span id="qualityIndicator">Uitstekend</span>
+            <!-- Header -->
+            <div class="p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="status-dot active" id="callStatusDot"></div>
+                    <div>
+                        <p class="text-xs font-medium text-zinc-400">In Gesprek</p>
+                        <p id="callDuration" class="text-xs font-mono text-zinc-600">00:00</p>
                     </div>
+                </div>
+                <div class="quality-badge" id="qualityBadge">
+                    <i data-lucide="activity" class="w-3 h-3"></i>
+                    <span id="qualityIndicator">Uitstekend</span>
                 </div>
             </div>
             
             <div class="divider"></div>
             
-            <div class="p-3">
-                <canvas id="visualizer" class="visualizer-canvas"></canvas>
-            </div>
-            
-            <div class="divider"></div>
-            
-            <div class="p-5">
-                <div class="flex items-center justify-between bg-black/30 rounded-2xl p-4 mb-6 border border-white/5">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center">
-                            <i data-lucide="user" class="w-4 h-4 text-zinc-400"></i>
-                        </div>
-                        <div>
-                            <p class="text-sm font-medium">Jij</p>
+            <!-- Participants -->
+            <div class="p-4 space-y-3">
+                <!-- Local Participant -->
+                <div class="participant-card" id="localCard">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="participant-avatar local">J</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <p class="text-sm font-semibold">Jij</p>
+                                <span id="localMuteBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium hidden">GEDEMPT</span>
+                            </div>
                             <p id="localStatusText" class="text-xs text-emerald-400">Microfoon aan</p>
                         </div>
+                        <div class="status-dot active" id="localStatusDot"></div>
                     </div>
-                    <div id="localMuteIndicator" class="w-3 h-3 rounded-full bg-emerald-500 transition-colors"></div>
+                    
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-zinc-500">Audio Level</span>
+                            <span id="localVolumeValue" class="text-zinc-400 font-mono">100%</span>
+                        </div>
+                        <div class="audio-meter">
+                            <div class="audio-meter-fill" id="localMeter" style="width: 5%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="flex items-center justify-between text-xs mb-2">
+                            <span class="text-zinc-500">Microfoon Volume</span>
+                        </div>
+                        <input type="range" id="localVolumeSlider" class="volume-slider" min="0" max="200" value="100">
+                    </div>
                 </div>
                 
-                <div class="flex justify-center items-center gap-5">
+                <!-- Remote Participant -->
+                <div class="participant-card" id="remoteCard">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="participant-avatar remote">P</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <p id="remotePeerName" class="text-sm font-semibold truncate">Partner</p>
+                                <span id="remoteMuteBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium hidden">GEDEMPT</span>
+                            </div>
+                            <p id="remoteStatusText" class="text-xs text-emerald-400">Microfoon aan</p>
+                        </div>
+                        <div class="status-dot active" id="remoteStatusDot"></div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-zinc-500">Audio Level</span>
+                            <span id="remoteVolumeValue" class="text-zinc-400 font-mono">100%</span>
+                        </div>
+                        <div class="audio-meter">
+                            <div class="audio-meter-fill" id="remoteMeter" style="width: 5%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="flex items-center justify-between text-xs mb-2">
+                            <span class="text-zinc-500">Partner Volume</span>
+                        </div>
+                        <input type="range" id="remoteVolumeSlider" class="volume-slider" min="0" max="200" value="100">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <!-- Controls -->
+            <div class="p-5">
+                <div class="flex justify-center items-center gap-4">
                     <button id="muteBtn" class="btn w-14 h-14 rounded-full bg-zinc-800/80 border border-white/10 hover:bg-zinc-700/80 transition-all" aria-label="Dempen">
                         <i data-lucide="mic" class="w-5 h-5" id="muteIcon"></i>
                     </button>
@@ -440,7 +620,11 @@
         'use strict';
         
         const SIGNAL = Object.freeze({
-            REJECT: 'reject', BUSY: 'busy', HANGUP: 'hangup', MUTE: 'mute'
+            REJECT: 'reject',
+            BUSY: 'busy',
+            HANGUP: 'hangup',
+            MUTE: 'mute',
+            VOLUME_CHANGE: 'volume_change'
         });
         
         const AUDIO_CONSTRAINTS = Object.freeze({
@@ -462,14 +646,20 @@
             remotePeerId: null,
             activeConn: null,
             audioCtx: null,
-            analyser: null,
+            localAnalyser: null,
+            remoteAnalyser: null,
             animationId: null,
             timerInterval: null,
             startTime: null,
             isMuted: false,
+            remoteIsMuted: false,
             timeoutTimer: null,
             audioElement: null,
-            isCallActive: false
+            isCallActive: false,
+            localGainNode: null,
+            remoteGainNode: null,
+            localVolume: 100,
+            remoteVolume: 100
         };
         
         const $ = (id) => document.getElementById(id);
@@ -479,13 +669,31 @@
             lobby: { input: $('customIdInput'), btn: $('connectBtn'), status: $('lobbyStatus') },
             main: {
                 id: $('myPeerId'), copyBtn: $('copyIdBtn'), remoteInput: $('remoteIdInput'),
-                callBtn: $('callBtn'), status: $('mainStatus'), disconnectBtn: $('disconnectBtn')
+                callBtn: $('callBtn'), status: $('mainStatus'), disconnectBtn: $('disconnectBtn'),
+                connectionDot: $('connectionDot')
             },
             call: {
-                remoteName: $('remotePeerName'), localStatus: $('localStatusText'),
-                localInd: $('localMuteIndicator'), muteBtn: $('muteBtn'),
-                muteIcon: $('muteIcon'), hangup: $('hangupBtn'), duration: $('callDuration'),
-                canvas: $('visualizer'), qualityIndicator: $('qualityIndicator')
+                remoteName: $('remotePeerName'),
+                localStatus: $('localStatusText'),
+                localStatusDot: $('localStatusDot'),
+                localMuteBadge: $('localMuteBadge'),
+                localCard: $('localCard'),
+                localMeter: $('localMeter'),
+                localVolumeSlider: $('localVolumeSlider'),
+                localVolumeValue: $('localVolumeValue'),
+                remoteStatus: $('remoteStatusText'),
+                remoteStatusDot: $('remoteStatusDot'),
+                remoteMuteBadge: $('remoteMuteBadge'),
+                remoteCard: $('remoteCard'),
+                remoteMeter: $('remoteMeter'),
+                remoteVolumeSlider: $('remoteVolumeSlider'),
+                remoteVolumeValue: $('remoteVolumeValue'),
+                muteBtn: $('muteBtn'),
+                muteIcon: $('muteIcon'),
+                hangup: $('hangupBtn'),
+                duration: $('callDuration'),
+                callStatusDot: $('callStatusDot'),
+                qualityIndicator: $('qualityIndicator')
             },
             modal: {
                 el: $('incomingModal'), callerId: $('callerId'),
@@ -512,6 +720,7 @@
             setTimeout(() => {
                 t.style.opacity = '0';
                 t.style.transform = 'translateY(-10px)';
+                t.style.transition = 'all 0.2s ease';
                 setTimeout(() => t.remove(), 200);
             }, 3000);
         }
@@ -529,7 +738,6 @@
         }
         
         function initPeer(customId) {
-            // BELANGRIJK: Vernietig oude peer instantie om conflicten te voorkomen
             if (state.peer) {
                 state.peer.destroy();
                 state.peer = null;
@@ -581,12 +789,9 @@
             
             state.peer.on('error', (err) => {
                 console.error('Peer Error:', err);
-                
-                // Reset UI
                 ui.lobby.btn.disabled = false;
                 ui.lobby.status.textContent = '';
                 
-                // Behandel specifieke 'unavailable-id' fout
                 if (err.type === 'unavailable-id') {
                     toast('ID is al in gebruik. Kies een andere naam.', 'error');
                     ui.lobby.input.classList.add('error');
@@ -599,7 +804,6 @@
                     toast(`Verbindingsfout: ${err.type}`, 'error');
                 }
                 
-                // Opruimen bij fatale fouten
                 if (state.peer && !state.peer.open) {
                     state.peer.destroy();
                     state.peer = null;
@@ -623,14 +827,52 @@
         }
         
         function handleSignal(data) {
-            if (data.type === SIGNAL.REJECT) { toast('Oproep geweigerd', 'error'); setMainStatus('Geweigerd', 'error'); cleanupCall(false); }
-            else if (data.type === SIGNAL.BUSY) { toast('Gebruiker is bezig', 'error'); setMainStatus('Bezig', 'error'); cleanupCall(false); }
-            else if (data.type === SIGNAL.HANGUP) { toast('Gesprek beëindigd'); cleanupCall(false); }
+            if (data.type === SIGNAL.REJECT) {
+                toast('Oproep geweigerd', 'error');
+                setMainStatus('Geweigerd', 'error');
+                cleanupCall(false);
+            } else if (data.type === SIGNAL.BUSY) {
+                toast('Gebruiker is bezig', 'error');
+                setMainStatus('Bezig', 'error');
+                cleanupCall(false);
+            } else if (data.type === SIGNAL.HANGUP) {
+                toast('Gesprek beëindigd');
+                cleanupCall(false);
+            } else if (data.type === SIGNAL.MUTE) {
+                updateRemoteMuteStatus(data.isMuted);
+            } else if (data.type === SIGNAL.VOLUME_CHANGE) {
+                // Partner's volume change notification (optional display)
+            }
+        }
+        
+        function updateRemoteMuteStatus(isMuted) {
+            state.remoteIsMuted = isMuted;
+            
+            if (isMuted) {
+                ui.call.remoteStatus.textContent = 'Gedempt';
+                ui.call.remoteStatus.style.color = '#f43f5e';
+                ui.call.remoteStatusDot.classList.remove('active');
+                ui.call.remoteStatusDot.classList.add('muted');
+                ui.call.remoteMuteBadge.classList.remove('hidden');
+                ui.call.remoteCard.classList.add('muted');
+                ui.call.remoteMeter.classList.add('muted');
+            } else {
+                ui.call.remoteStatus.textContent = 'Microfoon aan';
+                ui.call.remoteStatus.style.color = '#10b981';
+                ui.call.remoteStatusDot.classList.add('active');
+                ui.call.remoteStatusDot.classList.remove('muted');
+                ui.call.remoteMuteBadge.classList.add('hidden');
+                ui.call.remoteCard.classList.remove('muted');
+                ui.call.remoteMeter.classList.remove('muted');
+            }
         }
         
         async function getHighQualityAudio() {
-            try { return await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS); } 
-            catch (err) { return navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
+            try { 
+                return await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS); 
+            } catch (err) { 
+                return navigator.mediaDevices.getUserMedia({ audio: true, video: false }); 
+            }
         }
         
         async function startCall(remoteId) {
@@ -646,28 +888,51 @@
                     try {
                         state.localStream = await getHighQualityAudio();
                         initAudioContext();
-                        const call = state.peer.call(remoteId, state.localStream);
-                        state.currentCall = call;
-                        state.remotePeerId = remoteId;
-                        state.isCallActive = true;
-                        setMainStatus('Overgaan...', 'neutral');
                         
-                        state.timeoutTimer = setTimeout(() => {
-                            if (!state.analyser) {
-                                toast('Geen antwoord', 'error');
-                                setMainStatus('Geen antwoord', 'error');
-                                conn.send({ type: SIGNAL.HANGUP });
-                                cleanupCall(false);
-                            }
-                        }, 30000);
-                        
-                        call.on('stream', (remoteStream) => {
-                            clearTimeout(state.timeoutTimer);
-                            handleRemoteStream(remoteStream);
-                        });
-                        call.on('close', () => cleanupCall(false));
-                        call.on('error', () => cleanupCall(false));
+                        // Create gain node for local volume control
+                        if (state.audioCtx && state.localStream) {
+                            const source = state.audioCtx.createMediaStreamSource(state.localStream);
+                            state.localGainNode = state.audioCtx.createGain();
+                            state.localGainNode.gain.value = 1.0;
+                            source.connect(state.localGainNode);
+                            
+                            // Create destination for the modified stream
+                            const destination = state.audioCtx.createMediaStreamDestination();
+                            state.localGainNode.connect(destination);
+                            
+                            // Use the modified stream for the call
+                            const modifiedStream = destination.stream;
+                            
+                            // Also connect to analyser for visualization
+                            state.localAnalyser = state.audioCtx.createAnalyser();
+                            state.localAnalyser.fftSize = 32;
+                            state.localAnalyser.smoothingTimeConstant = 0.8;
+                            source.connect(state.localAnalyser);
+                            
+                            const call = state.peer.call(remoteId, modifiedStream);
+                            state.currentCall = call;
+                            state.remotePeerId = remoteId;
+                            state.isCallActive = true;
+                            setMainStatus('Overgaan...', 'neutral');
+                            
+                            state.timeoutTimer = setTimeout(() => {
+                                if (!state.remoteAnalyser) {
+                                    toast('Geen antwoord', 'error');
+                                    setMainStatus('Geen antwoord', 'error');
+                                    conn.send({ type: SIGNAL.HANGUP });
+                                    cleanupCall(false);
+                                }
+                            }, 30000);
+                            
+                            call.on('stream', (remoteStream) => {
+                                clearTimeout(state.timeoutTimer);
+                                handleRemoteStream(remoteStream);
+                            });
+                            call.on('close', () => cleanupCall(false));
+                            call.on('error', () => cleanupCall(false));
+                        }
                     } catch (err) {
+                        console.error(err);
                         toast('Microfoon toegang geweigerd', 'error');
                         cleanupCall(false);
                     }
@@ -685,7 +950,29 @@
             try {
                 state.localStream = await getHighQualityAudio();
                 initAudioContext();
-                state.currentCall.answer(state.localStream);
+                
+                // Create gain node for local volume control
+                if (state.audioCtx && state.localStream) {
+                    const source = state.audioCtx.createMediaStreamSource(state.localStream);
+                    state.localGainNode = state.audioCtx.createGain();
+                    state.localGainNode.gain.value = 1.0;
+                    source.connect(state.localGainNode);
+                    
+                    const destination = state.audioCtx.createMediaStreamDestination();
+                    state.localGainNode.connect(destination);
+                    
+                    // Connect to analyser
+                    state.localAnalyser = state.audioCtx.createAnalyser();
+                    state.localAnalyser.fftSize = 32;
+                    state.localAnalyser.smoothingTimeConstant = 0.8;
+                    source.connect(state.localAnalyser);
+                    
+                    const modifiedStream = destination.stream;
+                    state.currentCall.answer(modifiedStream);
+                } else {
+                    state.currentCall.answer(state.localStream);
+                }
+                
                 state.isCallActive = true;
                 
                 if (!state.activeConn || state.activeConn.peer !== state.remotePeerId) {
@@ -724,18 +1011,35 @@
             if (state.audioCtx && state.audioCtx.state !== 'closed') {
                 try {
                     const source = state.audioCtx.createMediaStreamSource(stream);
-                    state.analyser = state.audioCtx.createAnalyser();
-                    state.analyser.fftSize = 64;
-                    state.analyser.smoothingTimeConstant = 0.8;
-                    source.connect(state.analyser);
-                } catch (e) { console.warn('Analyzer error:', e); }
+                    
+                    // Create gain node for remote volume control
+                    state.remoteGainNode = state.audioCtx.createGain();
+                    state.remoteGainNode.gain.value = 1.0;
+                    
+                    // Create analyser for remote audio
+                    state.remoteAnalyser = state.audioCtx.createAnalyser();
+                    state.remoteAnalyser.fftSize = 32;
+                    state.remoteAnalyser.smoothingTimeConstant = 0.8;
+                    
+                    // Connect: source -> gain -> destination (for output)
+                    // Also connect analyser in parallel
+                    source.connect(state.remoteGainNode);
+                    source.connect(state.remoteAnalyser);
+                    state.remoteGainNode.connect(state.audioCtx.destination);
+                    
+                } catch (e) { 
+                    console.warn('Analyzer error:', e); 
+                }
             }
             enterCallUI();
         }
         
         function initAudioContext() {
             if (!state.audioCtx || state.audioCtx.state === 'closed') {
-                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: 48000 });
+                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ 
+                    latencyHint: 'interactive', 
+                    sampleRate: 48000 
+                });
             }
             if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
         }
@@ -748,74 +1052,100 @@
             state.timerInterval = setInterval(() => {
                 ui.call.duration.textContent = formatDuration(Math.floor((Date.now() - state.startTime) / 1000));
             }, 1000);
-            startVisualizer();
+            startAudioMeter();
         }
         
-        function startVisualizer() {
-            const canvas = ui.call.canvas;
-            const ctx = canvas.getContext('2d');
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            let lastDraw = 0;
-            const fps = 30;
-            const interval = 1000 / fps;
+        function startAudioMeter() {
+            const localMeter = ui.call.localMeter;
+            const remoteMeter = ui.call.remoteMeter;
+            const localVolumeValue = ui.call.localVolumeValue;
             
-            function draw(ts) {
-                state.animationId = requestAnimationFrame(draw);
-                const delta = ts - lastDraw;
-                if (delta < interval) return;
-                lastDraw = ts - (delta % interval);
+            function updateMeters() {
+                state.animationId = requestAnimationFrame(updateMeters);
                 
-                const w = canvas.width = canvas.offsetWidth * dpr;
-                const h = canvas.height = canvas.offsetHeight * dpr;
-                ctx.clearRect(0, 0, w, h);
+                // Local audio level
+                if (state.localAnalyser && !state.isMuted) {
+                    const dataArray = new Uint8Array(state.localAnalyser.frequencyBinCount);
+                    state.localAnalyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                    const level = Math.max(2, (average / 255) * 100 * (state.localVolume / 100));
+                    localMeter.style.width = `${Math.min(100, level)}%`;
+                } else if (state.isMuted) {
+                    localMeter.style.width = '2%';
+                }
                 
-                if (state.analyser) {
-                    const buf = state.analyser.frequencyBinCount;
-                    const arr = new Uint8Array(buf);
-                    state.analyser.getByteFrequencyData(arr);
-                    const barW = (w / buf) * 2;
-                    let x = 0;
-                    for (let i = 0; i < buf; i++) {
-                        const barH = Math.max(4, (arr[i] / 255) * h * 0.85);
-                        const grad = ctx.createLinearGradient(0, h, 0, h - barH);
-                        grad.addColorStop(0, 'rgba(139, 92, 246, 0.9)');
-                        grad.addColorStop(1, 'rgba(196, 167, 255, 0.6)');
-                        ctx.fillStyle = grad;
-                        ctx.beginPath();
-                        ctx.roundRect(x, h - barH, barW - 3, barH, 4);
-                        ctx.fill();
-                        x += barW;
-                    }
-                } else {
-                    ctx.fillStyle = 'rgba(139, 92, 246, 0.2)';
-                    const bc = 16, bw = w / bc;
-                    for (let i = 0; i < bc; i++) {
-                        const bh = 8 + Math.sin(Date.now() / 500 + i) * 4;
-                        ctx.beginPath();
-                        ctx.roundRect(i * bw + 1.5, h - bh, bw - 3, bh, 3);
-                        ctx.fill();
-                    }
+                // Remote audio level
+                if (state.remoteAnalyser && !state.remoteIsMuted) {
+                    const dataArray = new Uint8Array(state.remoteAnalyser.frequencyBinCount);
+                    state.remoteAnalyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                    const level = Math.max(2, (average / 255) * 100 * (state.remoteVolume / 100));
+                    remoteMeter.style.width = `${Math.min(100, level)}%`;
+                } else if (state.remoteIsMuted) {
+                    remoteMeter.style.width = '2%';
                 }
             }
-            state.animationId = requestAnimationFrame(draw);
+            
+            state.animationId = requestAnimationFrame(updateMeters);
         }
         
         function toggleMute() {
             if (!state.localStream) return;
             state.isMuted = !state.isMuted;
             state.localStream.getAudioTracks().forEach(t => t.enabled = !state.isMuted);
-            updateMuteUI(state.isMuted);
-            if (state.activeConn && state.activeConn.open) state.activeConn.send({ type: SIGNAL.MUTE, isMuted: state.isMuted });
+            updateLocalMuteUI(state.isMuted);
+            
+            if (state.activeConn && state.activeConn.open) {
+                state.activeConn.send({ type: SIGNAL.MUTE, isMuted: state.isMuted });
+            }
         }
         
-        function updateMuteUI(muted) {
+        function updateLocalMuteUI(muted) {
             ui.call.muteIcon.setAttribute('data-lucide', muted ? 'mic-off' : 'mic');
             ui.call.muteBtn.style.background = muted ? 'linear-gradient(135deg, #e11d48, #f43f5e)' : '';
             ui.call.muteBtn.style.borderColor = muted ? '#f43f5e' : '';
-            ui.call.localStatus.textContent = muted ? 'Gedempt' : 'Microfoon aan';
-            ui.call.localStatus.style.color = muted ? '#f43f5e' : '#10b981';
-            ui.call.localInd.style.background = muted ? '#f43f5e' : '#10b981';
+            
+            if (muted) {
+                ui.call.localStatus.textContent = 'Gedempt';
+                ui.call.localStatus.style.color = '#f43f5e';
+                ui.call.localStatusDot.classList.remove('active');
+                ui.call.localStatusDot.classList.add('muted');
+                ui.call.localMuteBadge.classList.remove('hidden');
+                ui.call.localCard.classList.add('muted');
+                ui.call.localMeter.classList.add('muted');
+            } else {
+                ui.call.localStatus.textContent = 'Microfoon aan';
+                ui.call.localStatus.style.color = '#10b981';
+                ui.call.localStatusDot.classList.add('active');
+                ui.call.localStatusDot.classList.remove('muted');
+                ui.call.localMuteBadge.classList.add('hidden');
+                ui.call.localCard.classList.remove('muted');
+                ui.call.localMeter.classList.remove('muted');
+            }
+            
             lucide.createIcons();
+        }
+        
+        function setLocalVolume(value) {
+            state.localVolume = value;
+            ui.call.localVolumeValue.textContent = `${value}%`;
+            
+            if (state.localGainNode) {
+                // Convert percentage to gain (0-2x)
+                const gain = value / 100;
+                state.localGainNode.gain.setTargetAtTime(gain, state.audioCtx.currentTime, 0.01);
+            }
+        }
+        
+        function setRemoteVolume(value) {
+            state.remoteVolume = value;
+            ui.call.remoteVolumeValue.textContent = `${value}%`;
+            
+            if (state.remoteGainNode) {
+                // Convert percentage to gain (0-2x)
+                const gain = value / 100;
+                state.remoteGainNode.gain.setTargetAtTime(gain, state.audioCtx.currentTime, 0.01);
+            }
         }
         
         function cleanupCall(notify = true) {
@@ -841,15 +1171,35 @@
             
             resetCallState();
             ui.call.duration.textContent = '00:00';
-            updateMuteUI(false);
+            updateLocalMuteUI(false);
+            updateRemoteMuteStatus(false);
+            ui.call.localMeter.style.width = '2%';
+            ui.call.remoteMeter.style.width = '2%';
+            ui.call.localVolumeSlider.value = 100;
+            ui.call.remoteVolumeSlider.value = 100;
+            ui.call.localVolumeValue.textContent = '100%';
+            ui.call.remoteVolumeValue.textContent = '100%';
             showScreen('main');
             ui.main.callBtn.disabled = false;
         }
         
         function resetCallState() {
-            state.localStream = null; state.currentCall = null; state.isMuted = false;
-            state.analyser = null; state.audioCtx = null; state.activeConn = null;
-            state.isCallActive = false; state.animationId = null; state.timerInterval = null; state.timeoutTimer = null;
+            state.localStream = null;
+            state.currentCall = null;
+            state.isMuted = false;
+            state.remoteIsMuted = false;
+            state.localAnalyser = null;
+            state.remoteAnalyser = null;
+            state.audioCtx = null;
+            state.activeConn = null;
+            state.isCallActive = false;
+            state.animationId = null;
+            state.timerInterval = null;
+            state.timeoutTimer = null;
+            state.localGainNode = null;
+            state.remoteGainNode = null;
+            state.localVolume = 100;
+            state.remoteVolume = 100;
         }
         
         function disconnectFromNetwork() {
@@ -865,8 +1215,12 @@
         async function copyPeerId() {
             const id = ui.main.id.textContent;
             if (id && id !== '---') {
-                try { await navigator.clipboard.writeText(id); toast('ID gekopieerd', 'success'); } 
-                catch (e) { toast('Kopiëren mislukt', 'error'); }
+                try { 
+                    await navigator.clipboard.writeText(id); 
+                    toast('ID gekopieerd', 'success'); 
+                } catch (e) { 
+                    toast('Kopiëren mislukt', 'error'); 
+                }
             }
         }
         
@@ -882,12 +1236,24 @@
         });
         
         ui.main.copyBtn.addEventListener('click', copyPeerId);
-        ui.main.callBtn.addEventListener('click', () => { const id = ui.main.remoteInput.value.trim(); if (id) startCall(id); });
+        ui.main.callBtn.addEventListener('click', () => { 
+            const id = ui.main.remoteInput.value.trim(); 
+            if (id) startCall(id); 
+        });
         ui.main.disconnectBtn.addEventListener('click', disconnectFromNetwork);
         ui.modal.accept.addEventListener('click', acceptCall);
         ui.modal.decline.addEventListener('click', declineCall);
         ui.call.muteBtn.addEventListener('click', toggleMute);
         ui.call.hangup.addEventListener('click', () => cleanupCall(true));
+        
+        // Volume sliders
+        ui.call.localVolumeSlider.addEventListener('input', (e) => {
+            setLocalVolume(parseInt(e.target.value));
+        });
+        
+        ui.call.remoteVolumeSlider.addEventListener('input', (e) => {
+            setRemoteVolume(parseInt(e.target.value));
+        });
         
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.repeat) {
@@ -895,6 +1261,11 @@
                 else if (ui.screens.main.classList.contains('active')) ui.main.callBtn.click();
             }
             if (e.key === 'Escape' && ui.modal.el.classList.contains('active')) declineCall();
+            
+            // Keyboard shortcut for mute (M key)
+            if (e.key === 'm' && ui.screens.call.classList.contains('active') && !e.repeat) {
+                toggleMute();
+            }
         });
         
         window.addEventListener('beforeunload', () => {
