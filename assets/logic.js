@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.1.0 (Stable Offline Mode & Memory State Fix)
+ *  Version: 1.1.1 (Robust Data Passing & Race Condition Fix)
  *  assets/logic.js 
  *  MIT License
  */
@@ -33,10 +33,7 @@ export function initHRNchat(customConfig = {}) {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
                 request.onerror = (e) => reject(request.error);
-                request.onsuccess = () => {
-                    this.db = request.result;
-                    resolve();
-                };
+                request.onsuccess = () => { this.db = request.result; resolve(); };
                 request.onupgradeneeded = (e) => {
                     const db = e.target.result;
                     const tx = e.target.transaction;
@@ -55,85 +52,15 @@ export function initHRNchat(customConfig = {}) {
                 };
             });
         },
-        async get(store, key) {
-            return new Promise((res, rej) => {
-                if (!this.db) return rej("DB not init");
-                const tx = this.db.transaction(store, 'readonly');
-                const req = tx.objectStore(store).get(key);
-                req.onsuccess = () => res(req.result);
-                req.onerror = () => rej(req.error);
-            });
-        },
-        async getAll(store) {
-            return new Promise((res, rej) => {
-                if (!this.db) return res([]);
-                const tx = this.db.transaction(store, 'readonly');
-                const req = tx.objectStore(store).getAll();
-                req.onsuccess = () => res(req.result || []);
-                req.onerror = () => rej(req.error);
-            });
-        },
-        async put(store, val) {
-            if (!val || !val.id) return;
-            return new Promise((res, rej) => {
-                if (!this.db) return rej("DB not init");
-                const tx = this.db.transaction(store, 'readwrite');
-                const req = tx.objectStore(store).put(val);
-                req.onsuccess = () => res();
-                req.onerror = () => rej(req.error);
-            });
-        },
-        async putAll(store, vals) {
-            if (!vals || vals.length === 0) return;
-            return new Promise((res, rej) => {
-                if (!this.db) return rej("DB not init");
-                const tx = this.db.transaction(store, 'readwrite');
-                const os = tx.objectStore(store);
-                vals.forEach(v => { if (v && v.id) os.put(v); });
-                tx.oncomplete = () => res();
-                tx.onerror = () => rej(tx.error);
-            });
-        },
-        async clear(store) {
-            return new Promise((res, rej) => {
-                if (!this.db) return res();
-                const tx = this.db.transaction(store, 'readwrite');
-                const req = tx.objectStore(store).clear();
-                req.onsuccess = () => res();
-                req.onerror = () => rej(req.error);
-            });
-        },
-        async delete(store, key) {
-            return new Promise((res, rej) => {
-                if (!this.db) return res();
-                const tx = this.db.transaction(store, 'readwrite');
-                const req = tx.objectStore(store).delete(key);
-                req.onsuccess = () => res();
-                req.onerror = () => rej(req.error);
-            });
-        },
-        async getRoomMessages(roomId) {
-            const all = await this.getAll('messages');
-            return all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        },
-        async clearRoomMessages(roomId) {
-            return new Promise((resolve, reject) => {
-                if (!this.db) return reject();
-                const tx = this.db.transaction('messages', 'readwrite');
-                const store = tx.objectStore('messages');
-                const index = store.index('room_id');
-                const req = index.openCursor(IDBKeyRange.only(roomId));
-                req.onsuccess = (e) => {
-                    const cursor = e.target.result;
-                    if (cursor) { cursor.delete(); cursor.continue(); }
-                };
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        },
-        async saveUserTree(userId, rooms) {
-            return this.put('user_tree', { user_id: userId, room_ids: rooms.map(r => r.id), timestamp: Date.now() });
-        },
+        async get(store, key) { return new Promise((res, rej) => { if (!this.db) return rej("DB not init"); const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).get(key); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); },
+        async getAll(store) { return new Promise((res, rej) => { if (!this.db) return res([]); const tx = this.db.transaction(store, 'readonly'); const req = tx.objectStore(store).getAll(); req.onsuccess = () => res(req.result || []); req.onerror = () => rej(req.error); }); },
+        async put(store, val) { if (!val || !val.id) return; return new Promise((res, rej) => { if (!this.db) return rej("DB not init"); const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).put(val); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async putAll(store, vals) { if (!vals || vals.length === 0) return; return new Promise((res, rej) => { if (!this.db) return rej("DB not init"); const tx = this.db.transaction(store, 'readwrite'); const os = tx.objectStore(store); vals.forEach(v => { if (v && v.id) os.put(v); }); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
+        async clear(store) { return new Promise((res, rej) => { if (!this.db) return res(); const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async delete(store, key) { return new Promise((res, rej) => { if (!this.db) return res(); const tx = this.db.transaction(store, 'readwrite'); const req = tx.objectStore(store).delete(key); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); },
+        async getRoomMessages(roomId) { const all = await this.getAll('messages'); return all.filter(m => m.room_id === roomId).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); },
+        async clearRoomMessages(roomId) { return new Promise((resolve, reject) => { if (!this.db) return reject(); const tx = this.db.transaction('messages', 'readwrite'); const store = tx.objectStore('messages'); const index = store.index('room_id'); const req = index.openCursor(IDBKeyRange.only(roomId)); req.onsuccess = (e) => { const cursor = e.target.result; if (cursor) { cursor.delete(); cursor.continue(); } }; tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); },
+        async saveUserTree(userId, rooms) { return this.put('user_tree', { user_id: userId, room_ids: rooms.map(r => r.id), timestamp: Date.now() }); },
         async getUserTree(userId) { return this.get('user_tree', userId); }
     };
     const state = {
@@ -196,10 +123,7 @@ export function initHRNchat(customConfig = {}) {
     let toastQueue = [];
     let toastVisible = false;
     const tabChannel = new BroadcastChannel('hrn_tab_sync');
-    const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
-        auth: { persistSession: false, autoRefreshToken: true },
-        realtime: { params: { eventsPerSecond: 10 } }
-    });
+    const db = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: true }, realtime: { params: { eventsPerSecond: 10 } } });
     const esc = t => { const p = document.createElement('p'); p.textContent = t; return p.innerHTML; };
     const truncateText = (text, maxLength = 20) => !text ? "" : text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
     const $ = id => document.getElementById(id);
@@ -247,98 +171,19 @@ export function initHRNchat(customConfig = {}) {
         const dot = roomCountEl?.previousElementSibling;
         if (dot) dot.style.background = roomStatusColor;
     };
-    const schedulePresenceUpdate = () => {
-        if (state.presenceUpdateTimer) clearTimeout(state.presenceUpdateTimer);
-        state.presenceUpdateTimer = setTimeout(() => { updatePresenceUI(); state.presenceUpdateTimer = null; }, 500);
-    };
-    const processToastQueue = () => {
-        if (toastVisible || toastQueue.length === 0) return;
-        toastVisible = true;
-        const msg = toastQueue.shift();
-        const c = $('toast-container');
-        const t = document.createElement('div');
-        t.className = 'toast-item'; t.innerText = msg;
-        t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); };
-        c.appendChild(t);
-        setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000);
-    };
+    const schedulePresenceUpdate = () => { if (state.presenceUpdateTimer) clearTimeout(state.presenceUpdateTimer); state.presenceUpdateTimer = setTimeout(() => { updatePresenceUI(); state.presenceUpdateTimer = null; }, 500); };
+    const processToastQueue = () => { if (toastVisible || toastQueue.length === 0) return; toastVisible = true; const msg = toastQueue.shift(); const c = $('toast-container'); const t = document.createElement('div'); t.className = 'toast-item'; t.innerText = msg; t.onclick = () => { t.style.opacity = '0'; setTimeout(() => { t.remove(); toastVisible = false; processToastQueue(); }, 400); }; c.appendChild(t); setTimeout(() => { if (t.parentNode) { t.style.opacity = '0'; setTimeout(() => { if (t.parentNode) t.remove(); toastVisible = false; processToastQueue(); }, 400); } }, 3000); };
     window.toast = m => { toastQueue.push(m); processToastQueue(); };
-    window.setLoading = (s, text = null) => {
-        const loader = $('loader-overlay');
-        const loaderText = $('loader-text');
-        if (!loader) return;
-        if (s) loader.classList.add('active'); else loader.classList.remove('active');
-        if (text) loaderText.innerText = text; else loaderText.innerText = "Loading...";
-    };
+    window.setLoading = (s, text = null) => { const loader = $('loader-overlay'); const loaderText = $('loader-text'); if (!loader) return; if (s) loader.classList.add('active'); else loader.classList.remove('active'); if (text) loaderText.innerText = text; else loaderText.innerText = "Loading..."; };
     const safeAwait = async (promise) => { try { return [await promise, null]; } catch (error) { return [null, error]; } };
-    const cacheAvatar = async (profile) => {
-        if (!profile || !profile.avatar_url) return profile;
-        try {
-            const response = await fetch(CONFIG.proxyUrl + profile.avatar_url);
-            if (!response.ok) throw new Error("Invalid image response");
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = async () => {
-                    profile.cached_avatar = reader.result;
-                    await localDB.put('profiles', profile);
-                    state.profileCache[profile.id] = profile;
-                    resolve(profile);
-                };
-                reader.onerror = () => resolve(profile);
-                reader.readAsDataURL(blob);
-            });
-        } catch (e) { console.warn("Avatar caching mislukt:", e); return profile; }
-    };
-    const getProfile = async (userId) => {
-        if (!userId) return null;
-        if (state.profileCache[userId]) return state.profileCache[userId];
-        let profile = await localDB.get('profiles', userId);
-        if (navigator.onLine && !state.isOfflineMode) {
-            try {
-                const { data: serverProfile, error } = await db.from('profiles').select('id, full_name, avatar_url, updated_at').eq('id', userId).single();
-                if (serverProfile) {
-                    const localTime = profile?.updated_at ? new Date(profile.updated_at).getTime() : 0;
-                    const serverTime = serverProfile.updated_at ? new Date(serverProfile.updated_at).getTime() : 0;
-                    const needsUpdate = !profile || serverTime > localTime || profile.avatar_url !== serverProfile.avatar_url;
-                    if (needsUpdate) {
-                        const newProfileData = { ...serverProfile };
-                        const urlChanged = !profile || profile.avatar_url !== serverProfile.avatar_url;
-                        const needsImageCache = urlChanged || !profile.cached_avatar;
-                        if (needsImageCache && serverProfile.avatar_url) { await cacheAvatar(newProfileData); profile = await localDB.get('profiles', userId); }
-                        else {
-                            if (profile?.cached_avatar) newProfileData.cached_avatar = profile.cached_avatar;
-                            await localDB.put('profiles', newProfileData);
-                            profile = newProfileData;
-                        }
-                    }
-                }
-            } catch (e) { console.warn("Kon profiel niet updaten van server:", e); }
-        }
-        if (profile) state.profileCache[userId] = profile;
-        return profile;
-    };
+    const cacheAvatar = async (profile) => { if (!profile || !profile.avatar_url) return profile; try { const response = await fetch(CONFIG.proxyUrl + profile.avatar_url); if (!response.ok) throw new Error("Invalid image response"); const blob = await response.blob(); return new Promise((resolve) => { const reader = new FileReader(); reader.onload = async () => { profile.cached_avatar = reader.result; await localDB.put('profiles', profile); state.profileCache[profile.id] = profile; resolve(profile); }; reader.onerror = () => resolve(profile); reader.readAsDataURL(blob); }); } catch (e) { console.warn("Avatar caching mislukt:", e); return profile; } };
+    const getProfile = async (userId) => { if (!userId) return null; if (state.profileCache[userId]) return state.profileCache[userId]; let profile = await localDB.get('profiles', userId); if (navigator.onLine && !state.isOfflineMode) { try { const { data: serverProfile, error } = await db.from('profiles').select('id, full_name, avatar_url, updated_at').eq('id', userId).single(); if (serverProfile) { const localTime = profile?.updated_at ? new Date(profile.updated_at).getTime() : 0; const serverTime = serverProfile.updated_at ? new Date(serverProfile.updated_at).getTime() : 0; const needsUpdate = !profile || serverTime > localTime || profile.avatar_url !== serverProfile.avatar_url; if (needsUpdate) { const newProfileData = { ...serverProfile }; const urlChanged = !profile || profile.avatar_url !== serverProfile.avatar_url; const needsImageCache = urlChanged || !profile.cached_avatar; if (needsImageCache && serverProfile.avatar_url) { await cacheAvatar(newProfileData); profile = await localDB.get('profiles', userId); } else { if (profile?.cached_avatar) newProfileData.cached_avatar = profile.cached_avatar; await localDB.put('profiles', newProfileData); profile = newProfileData; } } } } catch (e) { console.warn("Kon profiel niet updaten van server:", e); } } if (profile) state.profileCache[userId] = profile; return profile; };
     const workerCode = `self.onmessage = async (e) => { const { id, type, payload } = e.data; const encoder = new TextEncoder(); const decoder = new TextDecoder(); try { if (type === 'deriveKey') { const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); self.cryptoKey = key; self.postMessage({ id, type: 'keyDerived', success: true }); } else if (type === 'encrypt') { if (!self.cryptoKey) throw new Error("Key not derived"); const iv = crypto.getRandomValues(new Uint8Array(12)); const encoded = encoder.encode(payload.text); const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.cryptoKey, encoded); const combined = new Uint8Array(iv.length + ciphertext.byteLength); combined.set(iv, 0); combined.set(new Uint8Array(ciphertext), iv.length); const base64 = btoa(String.fromCharCode(...combined)); self.postMessage({ id, type: 'encrypted', result: base64 }); } else if (type === 'decryptHistory') { if (!self.cryptoKey) throw new Error("Key not derived"); const results = []; for (const m of payload.messages) { try { if (m.content === '/') { results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); continue; } const binary = atob(m.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); } catch (err) { results.push({ id: m.id, error: true }); } } self.postMessage({ id, type: 'historyDecrypted', results }); } else if (type === 'decryptSingle') { if (!self.cryptoKey) throw new Error("Key not derived"); if (payload.content === '/') { self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); return; } try { const binary = atob(payload.content); const bytes = new Uint8Array(binary.length); for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); const iv = bytes.slice(0, 12); const ciphertext = bytes.slice(12); const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.cryptoKey, ciphertext); const text = decoder.decode(decrypted); const parts = text.split('|'); self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); } catch(e) { self.postMessage({ id, type: 'singleDecrypted', error: e.message }); } } } catch (error) { self.postMessage({ id, type: 'error', message: error.message }); } };`;
     const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
     const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
     const pendingResolvers = {};
-    cryptoWorker.onmessage = (e) => {
-        const { id, type, result, error, results, success } = e.data;
-        const key = id || type;
-        if (pendingResolvers[key]) {
-            if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed");
-            else if (type === 'keyDerived') pendingResolvers[key].resolve(success);
-            else pendingResolvers[key].resolve({ type, result, results });
-            delete pendingResolvers[key];
-        }
-    };
-    const workerExec = (type, payload) => {
-        return new Promise((resolve, reject) => {
-            const id = crypto.randomUUID();
-            pendingResolvers[id] = { resolve, reject };
-            cryptoWorker.postMessage({ id, type, payload });
-        });
-    };
+    cryptoWorker.onmessage = (e) => { const { id, type, result, error, results, success } = e.data; const key = id || type; if (pendingResolvers[key]) { if (error || results?.error) pendingResolvers[key].reject(error || "Decryption failed"); else if (type === 'keyDerived') pendingResolvers[key].resolve(success); else pendingResolvers[key].resolve({ type, result, results }); delete pendingResolvers[key]; } };
+    const workerExec = (type, payload) => { return new Promise((resolve, reject) => { const id = crypto.randomUUID(); pendingResolvers[id] = { resolve, reject }; cryptoWorker.postMessage({ id, type, payload }); }); };
     const generateSalt = () => { const arr = new Uint8Array(16); crypto.getRandomValues(arr); return Array.from(arr, b => b.toString(16).padStart(2, '0')).join(''); };
     const sha256 = async (text) => { const buffer = new TextEncoder().encode(text); const hashBuffer = await crypto.subtle.digest('SHA-256', buffer); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); };
     const deriveKey = (pass, salt) => workerExec('deriveKey', { password: pass, salt: salt });
@@ -347,15 +192,13 @@ export function initHRNchat(customConfig = {}) {
     
     const handleServerFull = async () => {
         if (state.isCapacityBlocked) return; 
-        state.isCapacityBlocked = true;
-        state.isOfflineMode = true;
+        state.isCapacityBlocked = true; state.isOfflineMode = true;
         window.toast("Server is full. Switched to offline mode.");
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         state.reconnectTimer = null; state.connectionTimeoutTimer = null;
         await cleanupChannels(false); 
-        setConnectionVisuals('offline');
-        updatePresenceUI();
+        setConnectionVisuals('offline'); updatePresenceUI();
         if (state.user) window.loadRooms();
     };
 
@@ -366,8 +209,7 @@ export function initHRNchat(customConfig = {}) {
         if (state.presenceChannel) { state.presenceChannel.unsubscribe(); state.presenceChannel = null; state.isPresenceSubscribed = false; }
         if (state.chatChannel) { state.chatChannel.unsubscribe(); state.chatChannel = null; }
         if (!keepGlobal && state.globalPresenceChannel) { state.globalPresenceChannel.unsubscribe(); state.globalPresenceChannel = null; }
-        state.isChatChannelReady = false; state.isReconnecting = false;
-        setConnectionVisuals('offline');
+        state.isChatChannelReady = false; state.isReconnecting = false; setConnectionVisuals('offline');
     };
     const queryOnlineCountImmediately = async () => { if (!state.presenceChannel) return; const presState = state.presenceChannel.presenceState(); const allPresences = Object.values(presState).flat(); const uniqueUserIds = new Set(allPresences.map(p => p.user_id)); state.lastKnownOnlineCount = uniqueUserIds.size; schedulePresenceUpdate(); };
     
@@ -379,18 +221,9 @@ export function initHRNchat(customConfig = {}) {
             const users = [];
             Object.keys(presState).forEach(key => { presState[key].forEach(pres => { users.push(pres); }); });
             users.sort((a, b) => new Date(a.online_at) - new Date(b.online_at));
-            state.globalOnlineCount = users.length;
-            state.globalPresenceReady = true;
-            schedulePresenceUpdate();
-            if (state.user && !state.isOfflineMode && !state.isCapacityBlocked) {
-                if (users.length > CONFIG.maxUsers) {
-                    const myIndex = users.findIndex(u => u.user_id === state.user.id);
-                    if (myIndex === -1 || myIndex >= CONFIG.maxUsers) handleServerFull();
-                }
-            }
-        }).subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') { if (userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); }
-        });
+            state.globalOnlineCount = users.length; state.globalPresenceReady = true; schedulePresenceUpdate();
+            if (state.user && !state.isOfflineMode && !state.isCapacityBlocked) { if (users.length > CONFIG.maxUsers) { const myIndex = users.findIndex(u => u.user_id === state.user.id); if (myIndex === -1 || myIndex >= CONFIG.maxUsers) handleServerFull(); } }
+        }).subscribe(async (status) => { if (status === 'SUBSCRIBED') { if (userId && state.isMasterTab) await state.globalPresenceChannel.track({ user_id: userId, online_at: new Date().toISOString() }); } });
     };
     
     const attemptHardReconnect = () => {
@@ -398,64 +231,14 @@ export function initHRNchat(customConfig = {}) {
         if (state.isCapacityBlocked) return;
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
-        state.reconnectTimer = null; 
-        cleanupChannels(true);
-        state.isReconnecting = !!state.currentRoomId;
-        setConnectionVisuals('connecting');
-        if (state.currentRoomId) {
-            const timeout = getConnectionTimeout();
-            state.connectionTimeoutTimer = setTimeout(() => { state.isReconnecting = false; attemptHardReconnect(); }, timeout);
-            initRoomPresence(state.currentRoomId);
-            setupChatChannel(state.currentRoomId);
-        } else { setConnectionVisuals('connected'); }
+        state.reconnectTimer = null; cleanupChannels(true); state.isReconnecting = !!state.currentRoomId; setConnectionVisuals('connecting');
+        if (state.currentRoomId) { const timeout = getConnectionTimeout(); state.connectionTimeoutTimer = setTimeout(() => { state.isReconnecting = false; attemptHardReconnect(); }, timeout); initRoomPresence(state.currentRoomId); setupChatChannel(state.currentRoomId); }
+        else { setConnectionVisuals('connected'); }
     };
     
-    window.goOnline = async () => {
-        const overlay = $('internet-detected-overlay');
-        if (overlay) overlay.classList.remove('active');
-        state.isCapacityBlocked = false;
-        state.isOfflineMode = false;
-        window.setLoading(true, "Connecting...");
-        const storedEmail = localStorage.getItem('hrn_auth_email');
-        const storedPass = localStorage.getItem('hrn_auth_pass');
-        if (storedEmail && storedPass) {
-            const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass });
-            if (!error) {
-                const { data: { user } } = await db.auth.getUser();
-                state.user = user;
-                await localDB.put('known_users', { id: user.id, email: user.email, metadata: user.user_metadata });
-                if (state.user) setupGlobalPresence(state.user.id);
-                if (state.currentRoomId) attemptHardReconnect();
-                window.loadRooms();
-                window.setLoading(false);
-                window.toast("Back Online");
-            } else { window.setLoading(false); window.toast("Re-login failed"); window.nav('scr-login'); }
-        } else { window.setLoading(false); window.nav('scr-login'); }
-    };
+    window.goOnline = async () => { const overlay = $('internet-detected-overlay'); if (overlay) overlay.classList.remove('active'); state.isCapacityBlocked = false; state.isOfflineMode = false; window.setLoading(true, "Connecting..."); const storedEmail = localStorage.getItem('hrn_auth_email'); const storedPass = localStorage.getItem('hrn_auth_pass'); if (storedEmail && storedPass) { const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass }); if (!error) { const { data: { user } } = await db.auth.getUser(); state.user = user; await localDB.put('known_users', { id: user.id, email: user.email, metadata: user.user_metadata }); if (state.user) setupGlobalPresence(state.user.id); if (state.currentRoomId) attemptHardReconnect(); window.loadRooms(); window.setLoading(false); window.toast("Back Online"); } else { window.setLoading(false); window.toast("Re-login failed"); window.nav('scr-login'); } } else { window.setLoading(false); window.nav('scr-login'); } };
     window.stayOffline = () => { const overlay = $('internet-detected-overlay'); if (overlay) overlay.classList.remove('active'); state.isOfflineMode = true; window.toast("Staying in Offline Mode"); };
-    const handleReconnect = async () => {
-        const overlay = $('reconnect-overlay');
-        if (overlay) overlay.classList.add('active');
-        const storedEmail = localStorage.getItem('hrn_auth_email');
-        const storedPass = localStorage.getItem('hrn_auth_pass');
-        if (storedEmail && storedPass) {
-            try {
-                const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass });
-                if (!error) {
-                    const { data: { user } } = await db.auth.getUser();
-                    state.user = user;
-                    state.isOfflineMode = false;
-                    state.isCapacityBlocked = false;
-                    await localDB.put('known_users', { id: user.id, email: user.email, metadata: user.user_metadata });
-                    if (state.user) setupGlobalPresence(state.user.id);
-                    if (state.currentRoomId) attemptHardReconnect();
-                    window.loadRooms();
-                    if (overlay) overlay.classList.remove('active');
-                    window.toast("Synced successfully");
-                } else { if (overlay) overlay.classList.remove('active'); window.toast("Login failed. Try again."); }
-            } catch (e) { if (overlay) overlay.classList.remove('active'); window.toast("Connection error."); }
-        } else { if (overlay) overlay.classList.remove('active'); }
-    };
+    const handleReconnect = async () => { const overlay = $('reconnect-overlay'); if (overlay) overlay.classList.add('active'); const storedEmail = localStorage.getItem('hrn_auth_email'); const storedPass = localStorage.getItem('hrn_auth_pass'); if (storedEmail && storedPass) { try { const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass }); if (!error) { const { data: { user } } = await db.auth.getUser(); state.user = user; state.isOfflineMode = false; state.isCapacityBlocked = false; await localDB.put('known_users', { id: user.id, email: user.email, metadata: user.user_metadata }); if (state.user) setupGlobalPresence(state.user.id); if (state.currentRoomId) attemptHardReconnect(); window.loadRooms(); if (overlay) overlay.classList.remove('active'); window.toast("Synced successfully"); } else { if (overlay) overlay.classList.remove('active'); window.toast("Login failed. Try again."); } } catch (e) { if (overlay) overlay.classList.remove('active'); window.toast("Connection error."); } } else { if (overlay) overlay.classList.remove('active'); } };
     const setupChatChannel = (id) => {
         if (state.isOfflineMode || state.isCapacityBlocked) return;
         if (state.chatChannel) state.chatChannel.unsubscribe();
@@ -463,61 +246,13 @@ export function initHRNchat(customConfig = {}) {
         state.chatChannel = db.channel(`room_chat_${id}`, { config: { broadcast: { self: true } } });
         state.chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
             const m = payload.new;
-            if (m && state.currentRoomId) {
-                if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) { state.recentlySentIds.delete(m.id); return; }
-                try {
-                    const decRes = await workerExec('decryptSingle', { content: m.content });
-                    if (decRes.result) {
-                        const msgObj = { ...m, ...decRes.result, room_id: m.room_id };
-                        const container = $('chat-messages');
-                        const lastMsg = container.querySelector('.msg:last-of-type');
-                        let prevMsg = null;
-                        if (lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
-                        container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect));
-                        container.scrollTop = container.scrollHeight;
-                        checkChatEmpty();
-                        await localDB.put('messages', msgObj);
-                    }
-                } catch (e) { console.error("Decryption failed for new message", e); }
-            }
+            if (m && state.currentRoomId) { if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) { state.recentlySentIds.delete(m.id); return; } try { const decRes = await workerExec('decryptSingle', { content: m.content }); if (decRes.result) { const msgObj = { ...m, ...decRes.result, room_id: m.room_id }; const container = $('chat-messages'); const lastMsg = container.querySelector('.msg:last-of-type'); let prevMsg = null; if (lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time }; container.insertAdjacentHTML('beforeend', renderMsg(msgObj, prevMsg, isDirect)); container.scrollTop = container.scrollHeight; checkChatEmpty(); await localDB.put('messages', msgObj); } } catch (e) { console.error("Decryption failed for new message", e); } }
         }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, async (payload) => {
-            const m = payload.new;
-            const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`);
-            if (msgEl) {
-                try {
-                    const decRes = await workerExec('decryptSingle', { content: m.content });
-                    const deleted = m.content === '/';
-                    if (deleted) {
-                        msgEl.classList.add('msg-deleted');
-                        const contentDiv = msgEl.querySelector('div:not(.msg-header)');
-                        if (contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; }
-                        const timeSpan = msgEl.querySelector('.msg-time');
-                        if (timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if (editedTag) editedTag.remove(); }
-                        msgEl.dataset.text = "";
-                    } else if (decRes.result) {
-                        const prevEl = msgEl.previousElementSibling;
-                        let prevData = null;
-                        if (prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
-                        msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, room_id: m.room_id, updated_at: m.updated_at }, prevData, isDirect);
-                    }
-                    const cached = await localDB.get('messages', m.id);
-                    if (cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); }
-                } catch (e) { console.error("Decryption failed for update", e); }
-            }
+            const m = payload.new; const msgEl = document.querySelector(`.msg[data-id="${m.id}"]`); if (msgEl) { try { const decRes = await workerExec('decryptSingle', { content: m.content }); const deleted = m.content === '/'; if (deleted) { msgEl.classList.add('msg-deleted'); const contentDiv = msgEl.querySelector('div:not(.msg-header)'); if (contentDiv) { contentDiv.className = 'deleted-text'; contentDiv.innerText = "Message deleted"; } const timeSpan = msgEl.querySelector('.msg-time'); if (timeSpan) { const editedTag = timeSpan.querySelector('.edited-tag'); if (editedTag) editedTag.remove(); } msgEl.dataset.text = ""; } else if (decRes.result) { const prevEl = msgEl.previousElementSibling; let prevData = null; if (prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time }; msgEl.outerHTML = renderMsg({ ...m, ...decRes.result, room_id: m.room_id, updated_at: m.updated_at }, prevData, isDirect); } const cached = await localDB.get('messages', m.id); if (cached) { cached.deleted = deleted; cached.text = decRes.result?.text; await localDB.put('messages', cached); } } catch (e) { console.error("Decryption failed for update", e); } }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
-            if (status === 'SUBSCRIBED') {
-                if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
-                state.isReconnecting = false;
-                if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
-                setConnectionVisuals('connected');
-            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; }
-                if (navigator.onLine && !state.isOfflineMode && !state.isCapacityBlocked) {
-                    state.isChatChannelReady = false;
-                    if (!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); }
-                }
-            }
+            if (status === 'SUBSCRIBED') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } state.isReconnecting = false; if (state.reconnectTimer) clearTimeout(state.reconnectTimer); setConnectionVisuals('connected'); }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { if (state.connectionTimeoutTimer) { clearTimeout(state.connectionTimeoutTimer); state.connectionTimeoutTimer = null; } if (navigator.onLine && !state.isOfflineMode && !state.isCapacityBlocked) { state.isChatChannelReady = false; if (!state.isReconnecting) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } } }
         });
     };
     const initRoomPresence = async (roomId) => {
@@ -527,74 +262,18 @@ export function initHRNchat(customConfig = {}) {
         state.presenceChannel = db.channel(`room_presence:${roomId}`, { config: { presence: { key: myId } } });
         state.presenceChannel.on('presence', { event: 'sync' }, () => { if (!state.presenceChannel) return; queryOnlineCountImmediately(); })
         .subscribe(async (status, err) => {
-            if (status === 'SUBSCRIBED') {
-                if (!state.presenceChannel) return;
-                state.isPresenceSubscribed = true; state.isReconnecting = false;
-                queryOnlineCountImmediately();
-                await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() });
-                queryOnlineCountImmediately();
-                if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-                state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel && !state.isCapacityBlocked) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs);
-            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                state.isPresenceSubscribed = false;
-                if (navigator.onLine && !state.isReconnecting && !state.isOfflineMode && !state.isCapacityBlocked) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); }
-            }
+            if (status === 'SUBSCRIBED') { if (!state.presenceChannel) return; state.isPresenceSubscribed = true; state.isReconnecting = false; queryOnlineCountImmediately(); await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); queryOnlineCountImmediately(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = setInterval(async () => { if (state.presenceChannel && !state.isCapacityBlocked) await state.presenceChannel.track({ user_id: myId, online_at: new Date().toISOString() }); }, CONFIG.presenceHeartbeatMs); }
+            else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { state.isPresenceSubscribed = false; if (navigator.onLine && !state.isReconnecting && !state.isOfflineMode && !state.isCapacityBlocked) { state.isReconnecting = true; setConnectionVisuals('connecting'); state.reconnectTimer = setTimeout(attemptHardReconnect, 1000); } }
         });
     };
-    const monitorConnection = () => {
-        window.addEventListener('online', () => {
-            if (state.isOfflineMode) { const overlay = $('internet-detected-overlay'); if (overlay) overlay.classList.add('active'); }
-            else { setConnectionVisuals('connecting'); if (state.currentRoomId) attemptHardReconnect(); else setConnectionVisuals('connected'); }
-        });
-        window.addEventListener('offline', () => { setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; updatePresenceUI(); });
-    };
+    const monitorConnection = () => { window.addEventListener('online', () => { if (state.isOfflineMode) { const overlay = $('internet-detected-overlay'); if (overlay) overlay.classList.add('active'); } else { setConnectionVisuals('connecting'); if (state.currentRoomId) attemptHardReconnect(); else setConnectionVisuals('connected'); } }); window.addEventListener('offline', () => { setConnectionVisuals('offline'); if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer); if (state.reconnectTimer) clearTimeout(state.reconnectTimer); state.isReconnecting = false; updatePresenceUI(); }); };
     state.preventNextClose = false;
-    const showContextMenu = (e, msgEl) => {
-        if (!msgEl || !state.user) return;
-        if (msgEl.classList.contains('msg-deleted')) return;
-        e.preventDefault();
-        const msgData = { id: msgEl.dataset.id, user_id: msgEl.dataset.uid, created_at: msgEl.dataset.time, text: msgEl.dataset.text };
-        const menu = $('context-menu');
-        const editBtn = $('ctx-edit'); const deleteBtn = $('ctx-delete'); const copyBtn = $('ctx-copy');
-        const isOwner = msgData.user_id === state.user.id;
-        const msgDate = new Date(msgData.created_at); const now = new Date();
-        const diffMinutes = (now - msgDate) / 60000;
-        const canEdit = isOwner && diffMinutes < 15;
-        const canDelete = isOwner;
-        editBtn.style.display = canEdit ? 'flex' : 'none';
-        deleteBtn.style.display = canDelete ? 'flex' : 'none';
-        copyBtn.style.display = 'flex';
-        state.contextTarget = msgData;
-        let x = e.clientX || e.touches?.[0]?.clientX;
-        let y = e.clientY || e.touches?.[0]?.clientY;
-        menu.style.left = `${x}px`; menu.style.top = `${y}px`;
-        setTimeout(() => {
-            const rect = menu.getBoundingClientRect();
-            if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`;
-            if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`;
-            menu.classList.add('active');
-        }, 10);
-    };
+    const showContextMenu = (e, msgEl) => { if (!msgEl || !state.user) return; if (msgEl.classList.contains('msg-deleted')) return; e.preventDefault(); const msgData = { id: msgEl.dataset.id, user_id: msgEl.dataset.uid, created_at: msgEl.dataset.time, text: msgEl.dataset.text }; const menu = $('context-menu'); const editBtn = $('ctx-edit'); const deleteBtn = $('ctx-delete'); const copyBtn = $('ctx-copy'); const isOwner = msgData.user_id === state.user.id; const msgDate = new Date(msgData.created_at); const now = new Date(); const diffMinutes = (now - msgDate) / 60000; const canEdit = isOwner && diffMinutes < 15; const canDelete = isOwner; editBtn.style.display = canEdit ? 'flex' : 'none'; deleteBtn.style.display = canDelete ? 'flex' : 'none'; copyBtn.style.display = 'flex'; state.contextTarget = msgData; let x = e.clientX || e.touches?.[0]?.clientX; let y = e.clientY || e.touches?.[0]?.clientY; menu.style.left = `${x}px`; menu.style.top = `${y}px`; setTimeout(() => { const rect = menu.getBoundingClientRect(); if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 10}px`; if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 10}px`; menu.classList.add('active'); }, 10); };
     const hideContextMenu = () => { const menu = $('context-menu'); if (menu) menu.classList.remove('active'); state.contextTarget = null; };
     $('ctx-edit').onclick = () => { if (!state.contextTarget) return; state.editingMessage = state.contextTarget; $('edit-msg-input').value = state.contextTarget.text; window.showOverlayView('edit-message'); $('overlay-container').classList.add('active'); hideContextMenu(); };
     $('ctx-copy').onclick = () => { if (!state.contextTarget) return; navigator.clipboard.writeText(state.contextTarget.text); window.toast("Copied to clipboard"); hideContextMenu(); };
     $('ctx-delete').onclick = async () => { if (!state.contextTarget || !state.user) return; const idToDelete = state.contextTarget.id; hideContextMenu(); window.setLoading(true, "Deleting..."); const { error } = await db.from('messages').update({ content: '/' }).eq('id', idToDelete); if (error) window.toast("Failed: " + error.message); window.setLoading(false); };
-    window.saveEditMessage = async () => {
-        if (!state.editingMessage) return;
-        const v = $('edit-msg-input').value.trim();
-        if (!v) return window.toast("Message cannot be empty");
-        const msgDate = new Date(state.editingMessage.created_at); const now = new Date();
-        if ((now - msgDate) / 60000 >= 15) { window.toast("Edit time expired"); window.closeOverlay(); state.editingMessage = null; return; }
-        window.setLoading(true, "Saving...");
-        try {
-            const enc = await encryptMessage(v);
-            const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id);
-            if (error) window.toast("Failed to edit: " + error.message); else window.toast("Message updated");
-        } catch (e) { window.toast("Encryption failed"); }
-        state.editingMessage = null;
-        window.setLoading(false);
-        window.closeOverlay();
-    };
+    window.saveEditMessage = async () => { if (!state.editingMessage) return; const v = $('edit-msg-input').value.trim(); if (!v) return window.toast("Message cannot be empty"); const msgDate = new Date(state.editingMessage.created_at); const now = new Date(); if ((now - msgDate) / 60000 >= 15) { window.toast("Edit time expired"); window.closeOverlay(); state.editingMessage = null; return; } window.setLoading(true, "Saving..."); try { const enc = await encryptMessage(v); const { error } = await db.from('messages').update({ content: enc }).eq('id', state.editingMessage.id); if (error) window.toast("Failed to edit: " + error.message); else window.toast("Message updated"); } catch (e) { window.toast("Encryption failed"); } state.editingMessage = null; window.setLoading(false); window.closeOverlay(); };
     document.addEventListener('click', (e) => { if (state.preventNextClose) { state.preventNextClose = false; return; } hideContextMenu(); });
     const chatContainer = $('chat-messages');
     chatContainer.addEventListener('touchstart', (e) => { const msg = e.target.closest('.msg'); if (!msg) return; state.longPressTimer = setTimeout(() => { showContextMenu(e, msg); state.preventNextClose = true; }, 500); }, { passive: true });
@@ -602,14 +281,7 @@ export function initHRNchat(customConfig = {}) {
     chatContainer.addEventListener('touchmove', () => clearTimeout(state.longPressTimer));
     chatContainer.addEventListener('contextmenu', (e) => { const msg = e.target.closest('.msg'); if (msg) { e.preventDefault(); showContextMenu(e, msg); } });
     const updateAccessSummary = (prefix) => { const summaryEl = $(`${prefix}-access-summary`); if (!summaryEl) return; const count = state.selectedAllowedUsers.length; const text = count === 0 ? "Public Room" : `${count} User${count > 1 ? 's' : ''}`; summaryEl.innerHTML = `<span class="c-main">${text}</span><i data-lucide="chevron-right" class="w-16 h-16"></i>`; };
-    const updateStepUI = (context) => {
-        const current = state.currentStep[context];
-        const indicator = $(`${context}-step-indicator`);
-        if (!indicator) return;
-        indicator.querySelectorAll('.step-dot').forEach((dot, index) => { if (index < current) dot.classList.add('active'); else dot.classList.remove('active'); });
-        if (context === 'reg') { $('reg-step-1').classList.toggle('active', current === 1); $('reg-step-2').classList.toggle('active', current === 2); $('reg-step-3').classList.toggle('active', current === 3); if (current === 3) initAvatarCarousel(); }
-        else { $(`${context}-step-1`).classList.toggle('active', current === 1); $(`${context}-step-2`).classList.toggle('active', current === 2); }
-    };
+    const updateStepUI = (context) => { const current = state.currentStep[context]; const indicator = $(`${context}-step-indicator`); if (!indicator) return; indicator.querySelectorAll('.step-dot').forEach((dot, index) => { if (index < current) dot.classList.add('active'); else dot.classList.remove('active'); }); if (context === 'reg') { $('reg-step-1').classList.toggle('active', current === 1); $('reg-step-2').classList.toggle('active', current === 2); $('reg-step-3').classList.toggle('active', current === 3); if (current === 3) initAvatarCarousel(); } else { $(`${context}-step-1`).classList.toggle('active', current === 1); $(`${context}-step-2`).classList.toggle('active', current === 2); } };
     const initAvatarCarousel = () => { if (!state.selectedAvatar) state.selectedAvatar = AVATARS[0]; updateCarouselPreview(); };
     const updateCarouselPreview = () => { const preview = $('avatar-preview-el'); if (state.selectedAvatar) preview.innerHTML = `<img src="${state.selectedAvatar}">`; };
     window.carouselNav = (direction) => { let index = AVATARS.indexOf(state.selectedAvatar); if (index === -1) index = 0; index += direction; if (index < 0) index = AVATARS.length - 1; if (index >= AVATARS.length) index = 0; state.selectedAvatar = AVATARS[index]; $('r-avatar-url').value = ''; updateCarouselPreview(); };
@@ -617,40 +289,18 @@ export function initHRNchat(customConfig = {}) {
     window.selectCreateType = (type) => { state.createType = type; document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected')); $(`type-${type}`).classList.add('selected'); };
     window.nextRegStep = () => { if (state.currentStep.reg === 1) { const em = $('r-email').value, p = $('r-pass').value; if (!em || p.length < 8) return window.toast("Email and valid password required"); } if (state.currentStep.reg === 2) { const n = $('r-name').value; if (!n) return window.toast("Name required"); } state.currentStep.reg++; updateStepUI('reg'); };
     window.prevRegStep = () => { state.currentStep.reg--; updateStepUI('reg'); };
-    window.nextCreateStep = () => {
-        state.currentStep.create = 2; updateStepUI('create');
-        const groupFields = $('create-group-fields'); const directFields = $('create-direct-fields'); const accessSummary = $('create-access-summary'); const titleEl = $('create-step2-title'); const subEl = $('create-step2-sub');
-        if (!groupFields || !directFields || !accessSummary || !titleEl || !subEl) return;
-        if (state.createType === 'direct') { groupFields.classList.add('dn'); directFields.classList.remove('dn'); accessSummary.classList.add('dn'); titleEl.innerText = "Direct Message"; subEl.innerText = "Who are you messaging?"; }
-        else { groupFields.classList.remove('dn'); directFields.classList.add('dn'); accessSummary.classList.remove('dn'); titleEl.innerText = "Setup"; subEl.innerText = "Details"; }
-        updateAccessSummary('create');
-    };
+    window.nextCreateStep = () => { state.currentStep.create = 2; updateStepUI('create'); const groupFields = $('create-group-fields'); const directFields = $('create-direct-fields'); const accessSummary = $('create-access-summary'); const titleEl = $('create-step2-title'); const subEl = $('create-step2-sub'); if (!groupFields || !directFields || !accessSummary || !titleEl || !subEl) return; if (state.createType === 'direct') { groupFields.classList.add('dn'); directFields.classList.remove('dn'); accessSummary.classList.add('dn'); titleEl.innerText = "Direct Message"; subEl.innerText = "Who are you messaging?"; } else { groupFields.classList.remove('dn'); directFields.classList.add('dn'); accessSummary.classList.remove('dn'); titleEl.innerText = "Setup"; subEl.innerText = "Details"; } updateAccessSummary('create'); };
     window.prevCreateStep = () => { state.currentStep.create = 1; updateStepUI('create'); };
     window.nextEditStep = () => { const name = $('edit-room-name').value.trim(); if (!name) return window.toast("Name required"); state.currentStep.edit = 2; updateStepUI('edit'); updateAccessSummary('edit'); };
     window.prevEditStep = () => { state.currentStep.edit = 1; updateStepUI('edit'); };
-    window.openAccessManager = async (prefix) => {
-        state.currentPickerContext = prefix;
-        if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) {
-            const ids = state.currentRoomData.allowed_users;
-            if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); }
-        }
-        renderPickerSelectedUsers(); $('overlay-container').classList.add('active'); window.showOverlayView('access-manager'); $('picker-id-input').value = ''; $('picker-id-input').focus();
-    };
+    window.openAccessManager = async (prefix) => { state.currentPickerContext = prefix; if (prefix === 'edit-room' && state.selectedAllowedUsers.length === 0 && state.currentRoomData) { const ids = state.currentRoomData.allowed_users; if (ids && !ids.includes('*')) { const { data: profiles } = await db.from('profiles').select('id, full_name, avatar_url').in('id', ids); state.selectedAllowedUsers = ids.map(id => { const p = profiles?.find(pro => pro.id === id); return { id: id, name: p?.full_name || 'Unknown', avatar: p?.avatar_url }; }); } } renderPickerSelectedUsers(); $('overlay-container').classList.add('active'); window.showOverlayView('access-manager'); $('picker-id-input').value = ''; $('picker-id-input').focus(); };
     window.closeAccessManager = () => { if (state.currentPickerContext === 'edit-room') window.showOverlayView('room-settings'); else window.closeOverlay(); updateAccessSummary(state.currentPickerContext); };
-    const renderPickerSelectedUsers = () => {
-        const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers;
-        if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users selected.</div>`; $('picker-count').innerText = '0'; return; }
-        $('picker-count').innerText = displayUsers.length;
-        container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join('');
-    };
+    const renderPickerSelectedUsers = () => { const container = $('picker-selected-list'); const displayUsers = state.selectedAllowedUsers; if (displayUsers.length === 0) { container.innerHTML = `<div style="color:var(--text-mute);padding:20px 0;font-size:12px;text-align:center">No users selected.</div>`; $('picker-count').innerText = '0'; return; } $('picker-count').innerText = displayUsers.length; container.innerHTML = displayUsers.map(u => `<div class="picker-user-card" style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:28px;height:28px;border-radius:50%;background:#f2f2f7;overflow:hidden;margin-right:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;font-size:11px">${u.avatar ? `<img src="${u.avatar}">` : u.name.charAt(0)}</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px">${esc(u.name)} ${u.id === state.user.id ? '<span style="color:var(--text-mute);font-weight:500">(You)</span>' : ''}</div><div style="font-size:9px;color:var(--text-mute);font-family:monospace">${u.id}</div></div><button class="picker-remove-btn" style="background:transparent;border:none;color:var(--danger);cursor:pointer;padding:8px" onclick="window.removePickerUser('${u.id}')"><i data-lucide="x" style="width:14px;height:14px"></i></button></div>`).join(''); };
     window.removePickerUser = (id) => { state.selectedAllowedUsers = state.selectedAllowedUsers.filter(u => u.id !== id); renderPickerSelectedUsers(); };
     window.addUserById = async () => { const input = $('picker-id-input'); const id = input.value.trim(); if (!id) return window.toast("Enter ID"); if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added"); window.setLoading(true, "Fetching..."); const { data, error } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single(); window.setLoading(false); if (error || !data) return window.toast("User not found"); state.selectedAllowedUsers.push({ id: data.id, name: data.full_name, avatar: data.avatar_url }); renderPickerSelectedUsers(); input.value = ''; window.toast("Added"); };
     const checkMaster = () => new Promise((resolve) => { let masterFound = false; const handler = (ev) => { if (ev.data.type === 'PONG_MASTER') masterFound = true; }; tabChannel.addEventListener('message', handler); tabChannel.postMessage({ type: 'PING_MASTER' }); setTimeout(() => { tabChannel.removeEventListener('message', handler); resolve(masterFound); }, 300); });
     window.forceClaimMaster = () => { if (!state.isMasterTab) { state.isMasterTab = true; tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }); $('block-overlay').classList.remove('active'); if (state.user) { setupGlobalPresence(state.user.id); if (state.currentRoomId) attemptHardReconnect(); } } };
-    tabChannel.onmessage = (ev) => {
-        if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active'); } }
-        if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); }
-    };
+    tabChannel.onmessage = (ev) => { if (ev.data.type === 'CLAIM_MASTER' && ev.data.id !== state.tabId) { if (state.isMasterTab) { cleanupChannels(); if (state.heartbeatInterval) clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; state.isPresenceSubscribed = false; state.isMasterTab = false; setConnectionVisuals('offline'); const overlay = $('block-overlay'); overlay.innerHTML = `<i data-lucide="log-out" style="width:48px;height:48px;margin-bottom:24px;color:var(--danger)"></i><h1 class="title">Session Moved</h1><p class="subtitle" style="margin-bottom:48px">You switched to a new tab.</p><button class="btn btn-accent" onclick="window.forceClaimMaster()">Use Here</button>`; overlay.classList.add('active'); } } if (ev.data.type === 'PING_MASTER') { if (state.isMasterTab) tabChannel.postMessage({ type: 'PONG_MASTER' }); } };
     window.addEventListener('beforeunload', () => tabChannel.postMessage({ type: 'CLAIM_MASTER', id: state.tabId }));
     window.closeOverlay = () => { const oc = $('overlay-container'); if (oc) oc.classList.remove('active'); };
     window.showOverlayView = (viewId) => { const panel = document.querySelector('.panel-card'); if (!panel) return; panel.querySelectorAll('.view-content').forEach(v => v.classList.remove('active')); const target = $(`view-${viewId}`); if (target) target.classList.add('active'); };
@@ -740,7 +390,8 @@ export function initHRNchat(customConfig = {}) {
     };
     window.deleteRoom = async () => { if (!state.currentRoomId) return; window.setLoading(true, "Deleting..."); const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); if (error) { window.toast("Failed: " + error.message); window.setLoading(false); return; } window.toast("Deleted"); state.currentRoomId = null; state.currentRoomData = null; window.closeOverlay(); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
     
-    window.openVault = async (id, n, rawPassword, roomSalt) => {
+    // FIX: Accept cachedData argument to bypass IDB lookups and race conditions
+    window.openVault = async (id, n, rawPassword, roomSalt, cachedData = null) => {
         if (!state.user) return window.toast("Please login first");
         if (state.isCapacityBlocked) return; 
         
@@ -756,12 +407,14 @@ export function initHRNchat(customConfig = {}) {
         chatContainer.innerHTML = '';
         chatContainer.onscroll = handleScroll;
         
-        // FIX: Use in-memory data if valid (set by joinAttempt), else fetch IDB
-        let roomData = (state.currentRoomData && state.currentRoomData.id === id) 
-            ? state.currentRoomData 
-            : await localDB.get('rooms', id);
+        // FIX: Use cachedData if provided, otherwise fallback to IDB/Network
+        let roomData = cachedData;
         
-        // Online sync check
+        if (!roomData) {
+             roomData = await localDB.get('rooms', id);
+        }
+        
+        // Online sync check (only if we didn't just pull fresh data or if we want to update)
         if (navigator.onLine && !state.isOfflineMode) {
             try {
                 const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
@@ -773,8 +426,14 @@ export function initHRNchat(customConfig = {}) {
         }
 
         if (!roomData) {
-            window.setLoading(false);
-            return window.toast("Room data not found");
+            // Last resort: construct from args
+            if (id && n && roomSalt) {
+                roomData = { id, name: n, salt: roomSalt, created_at: new Date().toISOString() };
+                window.toast("Loading from cache info");
+            } else {
+                window.setLoading(false);
+                return window.toast("Room data not found");
+            }
         }
         
         state.currentRoomData = roomData; // Ensure state is updated
@@ -957,11 +616,16 @@ export function initHRNchat(customConfig = {}) {
         window.setLoading(true, "Verifying...");
         const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash });
         window.setLoading(false);
-        if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt); else window.toast("Access Denied");
+        // Pass the pending data (cachedData) to openVault
+        if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt, state.pending); else window.toast("Access Denied");
     };
     window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); state.user = null; state.isOfflineMode = false; state.isCapacityBlocked = false; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
-    window.enterCreated = () => { window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt); state.lastCreatedPass = null; };
+    window.enterCreated = () => { 
+        // Pass the lastCreated data (cachedData) to openVault
+        window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt, state.lastCreated); 
+        state.lastCreatedPass = null; 
+    };
     
     // FIX: Prevent Supabase from overwriting offline user state
     db.auth.onAuthStateChange(async (ev, ses) => {
@@ -1014,23 +678,18 @@ export function initHRNchat(customConfig = {}) {
     
     window.joinAttempt = async (id) => {
         const meta = await localDB.get('rooms', id);
-        // FIX: Clear currentRoomData initially to prevent stale data usage, then set if found
-        state.currentRoomData = null;
-
         if (!navigator.onLine || state.isOfflineMode) {
             if (meta && meta.id) {
                 state.pending = { id: meta.id, name: meta.name, salt: meta.salt };
-                state.currentRoomData = meta; // Set data for openVault
                 if (meta.has_password) {
                     window.toast("Cannot open password protected rooms offline");
-                    return;
                 } else {
-                    await window.openVault(meta.id, meta.name, null, meta.salt);
+                    // FIX: Pass 'meta' (cachedData) directly to openVault to prevent race conditions
+                    await window.openVault(meta.id, meta.name, null, meta.salt, meta);
                 }
             } else { window.toast("Offline data not found"); }
             return;
         }
-        
         // Online Logic
         window.setLoading(true, "Checking...");
         const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
@@ -1040,11 +699,12 @@ export function initHRNchat(customConfig = {}) {
         if (error || !data) return window.toast("Not found");
         if (data && data.id) await localDB.put('rooms', data);
         state.pending = { id: data.id, name: data.name, salt: data.salt };
-        state.currentRoomData = data;
-        if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt);
+        if (data.has_password) window.nav('scr-gate'); 
+        // FIX: Pass 'data' (cachedData) directly to openVault
+        else window.openVault(data.id, data.name, null, data.salt, data);
     };
     
-    window.joinPrivate = async () => { if (!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if (!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; state.currentRoomData = data; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt); } else window.toast("Not found"); };
+    window.joinPrivate = async () => { if (!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if (!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt, data); } else window.toast("Not found"); };
     const init = async () => {
         await localDB.init();
         monitorConnection();
