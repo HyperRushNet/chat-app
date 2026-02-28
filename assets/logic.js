@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.5 
+ *  Version: 1.0.6 (Strict Capacity Fix)
  *  assets/logic.js 
  *  MIT License
  */
@@ -224,7 +224,8 @@ export function initHRNchat(customConfig = {}) {
         recentlySentIds: new Set(),
         isNavigating: false,
         isOfflineMode: false,
-        isProcessingQueue: false
+        isProcessingQueue: false,
+        isCapacityBlocked: false // NIEUW: Flag voor harde blokkade
     };
     let toastQueue = [];
     let toastVisible = false;
@@ -266,7 +267,7 @@ export function initHRNchat(customConfig = {}) {
         if (!btn || !input) return;
         const isOnline = navigator.onLine && !state.isOfflineMode;
         const isReady = state.isChatChannelReady;
-        if (isOnline && isReady) {
+        if (isOnline && isReady && !state.isCapacityBlocked) {
             btn.disabled = false;
             btn.style.opacity = "1";
             input.disabled = false;
@@ -275,7 +276,7 @@ export function initHRNchat(customConfig = {}) {
             btn.disabled = true;
             btn.style.opacity = "0.5";
             input.disabled = true;
-            input.placeholder = !navigator.onLine ? "You are offline..." : (state.isOfflineMode ? "Offline Mode" : "Connecting to room...");
+            input.placeholder = state.isCapacityBlocked ? "Server Full" : (!navigator.onLine ? "You are offline..." : (state.isOfflineMode ? "Offline Mode" : "Connecting to room..."));
         }
     };
     const updatePresenceUI = () => {
@@ -286,11 +287,15 @@ export function initHRNchat(customConfig = {}) {
         let displayRoomCount = "-";
         let displayGlobalCount = "-";
         let roomStatusColor = 'var(--text-mute)';
-        if (isOnline || state.isOfflineMode) {
+        if (state.isCapacityBlocked) {
+            displayGlobalCount = "FULL";
+            displayRoomCount = "-";
+            roomStatusColor = 'var(--danger)';
+        } else if (isOnline || state.isOfflineMode) {
             const roomCount = state.lastKnownOnlineCount || 0;
             displayRoomCount = state.currentRoomData?.is_direct ? (roomCount >= 2 ? "Online" : "Offline") : `${roomCount}`;
             displayGlobalCount = state.isOfflineMode ? "Local" : `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
-            roomStatusColor = state.currentRoomData?.is_direct ? (roomCount >= 2 ? 'var(--success)' : 'var(--text-mute)') : 'var(--success)';
+            roomStatusColor = state.currentRoomData?.is_direct ? (roomCount >= 2 ? 'var(--success)' : 'var(--text-mute)') : 'var(--success);
         }
         if (infoGlobalEl) infoGlobalEl.innerText = displayGlobalCount;
         if (roomCountEl) roomCountEl.innerText = displayRoomCount;
@@ -497,6 +502,40 @@ export function initHRNchat(customConfig = {}) {
         }
         return 8000;
     };
+    
+    // NIEUW: Centrale functie om verbinding te verbreken bij 'Server Full'
+    const handleServerFull = async (isAutoLogin = false) => {
+        if (state.isCapacityBlocked) return; // Voorkom loops
+        state.isCapacityBlocked = true;
+        
+        window.toast("Server is full. Access denied.");
+        
+        // Stop alle reconnect pogingen
+        if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+        if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
+        state.reconnectTimer = null;
+        state.connectionTimeoutTimer = null;
+        
+        // Verbreek alle channels
+        await cleanupChannels(true); // Keep global presence evenementeel om updates te krijgen, maar eigenlijk beter alles killen
+        await cleanupChannels(false); // Kill everything
+        
+        // Log de gebruiker uit als dit gebeurde tijdens login/init
+        if (!isAutoLogin) {
+             // Handmatige actie, laat gebruiker op login scherm
+        } else {
+             // Auto-login poging die faalde
+             localStorage.removeItem('hrn_auth_email');
+             localStorage.removeItem('hrn_auth_pass');
+             await db.auth.signOut();
+             state.user = null;
+             window.nav('scr-start');
+        }
+        
+        setConnectionVisuals('offline');
+        updatePresenceUI();
+    };
+
     const cleanupChannels = async (keepGlobal = false) => {
         if (state.connectionTimeoutTimer) {
             clearTimeout(state.connectionTimeoutTimer);
@@ -535,8 +574,10 @@ export function initHRNchat(customConfig = {}) {
         state.lastKnownOnlineCount = uniqueUserIds.size;
         schedulePresenceUpdate();
     };
+    
     const setupGlobalPresence = async (userId) => {
         if (state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
+        
         state.globalPresenceChannel = db.channel('global-presence', {
             config: {
                 presence: {
@@ -546,44 +587,66 @@ export function initHRNchat(customConfig = {}) {
         });
         state.globalPresenceChannel.on('presence', {
             event: 'sync'
-        }, () => {
+        }, async () => {
             const presState = state.globalPresenceChannel.presenceState();
             const allPresences = Object.values(presState).flat();
             const uniqueUserIds = new Set(allPresences.map(p => p.user_id).filter(id => id));
+            
             state.globalOnlineCount = uniqueUserIds.size;
             state.globalPresenceReady = true;
             schedulePresenceUpdate();
+
+            // STRICT CHECK: Ben ik ingelogd en ben ik onderdeel van de presence state?
+            // Als de server vol is, en ik sta NIET in de lijst, dan ben ik geblokkeerd.
+            if (state.user && !state.isOfflineMode) {
+                const amIPresent = uniqueUserIds.has(state.user.id);
+                if (state.globalOnlineCount >= CONFIG.maxUsers && !amIPresent) {
+                    // Server is vol en ik sta niet geregistreerd als online -> KICK
+                    handleServerFull(true);
+                }
+            }
         }).subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                if (userId && state.isMasterTab) await state.globalPresenceChannel.track({
-                    user_id: userId,
-                    online_at: new Date().toISOString()
-                });
+                // Probeer te tracken
+                if (userId && state.isMasterTab) {
+                     // Check beforehand
+                     if (state.globalOnlineCount >= CONFIG.maxUsers) {
+                         // Double check voordat we onszelf toevoegen
+                         const presState = state.globalPresenceChannel.presenceState();
+                         const currentCount = Object.values(presState).flat().length;
+                         if (currentCount >= CONFIG.maxUsers) {
+                             handleServerFull(true);
+                             return;
+                         }
+                     }
+                     await state.globalPresenceChannel.track({
+                        user_id: userId,
+                        online_at: new Date().toISOString()
+                    });
+                }
             }
         });
     };
+    
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
-
-        // Stop eventuele bestaande timers direct om conflicten te voorkomen
-        if (state.connectionTimeoutTimer) {
-            clearTimeout(state.connectionTimeoutTimer);
-            state.connectionTimeoutTimer = null;
-        }
-        if (state.reconnectTimer) {
-            clearTimeout(state.reconnectTimer);
-            state.reconnectTimer = null;
+        
+        // STRICT: Als we geblokkeerd zijn, stop alles.
+        if (state.isCapacityBlocked) {
+             window.toast("Access denied: Server full.");
+             return;
         }
 
-        // START: AANGEPAST - Check of server vol is bij reconnect
+        if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
+        if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+        
+        // Check count
         if (state.globalOnlineCount >= CONFIG.maxUsers) {
-            window.toast("Server is full. Reconnect blocked.");
-            setConnectionVisuals('offline');
-            state.isReconnecting = false; // Zorg dat de status correct is
-            return; // Stop hier, ga niet verder met verbinden
+            handleServerFull(false);
+            return;
         }
-        // EINDE: AANGEPAST
-
+        
+        state.reconnectTimer = null; // reset variable
         cleanupChannels(true);
         state.isReconnecting = !!state.currentRoomId;
         setConnectionVisuals('connecting');
@@ -600,18 +663,16 @@ export function initHRNchat(customConfig = {}) {
             setConnectionVisuals('connected');
         }
     };
+    
     window.goOnline = async () => {
         const overlay = $('internet-detected-overlay');
         if (overlay) overlay.classList.remove('active');
         state.isOfflineMode = false;
         
-        // START: AANGEPAST - Check of server vol is bij online komen
         if (state.globalOnlineCount >= CONFIG.maxUsers) {
-            window.toast("Server is full. Staying in Offline Mode.");
-            state.isOfflineMode = true;
-            return;
+             // Check opnieuw bij server
+             window.toast("Checking server capacity...");
         }
-        // EINDE: AANGEPAST
         
         window.setLoading(true, "Connecting...");
         const storedEmail = localStorage.getItem('hrn_auth_email');
@@ -700,7 +761,7 @@ export function initHRNchat(customConfig = {}) {
         }
     };
     const setupChatChannel = (id) => {
-        if (state.isOfflineMode) return;
+        if (state.isOfflineMode || state.isCapacityBlocked) return;
         if (state.chatChannel) state.chatChannel.unsubscribe();
         const isDirect = state.currentRoomData?.is_direct;
         state.chatChannel = db.channel(`room_chat_${id}`, {
@@ -814,7 +875,7 @@ export function initHRNchat(customConfig = {}) {
                     clearTimeout(state.connectionTimeoutTimer);
                     state.connectionTimeoutTimer = null;
                 }
-                if (navigator.onLine && !state.isOfflineMode) {
+                if (navigator.onLine && !state.isOfflineMode && !state.isCapacityBlocked) {
                     state.isChatChannelReady = false;
                     if (!state.isReconnecting) {
                         state.isReconnecting = true;
@@ -826,7 +887,7 @@ export function initHRNchat(customConfig = {}) {
         });
     };
     const initRoomPresence = async (roomId) => {
-        if (!state.user || state.isOfflineMode) return;
+        if (!state.user || state.isOfflineMode || state.isCapacityBlocked) return;
         if (state.presenceChannel) state.presenceChannel.unsubscribe();
         const myId = state.user.id;
         state.presenceChannel = db.channel(`room_presence:${roomId}`, {
@@ -854,14 +915,14 @@ export function initHRNchat(customConfig = {}) {
                 queryOnlineCountImmediately();
                 if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
                 state.heartbeatInterval = setInterval(async () => {
-                    if (state.presenceChannel) await state.presenceChannel.track({
+                    if (state.presenceChannel && !state.isCapacityBlocked) await state.presenceChannel.track({
                         user_id: myId,
                         online_at: new Date().toISOString()
                     });
                 }, CONFIG.presenceHeartbeatMs);
             } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 state.isPresenceSubscribed = false;
-                if (navigator.onLine && !state.isReconnecting && !state.isOfflineMode) {
+                if (navigator.onLine && !state.isReconnecting && !state.isOfflineMode && !state.isCapacityBlocked) {
                     state.isReconnecting = true;
                     setConnectionVisuals('connecting');
                     state.reconnectTimer = setTimeout(attemptHardReconnect, 1000);
@@ -1636,6 +1697,17 @@ export function initHRNchat(customConfig = {}) {
     };
     window.openVault = async (id, n, rawPassword, roomSalt) => {
         if (!state.user) return window.toast("Please login first");
+        
+        // STRICT CHECK
+        if (!state.isOfflineMode && state.globalOnlineCount >= CONFIG.maxUsers) {
+            const presState = state.globalPresenceChannel?.presenceState();
+            const isPresent = presState && Object.values(presState).flat().some(p => p.user_id === state.user.id);
+            if (!isPresent) {
+                handleServerFull(false);
+                return;
+            }
+        }
+        
         window.setLoading(true, "Opening chat...");
         state.currentRoomPassword = rawPassword;
         if (state.chatChannel) state.chatChannel.unsubscribe();
@@ -1747,6 +1819,8 @@ export function initHRNchat(customConfig = {}) {
         if (!navigator.onLine || !state.isChatChannelReady || state.isOfflineMode) {
             return window.toast("Offline or Reconnecting...");
         }
+        if (state.isCapacityBlocked) return window.toast("Server Full");
+        
         if (!applyRateLimit()) return;
         const v = $('chat-input').value.trim();
         if (!v) return;
@@ -1798,6 +1872,7 @@ export function initHRNchat(customConfig = {}) {
         if (navigator.onLine && !state.isOfflineMode && !state.globalPresenceReady) {
             return window.toast("Connecting to server, please wait...");
         }
+        // STRICT: Check count vooraf
         if (!state.user && state.globalOnlineCount >= CONFIG.maxUsers && navigator.onLine && !state.isOfflineMode) {
             return window.toast("Server is full. Please try again later.");
         }
@@ -2126,6 +2201,7 @@ export function initHRNchat(customConfig = {}) {
         localStorage.removeItem('hrn_auth_pass');
         state.user = null;
         state.isOfflineMode = false;
+        state.isCapacityBlocked = false; // Reset flag
         await db.auth.signOut();
         window.nav('scr-start');
         window.setLoading(false);
@@ -2395,18 +2471,6 @@ export function initHRNchat(customConfig = {}) {
                     $('l-pass').value = storedPass;
                 }
             } else {
-                // START: AANGEPAST - Check of server vol is bij auto-login
-                if (state.globalOnlineCount >= CONFIG.maxUsers) {
-                    window.toast("Server is full. Auto-login blocked.");
-                    window.nav('scr-login');
-                    // Als de server vol is, niet inloggen. De gebruiker moet wachten.
-                    // We vullen wel de velden in.
-                    $('l-email').value = storedEmail;
-                    $('l-pass').value = storedPass;
-                    return;
-                }
-                // EINDE: AANGEPAST
-                
                 window.setLoading(true, "Auto-logging in...");
                 $('l-email').value = storedEmail;
                 $('l-pass').value = storedPass;
