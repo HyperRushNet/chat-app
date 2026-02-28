@@ -4,6 +4,8 @@
  *  Version: 1.0.5
  *  assets/logic.js 
  *  MIT License
+ *  BUG FOUND: Cannot log out.
+ *  - Not fixed yet.
  */
 import {
 	createClient
