@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.2.1 (Fix: Removed Intrusive Online Overlay & Async Safety)
+ *  Version: 1.2.2 (Fix: Full Screen Block on Capacity Full)
  *  assets/logic.js 
  *  MIT License
  */
@@ -205,13 +205,25 @@ export function initHRNchat(customConfig = {}) {
     const encryptMessage = async (text) => { const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); const res = await workerExec('encrypt', { text: time + "|" + text }); return res.result; };
     const getConnectionTimeout = () => { const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection; if (connection) { const type = connection.effectiveType; if (type === '4g') return 5000; if (type === '3g') return 10000; if (type === '2g') return 20000; if (type === 'slow-2g') return 30000; } return 8000; };
     
+    // FIX: Volledige block overlay bij server full
     const handleServerFull = async () => {
         if (state.isCapacityBlocked) return; 
         state.isCapacityBlocked = true; 
-        setAppMode(true);
-        window.toast("Server is full. Switched to offline mode.");
+        
+        // Stop alle verbindingen
         await cleanupChannels(false); 
-        if (state.user) window.loadRooms();
+        
+        // Toon de block-overlay met een "Server Full" bericht
+        const overlay = $('block-overlay');
+        if (overlay) {
+            overlay.innerHTML = `
+                <i data-lucide="users" style="width:48px;height:48px;margin-bottom:24px;color:var(--warning)"></i>
+                <h1 class="title">Server Full</h1>
+                <p class="subtitle" style="margin-bottom:48px;text-align:center">The maximum capacity of ${CONFIG.maxUsers} users has been reached.<br>Please try again later.</p>
+                <button class="btn btn-accent" onclick="window.stayOffline()">Switch to Offline Mode</button>
+            `;
+            overlay.classList.add('active');
+        }
     };
 
     const cleanupChannels = async (keepGlobal = false) => {
@@ -242,7 +254,9 @@ export function initHRNchat(customConfig = {}) {
     
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
+        // Als we geblokkeerd zijn, stop direct en laat de overlay zien
         if (state.isCapacityBlocked) return;
+        
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         state.reconnectTimer = null; cleanupChannels(true); state.isReconnecting = !!state.currentRoomId; setConnectionVisuals('connecting');
@@ -252,6 +266,9 @@ export function initHRNchat(customConfig = {}) {
     
     window.goOnline = async () => { 
         state.isCapacityBlocked = false; 
+        const overlay = $('block-overlay');
+        if (overlay) overlay.classList.remove('active');
+        
         setAppMode(false);
         window.setLoading(true, "Connecting..."); 
         
@@ -280,8 +297,12 @@ export function initHRNchat(customConfig = {}) {
     };
     
     window.stayOffline = () => { 
+        const overlay = $('block-overlay');
+        if (overlay) overlay.classList.remove('active'); // Verberg de blokkade overlay
+        
         setAppMode(true); 
         window.toast("Staying in Offline Mode"); 
+        if (state.user) window.loadRooms(); // Laad kamers in offline modus
     };
     
     const handleReconnect = async () => { const overlay = $('reconnect-overlay'); if (overlay) overlay.classList.add('active'); const storedEmail = localStorage.getItem('hrn_auth_email'); const storedPass = localStorage.getItem('hrn_auth_pass'); if (storedEmail && storedPass) { try { const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass }); if (!error) { const { data: { user } } = await db.auth.getUser(); state.user = user; setAppMode(false); state.isCapacityBlocked = false; await localDB.put('known_users', { id: user.id, email: user.email, metadata: user.user_metadata }); if (state.user) setupGlobalPresence(state.user.id); if (state.currentRoomId) attemptHardReconnect(); window.loadRooms(); if (overlay) overlay.classList.remove('active'); window.toast("Synced successfully"); } else { if (overlay) overlay.classList.remove('active'); window.toast("Login failed. Try again."); } } catch (e) { if (overlay) overlay.classList.remove('active'); window.toast("Connection error."); } } else { if (overlay) overlay.classList.remove('active'); } };
@@ -318,7 +339,6 @@ export function initHRNchat(customConfig = {}) {
     const monitorConnection = () => { 
         window.addEventListener('online', () => { 
             if (state.isOfflineMode) { 
-                // FIX: Don't show overlay. Just log or update subtle UI.
                 console.log("Internet detected, but user is in Offline Mode.");
             } else { 
                 setConnectionVisuals('connecting'); 
