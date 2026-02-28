@@ -218,8 +218,8 @@ export function initHRNchat(customConfig = {}) {
         if (overlay) {
             overlay.innerHTML = `
                 <i data-lucide="users" style="width:48px;height:48px;margin-bottom:24px;color:var(--warning)"></i>
-                <h1 class="title">Server Full</h1>
-                <p class="subtitle" style="margin-bottom:48px;text-align:center">The maximum capacity of ${CONFIG.maxUsers} users has been reached.<br>Please try again later.</p>
+                <h1 style="margin-bottom: 20px" class="title">Server Full</h1>
+                <p class="subtitle" style="margin-bottom:48px;text-align:center">Max concurrent user count (${CONFIG.maxUsers}) was reached.<br>Please try again later.</p>
             `;
             overlay.classList.add('active');
         }
