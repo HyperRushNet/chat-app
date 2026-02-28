@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.7 (Strict Capacity & Syntax Fix)
+ *  Version: 1.0.8 (Strict Capacity & Local Cache Fallback)
  *  assets/logic.js 
  *  MIT License
  */
@@ -276,7 +276,7 @@ export function initHRNchat(customConfig = {}) {
             btn.disabled = true;
             btn.style.opacity = "0.5";
             input.disabled = true;
-            input.placeholder = state.isCapacityBlocked ? "Server Full" : (!navigator.onLine ? "You are offline..." : (state.isOfflineMode ? "Offline Mode" : "Connecting to room..."));
+            input.placeholder = state.isCapacityBlocked ? "Server Full (Offline)" : (!navigator.onLine ? "You are offline..." : (state.isOfflineMode ? "Offline Mode" : "Connecting to room..."));
         }
     };
     const updatePresenceUI = () => {
@@ -503,12 +503,13 @@ export function initHRNchat(customConfig = {}) {
         return 8000;
     };
     
-    // NIEUW: Centrale functie om verbinding te verbreken bij 'Server Full'
-    const handleServerFull = async (isAutoLogin = false) => {
-        if (state.isCapacityBlocked) return; // Voorkom loops
+    // NIEUW: Centrale functie om te schakelen naar offline mode bij full server
+    const handleServerFull = async () => {
+        if (state.isCapacityBlocked) return; 
         state.isCapacityBlocked = true;
+        state.isOfflineMode = true; // Forceer offline mode
         
-        window.toast("Server is full. Access denied.");
+        window.toast("Server is full. Switched to offline mode.");
         
         // Stop alle reconnect pogingen
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
@@ -517,17 +518,15 @@ export function initHRNchat(customConfig = {}) {
         state.connectionTimeoutTimer = null;
         
         // Verbreek alle channels
-        await cleanupChannels(false); // Kill everything
+        await cleanupChannels(false); 
         
-        // Log de gebruiker uit
-        localStorage.removeItem('hrn_auth_email');
-        localStorage.removeItem('hrn_auth_pass');
-        await db.auth.signOut();
-        state.user = null;
-        
-        window.nav('scr-start');
+        // NIET uitloggen. Gebruiker blijft lokaal ingelogd.
+        // Update UI
         setConnectionVisuals('offline');
         updatePresenceUI();
+        
+        // Laad kamers opnieuw uit cache
+        if (state.user) window.loadRooms();
     };
 
     const cleanupChannels = async (keepGlobal = false) => {
@@ -584,16 +583,13 @@ export function initHRNchat(customConfig = {}) {
         }, async () => {
             const presState = state.globalPresenceChannel.presenceState();
             
-            // Format: { user_id: [{user_id, online_at}, ...], ... }
-            // We flatten en sorteren op online_at (timestamp)
+            // Sorteer gebruikers op online_at (tijd)
             const users = [];
             Object.keys(presState).forEach(key => {
                 presState[key].forEach(pres => {
                     users.push(pres);
                 });
             });
-            
-            // Sorteer: oudste eerst. Degene die het langst online is staat vooraan.
             users.sort((a, b) => new Date(a.online_at) - new Date(b.online_at));
             
             state.globalOnlineCount = users.length;
@@ -603,24 +599,11 @@ export function initHRNchat(customConfig = {}) {
             // STRICT CAPACITY CHECK
             if (state.user && !state.isOfflineMode && !state.isCapacityBlocked) {
                 if (users.length > CONFIG.maxUsers) {
-                    // Er zijn te veel gebruikers. Wie moet eruit?
-                    // De nieuwste gebruiker (degene met de laatstse online_at) moet eruit.
-                    // We checken of WIJ die nieuwste gebruiker zijn (of in de 'overflow' zitten).
-                    
-                    // Zoek mijn index in de gesorteerde lijst
                     const myIndex = users.findIndex(u => u.user_id === state.user.id);
                     
-                    // Als ik niet in de lijst sta (zou niet moeten kunnen, maar toch), dan index > count
-                    if (myIndex === -1) {
-                         // Ik ben erin gekomen, maar sta niet in de state? Rare race. Kick safe.
-                         handleServerFull(true);
-                         return;
-                    }
-
-                    // Als mijn index groter of gelijk is aan maxUsers, ben ik de overflow.
-                    // Bij maxUsers=1 (index 0 is toegestaan). Index 1 is overflow.
-                    if (myIndex >= CONFIG.maxUsers) {
-                         handleServerFull(true);
+                    if (myIndex === -1 || myIndex >= CONFIG.maxUsers) {
+                         // Ik sta niet in de top X (overflow) -> Switch naar offline cache mode
+                         handleServerFull();
                     }
                 }
             }
@@ -639,23 +622,14 @@ export function initHRNchat(customConfig = {}) {
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
         
-        // STRICT: Als we geblokkeerd zijn, stop alles.
         if (state.isCapacityBlocked) {
-             window.toast("Access denied: Server full.");
-             return;
+             return; // Blijft offline
         }
 
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         
-        // Check count
-        if (state.globalOnlineCount >= CONFIG.maxUsers) {
-            // Dubbel check: misschien zijn wij het zelf wel?
-            // setupGlobalPresence handelt dit af, maar we kunnen hier alvast proactief zijn.
-            // We reconnecten, en de sync event van presence zal ons kicken als we overflow zijn.
-        }
-        
-        state.reconnectTimer = null; // reset variable
+        state.reconnectTimer = null; 
         cleanupChannels(true);
         state.isReconnecting = !!state.currentRoomId;
         setConnectionVisuals('connecting');
@@ -676,6 +650,9 @@ export function initHRNchat(customConfig = {}) {
     window.goOnline = async () => {
         const overlay = $('internet-detected-overlay');
         if (overlay) overlay.classList.remove('active');
+        
+        // Reset blokkade als we handmatig online proberen te gaan (maybe spots free now)
+        state.isCapacityBlocked = false;
         state.isOfflineMode = false;
         
         window.setLoading(true, "Connecting...");
@@ -742,6 +719,7 @@ export function initHRNchat(customConfig = {}) {
                     } = await db.auth.getUser();
                     state.user = user;
                     state.isOfflineMode = false;
+                    state.isCapacityBlocked = false; // Reset bij reconnect poging
                     await localDB.put('known_users', {
                         id: user.id,
                         email: user.email,
@@ -1867,9 +1845,6 @@ export function initHRNchat(customConfig = {}) {
         if (navigator.onLine && !state.isOfflineMode && !state.globalPresenceReady) {
             return window.toast("Connecting to server, please wait...");
         }
-        // We checken hier NIET meer op count, dat doet presence sync (setupGlobalPresence) nu strict.
-        // Dit voorkomt dat de login knop geblokkeerd wordt terwijl het eigenlijk nog kan, 
-        // maar zorgt er wel voor dat je eruit wordt gegooid als het vol zit na de auth.
         
         state.processingAction = true;
         const em = $('l-email').value,
@@ -1932,7 +1907,7 @@ export function initHRNchat(customConfig = {}) {
                 metadata: user.user_metadata,
                 userId: user.id
             });
-            // Login success, nu presence setup. De sync event zal beslissen of we mogen blijven.
+            // Login success. setupGlobalPresence will handle capacity check.
             if (state.user) setupGlobalPresence(state.user.id);
             
             window.nav('scr-lobby');
