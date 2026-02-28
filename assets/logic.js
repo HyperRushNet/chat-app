@@ -603,6 +603,13 @@ export function initHRNchat(customConfig = {}) {
         if (state.isCapacityBlocked) return;
         state.isCapacityBlocked = true;
         await cleanupChannels(false);
+        
+        // Ensure global presence is also stopped to prevent auto-reconnects
+        if (state.globalPresenceChannel) {
+            state.globalPresenceChannel.unsubscribe();
+            state.globalPresenceChannel = null;
+        }
+
         const overlay = $('block-overlay');
         if (overlay) {
             overlay.innerHTML = `
@@ -696,7 +703,7 @@ export function initHRNchat(customConfig = {}) {
 
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
-        if (state.isCapacityBlocked) return;
+        if (state.isCapacityBlocked) return; // Stop if blocked
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         state.reconnectTimer = null;
@@ -1002,6 +1009,22 @@ export function initHRNchat(customConfig = {}) {
 
         window.addEventListener('online', onlineHandler);
         window.addEventListener('offline', offlineHandler);
+
+        // Fix: Handle visibility change to prevent blocked users from reconnecting
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // If we are blocked, do nothing (keep blocked state)
+                if (state.isCapacityBlocked) return;
+                
+                // If we are offline mode, just update UI
+                if (state.isOfflineMode) return;
+
+                // If we are the master tab and were backgrounded, try to reconnect
+                if (state.isMasterTab && !state.isChatChannelReady && state.currentRoomId) {
+                     attemptHardReconnect();
+                }
+            }
+        });
     };
 
     state.preventNextClose = false;
