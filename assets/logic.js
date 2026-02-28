@@ -564,18 +564,30 @@ export function initHRNchat(customConfig = {}) {
     };
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
-        
+
+        // Stop eventuele bestaande timers direct om conflicten te voorkomen
+        if (state.connectionTimeoutTimer) {
+            clearTimeout(state.connectionTimeoutTimer);
+            state.connectionTimeoutTimer = null;
+        }
+        if (state.reconnectTimer) {
+            clearTimeout(state.reconnectTimer);
+            state.reconnectTimer = null;
+        }
+
         // START: AANGEPAST - Check of server vol is bij reconnect
         if (state.globalOnlineCount >= CONFIG.maxUsers) {
-            window.toast("Server is full. Reconnect failed.");
+            window.toast("Server is full. Reconnect blocked.");
             setConnectionVisuals('offline');
-            return;
+            state.isReconnecting = false; // Zorg dat de status correct is
+            return; // Stop hier, ga niet verder met verbinden
         }
         // EINDE: AANGEPAST
-        
+
         cleanupChannels(true);
         state.isReconnecting = !!state.currentRoomId;
         setConnectionVisuals('connecting');
+        
         if (state.currentRoomId) {
             const timeout = getConnectionTimeout();
             state.connectionTimeoutTimer = setTimeout(() => {
@@ -2383,6 +2395,18 @@ export function initHRNchat(customConfig = {}) {
                     $('l-pass').value = storedPass;
                 }
             } else {
+                // START: AANGEPAST - Check of server vol is bij auto-login
+                if (state.globalOnlineCount >= CONFIG.maxUsers) {
+                    window.toast("Server is full. Auto-login blocked.");
+                    window.nav('scr-login');
+                    // Als de server vol is, niet inloggen. De gebruiker moet wachten.
+                    // We vullen wel de velden in.
+                    $('l-email').value = storedEmail;
+                    $('l-pass').value = storedPass;
+                    return;
+                }
+                // EINDE: AANGEPAST
+                
                 window.setLoading(true, "Auto-logging in...");
                 $('l-email').value = storedEmail;
                 $('l-pass').value = storedPass;
