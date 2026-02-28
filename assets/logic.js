@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.5
+ *  Version: 1.0.6 (Bugfix Release)
  *  assets/logic.js 
  *  MIT License
  */
@@ -223,7 +223,7 @@ export function initHRNchat(customConfig = {}) {
         isNavigating: false,
         isOfflineMode: false,
         isProcessingQueue: false,
-        isCapacityBlocked: false,
+        isCapacityBlocked: false, // BELANGRIJK: Houdt bij of de server vol zit
         authListener: null
     };
 
@@ -599,12 +599,13 @@ export function initHRNchat(customConfig = {}) {
         return 8000;
     };
 
+    // FIX: Verbeterde handleServerFull om reconnects te blokkeren
     const handleServerFull = async () => {
         if (state.isCapacityBlocked) return;
         state.isCapacityBlocked = true;
-        await cleanupChannels(false);
         
-        // Ensure global presence is also stopped to prevent auto-reconnects
+        // Stop alle channels, inclusief global presence, om te voorkomen dat deze triggert bij tab focus
+        await cleanupChannels(false); 
         if (state.globalPresenceChannel) {
             state.globalPresenceChannel.unsubscribe();
             state.globalPresenceChannel = null;
@@ -616,6 +617,7 @@ export function initHRNchat(customConfig = {}) {
                 <i data-lucide="users" style="width:48px;height:48px;margin-bottom:24px;color:var(--warning)"></i>
                 <h1 style="margin-bottom: 20px" class="title">Server Full</h1>
                 <p class="subtitle" style="margin-bottom:48px;text-align:center">Max concurrent user count (${CONFIG.maxUsers}) was reached.<br>Please try again later.</p>
+                <button class="btn btn-accent" onclick="window.stayOffline()">Enter Offline Mode</button>
             `;
             overlay.classList.add('active');
         }
@@ -662,7 +664,7 @@ export function initHRNchat(customConfig = {}) {
     };
 
     const setupGlobalPresence = async (userId) => {
-        if (state.isOfflineMode) return;
+        if (state.isOfflineMode || state.isCapacityBlocked) return; // Blokkeer als we vol zitten
         if (state.globalPresenceChannel) state.globalPresenceChannel.unsubscribe();
         state.globalPresenceChannel = db.channel('global-presence', {
             config: {
@@ -685,6 +687,8 @@ export function initHRNchat(customConfig = {}) {
             state.globalOnlineCount = users.length;
             state.globalPresenceReady = true;
             schedulePresenceUpdate();
+            
+            // Check alleen capacity als we niet geblokkeerd zijn
             if (state.user && !state.isOfflineMode && !state.isCapacityBlocked) {
                 if (users.length > CONFIG.maxUsers) {
                     const myIndex = users.findIndex(u => u.user_id === state.user.id);
@@ -703,7 +707,7 @@ export function initHRNchat(customConfig = {}) {
 
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
-        if (state.isCapacityBlocked) return; // Stop if blocked
+        if (state.isCapacityBlocked) return; // FIX: Blokkeer reconnect als server vol is
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         state.reconnectTimer = null;
@@ -724,7 +728,7 @@ export function initHRNchat(customConfig = {}) {
     };
 
     window.goOnline = async () => {
-        state.isCapacityBlocked = false;
+        state.isCapacityBlocked = false; // Reset bij handmatige poging
         const overlay = $('block-overlay');
         if (overlay) overlay.classList.remove('active');
         setAppMode(false);
@@ -1010,16 +1014,16 @@ export function initHRNchat(customConfig = {}) {
         window.addEventListener('online', onlineHandler);
         window.addEventListener('offline', offlineHandler);
 
-        // Fix: Handle visibility change to prevent blocked users from reconnecting
+        // FIX: Explicit visibility change handler
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // If we are blocked, do nothing (keep blocked state)
+                // Als we geblokkeerd zijn, doe niets
                 if (state.isCapacityBlocked) return;
                 
-                // If we are offline mode, just update UI
+                // Als we offline modus zijn, doe niets
                 if (state.isOfflineMode) return;
 
-                // If we are the master tab and were backgrounded, try to reconnect
+                // Als we master zijn en reconnect nodig hebben
                 if (state.isMasterTab && !state.isChatChannelReady && state.currentRoomId) {
                      attemptHardReconnect();
                 }
@@ -1821,7 +1825,7 @@ export function initHRNchat(customConfig = {}) {
 
     window.openVault = async (id, n, rawPassword, roomSalt, cachedData = null) => {
         if (!state.user) return window.toast("Please login first");
-        if (state.isCapacityBlocked) return;
+        if (state.isCapacityBlocked) return; // Blokkeer openen vault als we geblokkeerd zijn
         window.setLoading(true, "Opening chat...");
         state.currentRoomPassword = rawPassword;
         if (state.chatChannel) state.chatChannel.unsubscribe();
