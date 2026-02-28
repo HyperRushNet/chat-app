@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkUp - Dynamic Quality</title>
+    <title>LinkUp - Studio Quality</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -12,13 +12,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #06060a;
-            --card: rgba(12, 12, 20, 0.9);
-            --border: rgba(255, 255, 255, 0.06);
+            --bg: #050508;
+            --card: rgba(12, 12, 20, 0.92);
+            --border: rgba(255, 255, 255, 0.07);
             --text: #f0f0f5;
             --muted: #5a5a70;
             --accent: #8b5cf6;
-            --accent-glow: rgba(139, 92, 246, 0.4);
+            --accent-glow: rgba(139, 92, 246, 0.5);
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #f43f5e;
@@ -43,18 +43,18 @@
         .bg-mesh {
             position: fixed; inset: 0; z-index: -2;
             background: 
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
-                radial-gradient(ellipse 60% 50% at 100% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 90% 70% at 50% 0%, rgba(139, 92, 246, 0.15) 0%, transparent 60%),
+                radial-gradient(ellipse 70% 60% at 100% 100%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
                 var(--bg);
         }
         
         .bg-grid {
             position: fixed; inset: 0; z-index: -1;
             background-image: 
-                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-            background-size: 60px 60px;
-            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 20%, transparent 70%);
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 10%, transparent 70%);
         }
         
         .card {
@@ -63,8 +63,11 @@
             border-radius: 24px;
             width: 100%;
             max-width: 360px;
-            backdrop-filter: blur(40px);
-            box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 30px 60px -20px rgba(0,0,0,0.6), 0 0 100px -30px var(--accent-glow);
+            backdrop-filter: blur(50px);
+            box-shadow: 
+                0 0 0 1px rgba(255,255,255,0.04) inset, 
+                0 40px 80px -20px rgba(0,0,0,0.7), 
+                0 0 120px -40px var(--accent-glow);
             position: relative;
             overflow: hidden;
         }
@@ -72,11 +75,11 @@
         .card::before {
             content: '';
             position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
         }
         
         .input-field {
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.6);
             border: 1px solid var(--border);
             color: var(--text);
             font-family: inherit;
@@ -88,7 +91,7 @@
         
         .input-field:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
         }
         
         .input-field::placeholder { color: var(--muted); }
@@ -118,16 +121,16 @@
         }
         
         .btn-primary:hover:not(:disabled) {
-            box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);
             transform: translateY(-1px);
         }
         
         .btn-ghost {
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.05);
             color: var(--muted);
             border: 1px solid var(--border);
         }
-        .btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+        .btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); color: var(--text); }
         
         .btn-danger {
             background: linear-gradient(135deg, #e11d48 0%, var(--danger) 100%);
@@ -143,39 +146,38 @@
         
         .screen {
             display: none;
-            animation: screenIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: screenIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .screen.active { display: block; }
         
         @keyframes screenIn {
-            from { opacity: 0; transform: translateY(16px) scale(0.98); }
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
         
         @keyframes pulseRing {
-            0% { transform: scale(1); opacity: 0.8; }
-            100% { transform: scale(1.6); opacity: 0; }
+            0% { transform: scale(1); opacity: 0.9; }
+            100% { transform: scale(1.7); opacity: 0; }
         }
         
         .pulse-ring {
             position: absolute; inset: -6px; border-radius: 50%;
             border: 2px solid currentColor;
-            animation: pulseRing 1.8s ease-out infinite;
+            animation: pulseRing 2s ease-out infinite;
             pointer-events: none;
         }
         
         .visualizer-canvas {
-            width: 100%; height: 56px;
+            width: 100%; height: 60px;
             display: block;
             border-radius: 12px;
-            background: rgba(0,0,0,0.3);
+            background: rgba(0,0,0,0.4);
         }
         
         .status-indicator {
             width: 8px; height: 8px; border-radius: 50%;
             background: var(--success); position: relative;
         }
-        .status-indicator.error { background: var(--danger); }
         
         #toastContainer {
             position: fixed; top: 16px; left: 50%;
@@ -185,14 +187,14 @@
         }
         
         .toast {
-            background: rgba(20, 20, 30, 0.95);
+            background: rgba(10, 10, 15, 0.95);
             color: var(--text);
-            padding: 12px 20px;
-            border-radius: 12px;
+            padding: 12px 24px;
+            border-radius: 14px;
             font-size: 13px;
             font-weight: 500;
             border: 1px solid var(--border);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
             animation: toastSlide 0.3s ease;
             backdrop-filter: blur(10px);
         }
@@ -210,8 +212,8 @@
         
         .modal-overlay {
             position: fixed; inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(12px);
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(16px);
             display: flex; align-items: center; justify-content: center;
             padding: 1rem; z-index: 100;
             opacity: 0; visibility: hidden;
@@ -221,7 +223,7 @@
         .modal-overlay.active .card { animation: modalPop 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
         
         @keyframes modalPop {
-            from { opacity: 0; transform: scale(0.92) translateY(20px); }
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
         }
         
         .peer-id-display {
@@ -232,55 +234,32 @@
         
         .section-label {
             font-size: 10px; text-transform: uppercase;
-            letter-spacing: 1.8px; color: var(--muted);
+            letter-spacing: 2px; color: var(--muted);
             font-weight: 600;
         }
         
         .icon-box {
             display: inline-flex; align-items: center; justify-content: center;
-            width: 56px; height: 56px; border-radius: 18px;
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);
-            border: 1px solid rgba(139, 92, 246, 0.2);
+            width: 60px; height: 60px; border-radius: 20px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
         }
         
-        /* Dynamic Quality Badge Styles */
         .quality-badge {
             display: inline-flex; align-items: center; gap: 5px;
-            padding: 4px 12px; border-radius: 20px;
+            padding: 5px 12px; border-radius: 20px;
             font-size: 10px; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.5px;
             transition: all 0.3s ease;
         }
         
-        .quality-badge.excellent {
-            background: rgba(16, 185, 129, 0.15);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            color: var(--success);
-        }
-        
-        .quality-badge.good {
-            background: rgba(139, 92, 246, 0.15);
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            color: var(--accent);
-        }
-        
-        .quality-badge.poor {
-            background: rgba(245, 158, 11, 0.15);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            color: var(--warning);
-        }
-        
-        .quality-badge.bad {
-            background: rgba(244, 63, 94, 0.15);
-            border: 1px solid rgba(244, 63, 94, 0.3);
-            color: var(--danger);
-        }
+        .quality-badge.excellent { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--success); }
+        .quality-badge.good { background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); color: var(--accent); }
+        .quality-badge.poor { background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--warning); }
+        .quality-badge.bad { background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--danger); }
 
         @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
     </style>
 </head>
@@ -294,10 +273,10 @@
         <div class="card">
             <div class="p-8 text-center">
                 <div class="icon-box mx-auto mb-5">
-                    <i data-lucide="headphones" class="w-6 h-6 text-purple-400"></i>
+                    <i data-lucide="headphones" class="w-7 h-7 text-purple-400"></i>
                 </div>
                 <h1 class="text-2xl font-bold tracking-tight mb-1">LinkUp</h1>
-                <p class="text-sm text-zinc-500 mb-4">Crystal Clear Audio</p>
+                <p class="text-sm text-zinc-500 mb-4">Studio Quality Audio</p>
             </div>
             
             <div class="divider"></div>
@@ -305,14 +284,7 @@
             <div class="p-6 space-y-4">
                 <div>
                     <label class="section-label block mb-2.5">Custom ID (optioneel)</label>
-                    <input 
-                        type="text" 
-                        id="customIdInput" 
-                        class="input-field w-full px-4 py-3.5" 
-                        placeholder="Laat leeg voor auto-ID..."
-                        maxlength="20"
-                        autocomplete="off"
-                    >
+                    <input type="text" id="customIdInput" class="input-field w-full px-4 py-3.5" placeholder="Laat leeg voor auto-ID..." maxlength="20" autocomplete="off">
                 </div>
                 <button id="connectBtn" class="btn btn-primary w-full py-4 text-sm">
                     <i data-lucide="wifi" class="w-4 h-4"></i>
@@ -328,9 +300,7 @@
         <div class="card">
             <div class="p-4 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
-                    <div class="status-indicator">
-                        <div class="pulse-ring" style="color: var(--success);"></div>
-                    </div>
+                    <div class="status-indicator"><div class="pulse-ring" style="color: var(--success);"></div></div>
                     <span class="text-xs text-zinc-500 font-medium">Verbonden</span>
                 </div>
                 <button id="copyIdBtn" class="btn btn-ghost text-xs px-3.5 py-2">
@@ -450,6 +420,20 @@
         
         const SIGNAL = Object.freeze({ REJECT: 'reject', BUSY: 'busy', HANGUP: 'hangup', MUTE: 'mute' });
         
+        // High definition audio constraints
+        // We disable autoGainControl because it often causes volume dips ("verzwakking") during silence.
+        const AUDIO_CONSTRAINTS = Object.freeze({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: false, 
+                sampleRate: 48000,
+                channelCount: 2,
+                latency: 0
+            },
+            video: false
+        });
+        
         const state = {
             peer: null,
             localStream: null,
@@ -458,6 +442,7 @@
             activeConn: null,
             audioCtx: null,
             analyser: null,
+            sourceNode: null, // Keep reference to disconnect properly
             animationId: null,
             timerInterval: null,
             startTime: null,
@@ -465,7 +450,7 @@
             timeoutTimer: null,
             audioElement: null,
             isCallActive: false,
-            qualityInterval: null // Interval for quality monitoring
+            qualityInterval: null
         };
         
         const $ = (id) => document.getElementById(id);
@@ -483,14 +468,13 @@
                 muteIcon: $('muteIcon'), hangup: $('hangupBtn'), duration: $('callDuration'),
                 canvas: $('visualizer'), qualityBadge: $('qualityBadge'), qualityText: $('qualityText')
             },
-            modal: {
-                el: $('incomingModal'), callerId: $('callerId'),
-                accept: $('acceptBtn'), decline: $('declineBtn')
-            },
+            modal: { el: $('incomingModal'), callerId: $('callerId'), accept: $('acceptBtn'), decline: $('declineBtn') },
             toasts: $('toastContainer')
         };
         
         lucide.createIcons();
+        
+        // --- Core Utilities ---
         
         function showScreen(name) {
             Object.values(ui.screens).forEach(s => s.classList.remove('active'));
@@ -505,11 +489,7 @@
             else if (type === 'success') t.style.borderColor = 'rgba(16, 185, 129, 0.5)';
             
             ui.toasts.appendChild(t);
-            setTimeout(() => {
-                t.style.opacity = '0';
-                t.style.transform = 'translateY(-10px)';
-                setTimeout(() => t.remove(), 200);
-            }, 3000);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 3000);
         }
         
         function formatDuration(seconds) {
@@ -523,72 +503,133 @@
             ui.main.status.style.color = type === 'error' ? '#f43f5e' : type === 'success' ? '#10b981' : '#5a5a70';
         }
         
-        // --- Quality Monitoring Logic ---
+        // --- SDP Manipulation for High Quality ---
+        // This forces the Opus codec to use maximum bitrate, preventing quality degradation.
+        function forceHighQualitySDP(sdp) {
+            if (!sdp) return sdp;
+            // Force Opus stereo and high bitrate
+            return sdp.replace(/a=fmtp:111/, 'a=fmtp:111 stereo=1;maxaveragebitrate=510000;maxplaybackrate=48000;minptime=10;useinbandfec=1');
+        }
+        
+        // --- Quality Monitoring ---
         function startQualityMonitor() {
             if (state.qualityInterval) clearInterval(state.qualityInterval);
             
-            // Check every 2 seconds
             state.qualityInterval = setInterval(async () => {
                 if (!state.currentCall || !state.currentCall.peerConnection) return;
                 
                 try {
                     const stats = await state.currentCall.peerConnection.getStats();
-                    let rtt = 0;
-                    let packetsLost = 0;
-                    let packetsReceived = 0;
+                    let rtt = 0, lost = 0, received = 0;
                     
                     stats.forEach(report => {
                         if (report.type === 'candidate-pair' && report.state === 'succeeded') {
                             rtt = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
                         }
-                        // Only count audio packets for relevant stats
                         if (report.type === 'inbound-rtp' && report.kind === 'audio') {
-                            packetsLost = report.packetsLost || 0;
-                            packetsReceived = report.packetsReceived || 0;
+                            lost = report.packetsLost || 0;
+                            received = report.packetsReceived || 0;
                         }
                     });
                     
-                    updateQualityUI(rtt, packetsLost, packetsReceived);
-                } catch (e) {
-                    console.warn("Stats error", e);
-                }
+                    updateQualityUI(rtt, lost, received);
+                } catch (e) { /* silent fail */ }
             }, 2000);
         }
         
         function updateQualityUI(rtt, lost, received) {
             const badge = ui.call.qualityBadge;
             const text = ui.call.qualityText;
+            const total = lost + received;
+            const lossPercent = total > 0 ? (lost / total) * 100 : 0;
             
-            // Calculate packet loss percentage safely
-            const totalPackets = lost + received;
-            const lossPercent = totalPackets > 0 ? (lost / totalPackets) * 100 : 0;
-            
-            // Remove old classes
             badge.classList.remove('excellent', 'good', 'poor', 'bad');
             
-            // Determine quality based on RTT (latency) and Packet Loss
-            if (rtt < 150 && lossPercent < 0.5) {
-                badge.classList.add('excellent');
-                text.textContent = 'Uitstekend';
-            } else if (rtt < 300 && lossPercent < 2) {
-                badge.classList.add('good');
-                text.textContent = 'Goed';
-            } else if (rtt < 500 && lossPercent < 5) {
-                badge.classList.add('poor');
-                text.textContent = 'Matig';
-            } else {
-                badge.classList.add('bad');
-                text.textContent = 'Slecht';
-            }
+            if (rtt < 150 && lossPercent < 0.5) { badge.classList.add('excellent'); text.textContent = 'Uitstekend'; }
+            else if (rtt < 300 && lossPercent < 2) { badge.classList.add('good'); text.textContent = 'Goed'; }
+            else if (rtt < 500 && lossPercent < 5) { badge.classList.add('poor'); text.textContent = 'Matig'; }
+            else { badge.classList.add('bad'); text.textContent = 'Slecht'; }
         }
         
         function stopQualityMonitor() {
-            if (state.qualityInterval) {
-                clearInterval(state.qualityInterval);
-                state.qualityInterval = null;
-            }
+            if (state.qualityInterval) { clearInterval(state.qualityInterval); state.qualityInterval = null; }
         }
-        // --------------------------------
+        
+        // --- Audio Context & Visalizer Lifecycle ---
+        
+        function initAudioContext() {
+            if (!state.audioCtx || state.audioCtx.state === 'closed') {
+                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive', sampleRate: 48000 });
+            }
+            if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
+        }
+        
+        function handleRemoteStream(stream) {
+            // Clean up old audio element
+            if (state.audioElement) { state.audioElement.pause(); state.audioElement.remove(); }
+            
+            state.audioElement = document.createElement('audio');
+            state.audioElement.srcObject = stream;
+            state.audioElement.autoplay = true;
+            document.body.appendChild(state.audioElement);
+            
+            // Clean up old nodes to prevent memory leaks over hours
+            if (state.sourceNode) {
+                try { state.sourceNode.disconnect(); } catch(e) {}
+            }
+            
+            initAudioContext();
+            
+            try {
+                state.sourceNode = state.audioCtx.createMediaStreamSource(stream);
+                state.analyser = state.audioCtx.createAnalyser();
+                state.analyser.fftSize = 64;
+                state.analyser.smoothingTimeConstant = 0.8;
+                state.sourceNode.connect(state.analyser);
+            } catch(e) { console.warn("Audio visualizer init failed", e); }
+            
+            enterCallUI();
+        }
+        
+        function startVisualizer() {
+            const canvas = ui.call.canvas;
+            const ctx = canvas.getContext('2d');
+            
+            function draw() {
+                state.animationId = requestAnimationFrame(draw);
+                const w = canvas.width = canvas.offsetWidth * 2;
+                const h = canvas.height = canvas.offsetHeight * 2;
+                ctx.clearRect(0, 0, w, h);
+                
+                if (state.analyser) {
+                    const arr = new Uint8Array(state.analyser.frequencyBinCount);
+                    state.analyser.getByteFrequencyData(arr);
+                    const barW = (w / arr.length) * 2;
+                    let x = 0;
+                    for (let i = 0; i < arr.length; i++) {
+                        const barH = Math.max(4, (arr[i] / 255) * h * 0.85);
+                        ctx.fillStyle = `rgba(139, 92, 246, ${0.6 + (arr[i]/255)*0.4})`;
+                        ctx.beginPath();
+                        ctx.roundRect(x, h - barH, barW - 3, barH, 4);
+                        ctx.fill();
+                        x += barW;
+                    }
+                } else {
+                    // Fallback idle animation
+                    ctx.fillStyle = 'rgba(139, 92, 246, 0.2)';
+                    const bc = 16, bw = w / bc;
+                    for (let i = 0; i < bc; i++) {
+                        const bh = 8 + Math.sin(Date.now() / 500 + i) * 4;
+                        ctx.beginPath();
+                        ctx.roundRect(i * bw + 1.5, h - bh, bw - 3, bh, 3);
+                        ctx.fill();
+                    }
+                }
+            }
+            draw();
+        }
+        
+        // --- Peer Logic ---
         
         function initPeer(customId) {
             if (state.peer) { state.peer.destroy(); state.peer = null; }
@@ -642,14 +683,11 @@
                 ui.lobby.status.textContent = '';
                 
                 if (err.type === 'unavailable-id') {
-                    toast('ID is al in gebruik. Kies een andere naam.', 'error');
+                    toast('ID is al in gebruik.', 'error');
                     ui.lobby.input.classList.add('error');
-                    ui.lobby.input.focus();
                 } else {
-                    toast(`Verbindingsfout: ${err.type}`, 'error');
+                    toast(`Fout: ${err.type}`, 'error');
                 }
-                
-                if (state.peer && !state.peer.open) { state.peer.destroy(); state.peer = null; }
             });
         }
         
@@ -666,8 +704,12 @@
         }
         
         async function getAudio() {
-            try { return await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); } 
-            catch (e) { return null; }
+            try { return await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS); } 
+            catch (e) { 
+                // Fallback if specific constraints fail
+                try { return await navigator.mediaDevices.getUserMedia({ audio: true }); }
+                catch (e2) { return null; }
+            }
         }
         
         async function startCall(remoteId) {
@@ -682,7 +724,11 @@
                 state.localStream = await getAudio();
                 if (!state.localStream) { toast('Geen microfoon toegang', 'error'); cleanupCall(false); return; }
                 
-                const call = state.peer.call(remoteId, state.localStream);
+                // Call with SDP transform
+                const call = state.peer.call(remoteId, state.localStream, {
+                    sdpTransform: forceHighQualitySDP
+                });
+                
                 state.currentCall = call;
                 state.remotePeerId = remoteId;
                 state.isCallActive = true;
@@ -702,7 +748,7 @@
             state.localStream = await getAudio();
             if (!state.localStream) { toast('Geen microfoon toegang', 'error'); cleanupCall(true); return; }
             
-            state.currentCall.answer(state.localStream);
+            state.currentCall.answer(state.localStream, { sdpTransform: forceHighQualitySDP });
             state.isCallActive = true;
             
             if (!state.activeConn) handleDataConnection(state.peer.connect(state.remotePeerId));
@@ -718,28 +764,6 @@
             resetCallState();
         }
         
-        function handleRemoteStream(stream) {
-            if (state.audioElement) { state.audioElement.pause(); state.audioElement.remove(); }
-            
-            state.audioElement = document.createElement('audio');
-            state.audioElement.srcObject = stream;
-            state.audioElement.autoplay = true;
-            document.body.appendChild(state.audioElement);
-            
-            // Setup Audio Context for Visualizer
-            if (!state.audioCtx) state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
-            
-            try {
-                const src = state.audioCtx.createMediaStreamSource(stream);
-                state.analyser = state.audioCtx.createAnalyser();
-                state.analyser.fftSize = 64;
-                src.connect(state.analyser);
-            } catch(e) {}
-            
-            enterCallUI();
-        }
-        
         function enterCallUI() {
             ui.call.remoteName.textContent = state.remotePeerId || 'Partner';
             showScreen('call');
@@ -750,35 +774,7 @@
             }, 1000);
             
             startVisualizer();
-            startQualityMonitor(); // Start monitoring quality
-        }
-        
-        function startVisualizer() {
-            const canvas = ui.call.canvas;
-            const ctx = canvas.getContext('2d');
-            
-            function draw() {
-                state.animationId = requestAnimationFrame(draw);
-                const w = canvas.width = canvas.offsetWidth * 2;
-                const h = canvas.height = canvas.offsetHeight * 2;
-                ctx.clearRect(0, 0, w, h);
-                
-                if (state.analyser) {
-                    const arr = new Uint8Array(state.analyser.frequencyBinCount);
-                    state.analyser.getByteFrequencyData(arr);
-                    const barW = (w / arr.length) * 2;
-                    let x = 0;
-                    for (let i = 0; i < arr.length; i++) {
-                        const barH = Math.max(4, (arr[i] / 255) * h * 0.85);
-                        ctx.fillStyle = `rgba(139, 92, 246, ${0.6 + (arr[i]/255)*0.4})`;
-                        ctx.beginPath();
-                        ctx.roundRect(x, h - barH, barW - 3, barH, 4);
-                        ctx.fill();
-                        x += barW;
-                    }
-                }
-            }
-            draw();
+            startQualityMonitor();
         }
         
         function toggleMute() {
@@ -801,11 +797,14 @@
             clearTimeout(state.timeoutTimer);
             clearInterval(state.timerInterval);
             cancelAnimationFrame(state.animationId);
-            stopQualityMonitor(); // Stop quality monitor
+            stopQualityMonitor();
             
             if (notify && state.activeConn && state.activeConn.open) state.activeConn.send({ type: SIGNAL.HANGUP });
             if (state.currentCall) state.currentCall.close();
             if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
+            
+            // Cleanup Audio Nodes
+            if (state.sourceNode) try { state.sourceNode.disconnect(); } catch(e) {}
             if (state.audioElement) { state.audioElement.pause(); state.audioElement.remove(); }
             if (state.audioCtx) state.audioCtx.close();
             
@@ -818,7 +817,7 @@
         
         function resetCallState() {
             state.localStream = null; state.currentCall = null; state.isMuted = false;
-            state.analyser = null; state.audioCtx = null; state.activeConn = null;
+            state.analyser = null; state.sourceNode = null; state.audioCtx = null; state.activeConn = null;
             state.isCallActive = false;
         }
         
@@ -830,22 +829,28 @@
             ui.lobby.input.value = '';
         }
         
-        // Event Listeners
+        // --- Event Listeners ---
+        
         ui.lobby.btn.onclick = () => {
             const val = ui.lobby.input.value.trim();
-            if (val && !/^[a-zA-Z0-9_-]{2,}$/.test(val)) {
-                toast('Ongeldig ID formaat', 'error'); return;
-            }
+            if (val && !/^[a-zA-Z0-9_-]{2,}$/.test(val)) { toast('Ongeldig ID', 'error'); return; }
             initPeer(val);
         };
         
-        ui.main.copyBtn.onclick = () => { navigator.clipboard.writeText(ui.main.id.textContent); toast('Gekopieerd'); };
+        ui.main.copyBtn.onclick = () => { navigator.clipboard.writeText(ui.main.id.textContent); toast('Gekopieerd', 'success'); };
         ui.main.callBtn.onclick = () => { const id = ui.main.remoteInput.value.trim(); if (id) startCall(id); };
         ui.main.disconnectBtn.onclick = disconnectFromNetwork;
         ui.modal.accept.onclick = acceptCall;
         ui.modal.decline.onclick = declineCall;
         ui.call.muteBtn.onclick = toggleMute;
         ui.call.hangup.onclick = () => cleanupCall(true);
+        
+        // Handle Tab Visibility to prevent audio context suspension
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && state.audioCtx && state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume();
+            }
+        });
         
         document.onkeypress = (e) => {
             if (e.key === 'Enter') {
