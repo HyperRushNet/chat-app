@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.1.1 (Robust Data Passing & Race Condition Fix)
+ *  Version: 1.1.2 (Robust Offline Fallback Fix)
  *  assets/logic.js 
  *  MIT License
  */
@@ -540,7 +540,20 @@ export function initHRNchat(customConfig = {}) {
             window.toast("Offline login failed. Check credentials or go online."); window.setLoading(false); state.processingAction = false; return;
         }
         const { error } = await db.auth.signInWithPassword({ email: em, password: p });
-        if (error) { window.toast(error.message); window.setLoading(false); state.processingAction = false; }
+        if (error) {
+            // FIX: Fallback to offline login if online login fails (e.g. no internet but browser thinks online)
+            console.warn("Online login failed, checking offline fallback...", error);
+            const knownUser = await localDB.get('known_users', em);
+            if (knownUser && knownUser.metadata) {
+                const hashInput = await sha256(p + em);
+                if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
+                    state.user = { id: knownUser.userId, email: knownUser.email, user_metadata: knownUser.metadata };
+                    state.isOfflineMode = true;
+                    window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); state.processingAction = false; window.toast("Offline Login (No Connection)"); return;
+                }
+            }
+            window.toast(error.message); window.setLoading(false); state.processingAction = false;
+        }
         else {
             localStorage.setItem('hrn_auth_email', em); localStorage.setItem('hrn_auth_pass', p);
             const { data: { user } } = await db.auth.getUser();
@@ -734,7 +747,24 @@ export function initHRNchat(customConfig = {}) {
                     const hashInput = await sha256(storedPass + storedEmail);
                     await localDB.put('known_users', { id: storedEmail, pass_hash: hashInput, email: storedEmail, metadata: user.user_metadata, userId: user.id });
                     window.nav('scr-lobby'); window.loadRooms();
-                } else { localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); window.nav('scr-start'); }
+                } else {
+                    // FIX: Fallback to offline mode if auto-login fails but credentials exist locally
+                    console.warn("Auto-login failed, trying offline fallback...", error);
+                    const knownUser = await localDB.get('known_users', storedEmail);
+                    if (knownUser && knownUser.metadata) {
+                        const hashInput = await sha256(storedPass + storedEmail);
+                        if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
+                            state.user = { id: knownUser.userId, email: knownUser.email, user_metadata: knownUser.metadata };
+                            state.isOfflineMode = true;
+                            window.nav('scr-lobby'); window.loadRooms();
+                            window.toast("Connection failed. Logged in offline.");
+                        } else {
+                             localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); window.nav('scr-start');
+                        }
+                    } else {
+                        localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); window.nav('scr-start');
+                    }
+                }
             }
         } else { window.nav('scr-start'); }
         window.setLoading(false);
