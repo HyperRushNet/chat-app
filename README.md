@@ -1,4 +1,4 @@
-# HRN Chat 2026 – v1.0.5
+# HRN Chat 2026 – v1.0.5 - Not stable yet. Wait.
 
 A private, encrypted chat app that runs directly in your browser.  
 No apps to install. Strong privacy. Real-time. Offline capable.
