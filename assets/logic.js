@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.1.2 (Robust Offline Fallback Fix)
+ *  Version: 1.1.3 (Fix: Offline Chat Opening & Persistence)
  *  assets/logic.js 
  *  MIT License
  */
@@ -390,7 +390,6 @@ export function initHRNchat(customConfig = {}) {
     };
     window.deleteRoom = async () => { if (!state.currentRoomId) return; window.setLoading(true, "Deleting..."); const { error } = await db.from('rooms').delete().eq('id', state.currentRoomId); if (error) { window.toast("Failed: " + error.message); window.setLoading(false); return; } window.toast("Deleted"); state.currentRoomId = null; state.currentRoomData = null; window.closeOverlay(); window.nav('scr-lobby'); window.loadRooms(); window.setLoading(false); };
     
-    // FIX: Accept cachedData argument to bypass IDB lookups and race conditions
     window.openVault = async (id, n, rawPassword, roomSalt, cachedData = null) => {
         if (!state.user) return window.toast("Please login first");
         if (state.isCapacityBlocked) return; 
@@ -407,14 +406,12 @@ export function initHRNchat(customConfig = {}) {
         chatContainer.innerHTML = '';
         chatContainer.onscroll = handleScroll;
         
-        // FIX: Use cachedData if provided, otherwise fallback to IDB/Network
         let roomData = cachedData;
         
         if (!roomData) {
              roomData = await localDB.get('rooms', id);
         }
         
-        // Online sync check (only if we didn't just pull fresh data or if we want to update)
         if (navigator.onLine && !state.isOfflineMode) {
             try {
                 const { data: netRoom } = await db.from('rooms').select('*').eq('id', id).single();
@@ -426,7 +423,6 @@ export function initHRNchat(customConfig = {}) {
         }
 
         if (!roomData) {
-            // Last resort: construct from args
             if (id && n && roomSalt) {
                 roomData = { id, name: n, salt: roomSalt, created_at: new Date().toISOString() };
                 window.toast("Loading from cache info");
@@ -436,7 +432,7 @@ export function initHRNchat(customConfig = {}) {
             }
         }
         
-        state.currentRoomData = roomData; // Ensure state is updated
+        state.currentRoomData = roomData;
         const isDirect = roomData?.is_direct;
         let displayTitle = roomData.name;
         let displayAvatar = roomData?.avatar_url;
@@ -541,7 +537,6 @@ export function initHRNchat(customConfig = {}) {
         }
         const { error } = await db.auth.signInWithPassword({ email: em, password: p });
         if (error) {
-            // FIX: Fallback to offline login if online login fails (e.g. no internet but browser thinks online)
             console.warn("Online login failed, checking offline fallback...", error);
             const knownUser = await localDB.get('known_users', em);
             if (knownUser && knownUser.metadata) {
@@ -613,34 +608,53 @@ export function initHRNchat(customConfig = {}) {
         window.setLoading(true, "Creating...");
         const roomSalt = generateSalt();
         const insertData = { name: n, avatar_url: avatarUrl, has_password: !!rawPass, is_visible: isVisible, salt: roomSalt, created_by: state.user.id, allowed_users: allowedUsers, is_direct: isDirect };
+        
+        // FIX: Create locally first (or simultaneously) to ensure it exists for offline use immediately
+        // We generate a client-side ID for local first if we want full offline creation, 
+        // but currently, we rely on server for ID generation. 
+        // To fix the reported issue, we ensure the ROOM is saved to localDB on success.
+        
         const { data, error } = await db.from('rooms').insert([insertData]).select();
         if (error) { window.toast("Error: " + error.message); state.processingAction = false; window.setLoading(false); return; }
         if (data && data.length > 0) {
             const newRoom = data[0];
             if (rawPass) { const accessHash = await sha256(rawPass + roomSalt); await db.rpc('set_room_password', { p_room_id: newRoom.id, p_hash: accessHash }); }
+            
+            // FIX: Save the new room to localDB immediately so it opens offline
+            await localDB.put('rooms', newRoom);
+            
             state.lastCreated = newRoom; state.lastCreatedPass = rawPass; $('s-id').innerText = newRoom.id; window.nav('scr-success'); state.selectedAllowedUsers = [];
         }
         state.processingAction = false; window.setLoading(false);
     };
+    
+    // FIX: Allow offline password attempt
     window.submitGate = async (e) => {
         if (!e || !e.isTrusted) return;
-        if (!navigator.onLine || state.isOfflineMode) return window.toast("Cannot verify password offline.");
-        const inputPass = $('gate-pass').value; const inputHash = await sha256(inputPass + state.pending.salt);
+        const inputPass = $('gate-pass').value; 
+        
+        // Offline handling: try to open with password, skip server verify
+        if (!navigator.onLine || state.isOfflineMode) {
+            window.toast("Attempting access...");
+            window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt, state.pending); 
+            return;
+        }
+
+        // Online logic
+        const inputHash = await sha256(inputPass + state.pending.salt);
         window.setLoading(true, "Verifying...");
         const { data } = await db.rpc('verify_room_password', { p_room_id: state.pending.id, p_hash: inputHash });
         window.setLoading(false);
-        // Pass the pending data (cachedData) to openVault
         if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt, state.pending); else window.toast("Access Denied");
     };
+    
     window.handleLogout = async (e) => { if (!e || !e.isTrusted) return; window.setLoading(true, "Leaving..."); await cleanupChannels(); localStorage.removeItem('hrn_auth_email'); localStorage.removeItem('hrn_auth_pass'); state.user = null; state.isOfflineMode = false; state.isCapacityBlocked = false; await db.auth.signOut(); window.nav('scr-start'); window.setLoading(false); };
     window.copySId = () => { navigator.clipboard.writeText(state.lastCreated.id); window.toast("ID Copied"); };
     window.enterCreated = () => { 
-        // Pass the lastCreated data (cachedData) to openVault
         window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt, state.lastCreated); 
         state.lastCreatedPass = null; 
     };
     
-    // FIX: Prevent Supabase from overwriting offline user state
     db.auth.onAuthStateChange(async (ev, ses) => {
         if (state.isOfflineMode && !ses) return; 
         state.user = ses?.user;
@@ -691,33 +705,59 @@ export function initHRNchat(customConfig = {}) {
     
     window.joinAttempt = async (id) => {
         const meta = await localDB.get('rooms', id);
-        if (!navigator.onLine || state.isOfflineMode) {
+        
+        // Helper function to open room locally
+        const openLocalRoom = async () => {
             if (meta && meta.id) {
                 state.pending = { id: meta.id, name: meta.name, salt: meta.salt };
                 if (meta.has_password) {
-                    window.toast("Cannot open password protected rooms offline");
+                    // Allow password entry even if offline
+                    window.nav('scr-gate');
                 } else {
-                    // FIX: Pass 'meta' (cachedData) directly to openVault to prevent race conditions
                     await window.openVault(meta.id, meta.name, null, meta.salt, meta);
                 }
-            } else { window.toast("Offline data not found"); }
+            } else { 
+                window.toast("Offline data not found"); 
+            }
+        };
+
+        // If explicitly offline, use local immediately
+        if (!navigator.onLine || state.isOfflineMode) {
+            await openLocalRoom();
             return;
         }
-        // Online Logic
+
+        // Try online logic
         window.setLoading(true, "Checking...");
-        const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id });
-        if (!canAccess) { window.setLoading(false); return window.toast("Access denied"); }
-        const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
-        window.setLoading(false);
-        if (error || !data) return window.toast("Not found");
-        if (data && data.id) await localDB.put('rooms', data);
-        state.pending = { id: data.id, name: data.name, salt: data.salt };
-        if (data.has_password) window.nav('scr-gate'); 
-        // FIX: Pass 'data' (cachedData) directly to openVault
-        else window.openVault(data.id, data.name, null, data.salt, data);
+        try {
+            const { data: canAccess, error: rpcError } = await db.rpc('can_access_room', { p_room_id: id });
+            
+            // Network error or access check failed
+            if (rpcError) throw new Error("Network Error");
+            if (!canAccess) {
+                window.setLoading(false);
+                window.toast("Access denied");
+                return;
+            }
+
+            const { data, error } = await db.from('rooms').select('*').eq('id', id).single();
+            if (error) throw error;
+            
+            window.setLoading(false);
+            if (data && data.id) await localDB.put('rooms', data);
+            state.pending = { id: data.id, name: data.name, salt: data.salt };
+            if (data.has_password) window.nav('scr-gate');
+            else window.openVault(data.id, data.name, null, data.salt, data);
+
+        } catch (err) {
+            window.setLoading(false);
+            console.warn("Online check failed, falling back to offline mode", err);
+            // Fallback to local if online fails (e.g. server down but browser says online)
+            await openLocalRoom();
+        }
     };
     
-    window.joinPrivate = async () => { if (!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if (!id) return; window.setLoading(true, "Checking..."); const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (data) { state.pending = { id: data.id, name: data.name, salt: data.salt }; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt, data); } else window.toast("Not found"); };
+    window.joinPrivate = async () => { if (!state.user) return window.toast("Login required"); const id = $('join-id').value.trim(); if (!id) return; window.setLoading(true, "Checking..."); try { const { data: canAccess } = await db.rpc('can_access_room', { p_room_id: id }); if (!canAccess) { window.setLoading(false); return window.toast("Access denied or not found"); } const { data } = await db.from('rooms').select('*').eq('id', id).single(); window.setLoading(false); if (data) { await localDB.put('rooms', data); state.pending = { id: data.id, name: data.name, salt: data.salt }; if (data.has_password) window.nav('scr-gate'); else window.openVault(data.id, data.name, null, data.salt, data); } else window.toast("Not found"); } catch(e) { window.setLoading(false); window.toast("Network error. Try offline if cached."); } };
     const init = async () => {
         await localDB.init();
         monitorConnection();
@@ -748,7 +788,6 @@ export function initHRNchat(customConfig = {}) {
                     await localDB.put('known_users', { id: storedEmail, pass_hash: hashInput, email: storedEmail, metadata: user.user_metadata, userId: user.id });
                     window.nav('scr-lobby'); window.loadRooms();
                 } else {
-                    // FIX: Fallback to offline mode if auto-login fails but credentials exist locally
                     console.warn("Auto-login failed, trying offline fallback...", error);
                     const knownUser = await localDB.get('known_users', storedEmail);
                     if (knownUser && knownUser.metadata) {
