@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.8 (Strict Capacity & Local Cache Fallback)
+ *  Version: 1.0.9 (Fixed Offline Mode & State Persistence)
  *  assets/logic.js 
  *  MIT License
  */
@@ -503,29 +503,23 @@ export function initHRNchat(customConfig = {}) {
         return 8000;
     };
     
-    // NIEUW: Centrale functie om te schakelen naar offline mode bij full server
     const handleServerFull = async () => {
         if (state.isCapacityBlocked) return; 
         state.isCapacityBlocked = true;
-        state.isOfflineMode = true; // Forceer offline mode
+        state.isOfflineMode = true;
         
         window.toast("Server is full. Switched to offline mode.");
         
-        // Stop alle reconnect pogingen
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         state.reconnectTimer = null;
         state.connectionTimeoutTimer = null;
         
-        // Verbreek alle channels
         await cleanupChannels(false); 
         
-        // NIET uitloggen. Gebruiker blijft lokaal ingelogd.
-        // Update UI
         setConnectionVisuals('offline');
         updatePresenceUI();
         
-        // Laad kamers opnieuw uit cache
         if (state.user) window.loadRooms();
     };
 
@@ -582,8 +576,6 @@ export function initHRNchat(customConfig = {}) {
             event: 'sync'
         }, async () => {
             const presState = state.globalPresenceChannel.presenceState();
-            
-            // Sorteer gebruikers op online_at (tijd)
             const users = [];
             Object.keys(presState).forEach(key => {
                 presState[key].forEach(pres => {
@@ -596,13 +588,10 @@ export function initHRNchat(customConfig = {}) {
             state.globalPresenceReady = true;
             schedulePresenceUpdate();
 
-            // STRICT CAPACITY CHECK
             if (state.user && !state.isOfflineMode && !state.isCapacityBlocked) {
                 if (users.length > CONFIG.maxUsers) {
                     const myIndex = users.findIndex(u => u.user_id === state.user.id);
-                    
                     if (myIndex === -1 || myIndex >= CONFIG.maxUsers) {
-                         // Ik sta niet in de top X (overflow) -> Switch naar offline cache mode
                          handleServerFull();
                     }
                 }
@@ -622,9 +611,7 @@ export function initHRNchat(customConfig = {}) {
     const attemptHardReconnect = () => {
         if (!state.user || state.isOfflineMode) return;
         
-        if (state.isCapacityBlocked) {
-             return; // Blijft offline
-        }
+        if (state.isCapacityBlocked) return;
 
         if (state.connectionTimeoutTimer) clearTimeout(state.connectionTimeoutTimer);
         if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
@@ -651,7 +638,6 @@ export function initHRNchat(customConfig = {}) {
         const overlay = $('internet-detected-overlay');
         if (overlay) overlay.classList.remove('active');
         
-        // Reset blokkade als we handmatig online proberen te gaan (maybe spots free now)
         state.isCapacityBlocked = false;
         state.isOfflineMode = false;
         
@@ -719,7 +705,7 @@ export function initHRNchat(customConfig = {}) {
                     } = await db.auth.getUser();
                     state.user = user;
                     state.isOfflineMode = false;
-                    state.isCapacityBlocked = false; // Reset bij reconnect poging
+                    state.isCapacityBlocked = false;
                     await localDB.put('known_users', {
                         id: user.id,
                         email: user.email,
@@ -1679,7 +1665,7 @@ export function initHRNchat(customConfig = {}) {
     };
     window.openVault = async (id, n, rawPassword, roomSalt) => {
         if (!state.user) return window.toast("Please login first");
-        if (state.isCapacityBlocked) return; // Extra fail-safe
+        if (state.isCapacityBlocked) return; 
         
         window.setLoading(true, "Opening chat...");
         state.currentRoomPassword = rawPassword;
@@ -1693,15 +1679,22 @@ export function initHRNchat(customConfig = {}) {
         chatContainer.innerHTML = '';
         chatContainer.onscroll = handleScroll;
         let roomData = await localDB.get('rooms', id);
+        
+        // FIX: Only try to fetch online if actually online
         if (navigator.onLine && !state.isOfflineMode) {
-            const {
-                data: netRoom
-            } = await db.from('rooms').select('*').eq('id', id).single();
-            if (netRoom && netRoom.id) {
-                roomData = netRoom;
-                await localDB.put('rooms', roomData);
+            try {
+                const {
+                    data: netRoom
+                } = await db.from('rooms').select('*').eq('id', id).single();
+                if (netRoom && netRoom.id) {
+                    roomData = netRoom;
+                    await localDB.put('rooms', roomData);
+                }
+            } catch (e) {
+                console.warn("Network fetch failed, falling back to local", e);
             }
         }
+
         if (!roomData) {
             window.setLoading(false);
             return window.toast("Room data not found");
@@ -1730,32 +1723,40 @@ export function initHRNchat(customConfig = {}) {
         const keySource = rawPassword ? (rawPassword + id) : id;
         await deriveKey(keySource, roomData?.salt);
         let finalMessages = [];
+        
+        // FIX: Try online messages, fallback to local
         if (navigator.onLine && !state.isOfflineMode) {
-            const {
-                data
-            } = await db.from('messages').select('*').eq('room_id', id).order('created_at', {
-                ascending: false
-            }).limit(CONFIG.maxMessages);
-            if (data && data.length > 0) {
-                data.reverse();
-                try {
-                    const res = await workerExec('decryptHistory', {
-                        messages: data
-                    });
-                    const validMsgs = res.results.filter(m => !m.error);
-                    const messagesWithRoomId = validMsgs.map(m => ({
-                        ...m,
-                        room_id: id
-                    }));
-                    await localDB.clearRoomMessages(id);
-                    await localDB.putAll('messages', messagesWithRoomId);
-                    finalMessages = validMsgs;
-                } catch (e) {
-                    console.error(e);
+            try {
+                const {
+                    data
+                } = await db.from('messages').select('*').eq('room_id', id).order('created_at', {
+                    ascending: false
+                }).limit(CONFIG.maxMessages);
+                if (data && data.length > 0) {
+                    data.reverse();
+                    try {
+                        const res = await workerExec('decryptHistory', {
+                            messages: data
+                        });
+                        const validMsgs = res.results.filter(m => !m.error);
+                        const messagesWithRoomId = validMsgs.map(m => ({
+                            ...m,
+                            room_id: id
+                        }));
+                        await localDB.clearRoomMessages(id);
+                        await localDB.putAll('messages', messagesWithRoomId);
+                        finalMessages = validMsgs;
+                    } catch (e) {
+                        console.error(e);
+                    }
                 }
+            } catch (e) {
+                 console.warn("Failed to fetch online messages", e);
             }
         }
+
         if (finalMessages.length === 0) finalMessages = await localDB.getRoomMessages(id);
+        
         window.nav('scr-chat');
         if (finalMessages.length > 0) {
             if (finalMessages.length > 0) state.oldestMessageTimestamp = finalMessages[0].created_at;
@@ -1907,7 +1908,6 @@ export function initHRNchat(customConfig = {}) {
                 metadata: user.user_metadata,
                 userId: user.id
             });
-            // Login success. setupGlobalPresence will handle capacity check.
             if (state.user) setupGlobalPresence(state.user.id);
             
             window.nav('scr-lobby');
@@ -2153,6 +2153,11 @@ export function initHRNchat(customConfig = {}) {
     };
     window.submitGate = async (e) => {
         if (!e || !e.isTrusted) return;
+        // FIX: Cannot verify password offline (no hash stored locally for security)
+        if (!navigator.onLine || state.isOfflineMode) {
+            return window.toast("Cannot verify password offline.");
+        }
+        
         const inputPass = $('gate-pass').value;
         const inputHash = await sha256(inputPass + state.pending.salt);
         window.setLoading(true, "Verifying...");
@@ -2174,7 +2179,7 @@ export function initHRNchat(customConfig = {}) {
         localStorage.removeItem('hrn_auth_pass');
         state.user = null;
         state.isOfflineMode = false;
-        state.isCapacityBlocked = false; // Reset flag
+        state.isCapacityBlocked = false;
         await db.auth.signOut();
         window.nav('scr-start');
         window.setLoading(false);
@@ -2188,6 +2193,9 @@ export function initHRNchat(customConfig = {}) {
         state.lastCreatedPass = null;
     };
     db.auth.onAuthStateChange(async (ev, ses) => {
+        // FIX: Do not let Supabase overwrite our manual offline login
+        if (state.isOfflineMode && !ses) return;
+
         state.user = ses?.user;
         if (state.user && !state.isOfflineMode) setupGlobalPresence(state.user.id);
         const createBtn = $('icon-plus-lobby');
@@ -2330,23 +2338,32 @@ export function initHRNchat(customConfig = {}) {
     };
     window.joinAttempt = async (id) => {
         const meta = await localDB.get('rooms', id);
-        if (meta && meta.id) {
-            state.pending = {
-                id: meta.id,
-                name: meta.name,
-                salt: meta.salt
-            };
-            state.currentRoomData = meta;
-            if (meta.has_password) {
-                window.nav('scr-gate');
+
+        // FIX: Prioritize offline logic and return early
+        if (!navigator.onLine || state.isOfflineMode) {
+            if (meta && meta.id) {
+                state.pending = {
+                    id: meta.id,
+                    name: meta.name,
+                    salt: meta.salt
+                };
+                state.currentRoomData = meta;
+                if (meta.has_password) {
+                    window.toast("Cannot open password protected rooms offline");
+                    // Optionally still show gate or just return
+                    return; 
+                } else {
+                    window.openVault(meta.id, meta.name, null, meta.salt);
+                }
             } else {
-                window.openVault(meta.id, meta.name, null, meta.salt);
+                window.toast("Offline data not found");
             }
-        } else if (!navigator.onLine || state.isOfflineMode) {
-            window.toast("Offline data not found");
-            return;
+            return; // Stop execution here for offline mode
         }
-        if (!navigator.onLine || state.isOfflineMode) return;
+
+        // ONLINE LOGIC BELOW
+        if (!navigator.onLine || state.isOfflineMode) return; 
+
         window.setLoading(true, "Checking...");
         const {
             data: canAccess
@@ -2470,7 +2487,6 @@ export function initHRNchat(customConfig = {}) {
                         metadata: user.user_metadata,
                         userId: user.id
                     });
-                    // setupGlobalPresence wordt afgehandeld door onAuthStateChange
                     window.nav('scr-lobby');
                     window.loadRooms();
                 } else {
