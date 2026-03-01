@@ -26,7 +26,7 @@ export function initHRNchat(customConfig = {}) {
     };
     const AVATARS = ['./assets/avatars/1.webp', './assets/avatars/2.webp', './assets/avatars/3.webp', './assets/avatars/4.webp', './assets/avatars/5.webp'];
     const DB_NAME = 'HRN_LOCAL_DB';
-    const DB_VERSION = 6;
+    const DB_VERSION = 7;
     
     const state = {
         user: null,
@@ -88,7 +88,8 @@ export function initHRNchat(customConfig = {}) {
         isProcessingQueue: false,
         isCapacityBlocked: false,
         authListener: null,
-        localKey: null
+        localKey: null,
+        recentlySentIds: new Set()
     };
 
     let toastQueue = [];
@@ -120,30 +121,25 @@ export function initHRNchat(customConfig = {}) {
 
     const getLocalKey = async () => {
         if (state.localKey) return state.localKey;
-        try {
-            let keyStr = localStorage.getItem('hrn_mk');
-            if (keyStr) {
-                try {
-                    const keyData = JSON.parse(keyStr);
-                    state.localKey = await crypto.subtle.importKey('jwk', keyData, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
-                    return state.localKey;
-                } catch (e) {
-                    localStorage.removeItem('hrn_mk');
-                }
+        let keyStr = localStorage.getItem('hrn_mk');
+        if (keyStr) {
+            try {
+                const keyData = JSON.parse(keyStr);
+                state.localKey = await crypto.subtle.importKey('jwk', keyData, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+                return state.localKey;
+            } catch (e) {
+                localStorage.removeItem('hrn_mk');
             }
-            state.localKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-            const exported = await crypto.subtle.exportKey('jwk', state.localKey);
-            localStorage.setItem('hrn_mk', JSON.stringify(exported));
-            return state.localKey;
-        } catch (e) {
-            return null;
         }
+        state.localKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+        const exported = await crypto.subtle.exportKey('jwk', state.localKey);
+        localStorage.setItem('hrn_mk', JSON.stringify(exported));
+        return state.localKey;
     };
 
     const encryptValue = async (data) => {
         try {
             const key = await getLocalKey();
-            if (!key) return null;
             const iv = crypto.getRandomValues(new Uint8Array(12));
             const encoded = new TextEncoder().encode(JSON.stringify(data));
             const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
@@ -160,7 +156,6 @@ export function initHRNchat(customConfig = {}) {
         if (!encryptedStr) return null;
         try {
             const key = await getLocalKey();
-            if (!key) return null;
             const binary = atob(encryptedStr);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -732,6 +727,39 @@ export function initHRNchat(customConfig = {}) {
         window.toast("Connection error.");
     };
 
+    const processOutgoingQueue = async () => {
+        if (!state.user) return;
+        const queue = await localDB.getAll('queue');
+        if (queue.length === 0) return;
+        window.toast(`Sending ${queue.length} pending message(s)...`);
+        const failed = [];
+        for (const item of queue) {
+            try {
+                const enc = await encryptMessage(item.text, state.currentRoomId);
+                const { data, error } = await db.from('messages').insert([{ room_id: item.roomId, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, content: enc }]).select().single();
+                if (!error && data) {
+                    state.recentlySentIds.add(data.id);
+                    await localDB.delete('queue', item.id);
+                    const msgEl = document.querySelector(`.msg[data-id="${item.tempId}"]`);
+                    if (msgEl) {
+                        const prevEl = msgEl.previousElementSibling;
+                        let prevMsg = null;
+                        if (prevEl && prevEl.classList.contains('msg')) prevMsg = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                        try {
+                            const decRes = await workerExec('decryptSingle', { content: data.content, keyId: state.currentRoomId });
+                            if (decRes.result) {
+                                const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                                msgEl.outerHTML = renderMsg(finalMsg, prevMsg, state.currentRoomData?.is_direct);
+                                await localDB.put('messages', finalMsg);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            } catch (e) { failed.push(item); }
+        }
+        if (failed.length > 0) await localDB.putAll('queue', failed);
+    };
+
     const setupChatChannel = (id) => {
         if (state.isOfflineMode) return;
         if (state.chatChannel) state.chatChannel.unsubscribe();
@@ -751,6 +779,10 @@ export function initHRNchat(customConfig = {}) {
         }, async (payload) => {
             const m = payload.new;
             if (m && state.currentRoomId) {
+                if (state.user && m.user_id === state.user.id && state.recentlySentIds.has(m.id)) {
+                    state.recentlySentIds.delete(m.id);
+                    return;
+                }
                 try {
                     const decRes = await workerExec('decryptSingle', {
                         content: m.content,
@@ -836,6 +868,7 @@ export function initHRNchat(customConfig = {}) {
                 state.isReconnecting = false;
                 if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
                 setConnectionVisuals('connected');
+                processOutgoingQueue();
             } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 if (state.connectionTimeoutTimer) {
                     clearTimeout(state.connectionTimeoutTimer);
@@ -1861,6 +1894,17 @@ export function initHRNchat(customConfig = {}) {
         state.processingAction = true;
         $('chat-input').value = '';
         state.lastMessageTime = Date.now();
+        
+        const tempId = `temp_${Date.now()}`;
+        const tempMsg = { id: tempId, text: v, user_id: state.user.id, user_name: state.user.user_metadata?.full_name, created_at: new Date().toISOString(), room_id: state.currentRoomId };
+
+        const container = $('chat-messages'); 
+        const lastMsg = container.querySelector('.msg:last-of-type'); 
+        let prevMsg = null; if(lastMsg) prevMsg = { user_id: lastMsg.dataset.uid, created_at: lastMsg.dataset.time };
+        container.insertAdjacentHTML('beforeend', renderMsg(tempMsg, prevMsg, state.currentRoomData?.is_direct, true)); 
+        container.scrollTop = container.scrollHeight;
+        await localDB.put('messages', tempMsg);
+
         try {
             const enc = await encryptMessage(v, state.currentRoomId);
             const {
@@ -1872,9 +1916,28 @@ export function initHRNchat(customConfig = {}) {
                 user_name: state.user.user_metadata?.full_name,
                 content: enc
             }]).select().single();
-            if (error) window.toast("Failed to send message.");
-        } catch (err) {
-            window.toast("Encryption or Send failed.");
+            if (!error && data) {
+                state.recentlySentIds.add(data.id);
+                const msgEl = container.querySelector(`[data-id="${tempId}"]`);
+                if(msgEl) {
+                    const prevEl = msgEl.previousElementSibling; 
+                    let prevData = null; 
+                    if(prevEl && prevEl.classList.contains('msg')) prevData = { user_id: prevEl.dataset.uid, created_at: prevEl.dataset.time };
+                    try {
+                        const decRes = await workerExec('decryptSingle', { content: data.content, keyId: state.currentRoomId });
+                        if(decRes.result) {
+                            const finalMsg = { ...data, ...decRes.result, room_id: data.room_id };
+                            msgEl.outerHTML = renderMsg(finalMsg, prevData, state.currentRoomData?.is_direct);
+                            await localDB.put('messages', finalMsg);
+                        }
+                    } catch(e) {}
+                }
+            } else {
+                throw error;
+            }
+        } catch (e) {
+            window.toast("Send failed.");
+            await localDB.put('queue', { roomId: state.currentRoomId, text: v, tempId: tempId });
         }
         state.processingAction = false;
     };
@@ -1910,50 +1973,46 @@ export function initHRNchat(customConfig = {}) {
         }
         window.setLoading(true, "Signing In...");
         if (!state.isOfflineMode) {
-            try {
+            const {
+                error
+            } = await db.auth.signInWithPassword({
+                email: em,
+                password: p
+            });
+            if (!error) {
                 const {
-                    error
-                } = await db.auth.signInWithPassword({
+                    data: {
+                        user
+                    }
+                } = await db.auth.getUser();
+                state.user = user;
+                setAppMode(false);
+                const hashInput = await sha256(p + em);
+                await localDB.put('known_users', {
+                    id: em,
+                    pass_hash: hashInput,
                     email: em,
-                    password: p
+                    metadata: user.user_metadata,
+                    userId: user.id
                 });
-                if (!error) {
-                    const {
-                        data: {
-                            user
-                        }
-                    } = await db.auth.getUser();
-                    state.user = user;
-                    setAppMode(false);
-                    const hashInput = await sha256(p + em);
-                    await localDB.put('known_users', {
-                        id: em,
-                        pass_hash: hashInput,
-                        email: em,
-                        metadata: user.user_metadata,
-                        userId: user.id
-                    });
-                    if (state.user) await setupGlobalPresence(state.user.id);
-                    window.nav('scr-lobby');
-                    await window.loadRooms();
-                    window.setLoading(false);
-                    state.processingAction = false;
-                    const encCreds = await encryptValue({
-                        e: em,
-                        p: p
-                    });
-                    localStorage.setItem('hrn_auth', encCreds);
-                    return;
-                }
-            } catch (err) {
-                window.toast("Login failed.");
+                if (state.user) setupGlobalPresence(state.user.id);
+                window.nav('scr-lobby');
+                try { await window.loadRooms(); } catch(e) {}
+                window.setLoading(false);
+                state.processingAction = false;
+                const encCreds = await encryptValue({
+                    e: em,
+                    p: p
+                });
+                localStorage.setItem('hrn_auth', encCreds);
+                return;
             }
         }
         const offlineOk = await attemptOfflineLogin(em, p);
         if (offlineOk) {
             setAppMode(true);
             window.nav('scr-lobby');
-            await window.loadRooms();
+            try { await window.loadRooms(); } catch(e) {}
             window.setLoading(false);
             state.processingAction = false;
             window.toast("Logged in successfully (Offline).");
@@ -2130,7 +2189,7 @@ export function initHRNchat(customConfig = {}) {
                 });
                 if (state.user) await setupGlobalPresence(state.user.id);
                 window.nav('scr-lobby');
-                await window.loadRooms();
+                try { await window.loadRooms(); } catch(e) {}
                 window.setLoading(false);
                 const encCreds = await encryptValue({
                     e: temp.em,
@@ -2577,6 +2636,10 @@ export function initHRNchat(customConfig = {}) {
                     if (!db.objectStoreNames.contains('user_tree')) db.createObjectStore('user_tree', {
                         keyPath: 'user_id'
                     });
+                    if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', {
+                        keyPath: 'id',
+                        autoIncrement: true
+                    });
                 };
             });
         },
@@ -2778,7 +2841,7 @@ export function initHRNchat(customConfig = {}) {
                                 userId: user.id
                             });
                             window.nav('scr-lobby');
-                            await window.loadRooms();
+                            try { await window.loadRooms(); } catch(e) {}
                             window.setLoading(false);
                             return;
                         }
@@ -2788,7 +2851,7 @@ export function initHRNchat(customConfig = {}) {
                 if (offlineOk) {
                     setAppMode(true);
                     window.nav('scr-lobby');
-                    await window.loadRooms();
+                    try { await window.loadRooms(); } catch(e) {}
                     window.setLoading(false);
                     window.toast("Offline login successful.");
                     return;
