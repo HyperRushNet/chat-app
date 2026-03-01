@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.6
+ *  Version: 1.0.5
  *  assets/logic.js 
  *  MIT License
  */
@@ -253,7 +253,6 @@ export function initHRNchat(customConfig = {}) {
         updatePresenceUI();
         updateSendButtonState();
         setConnectionVisuals(offline ? 'offline' : 'connected');
-        console.log(`App Mode Switched: ${offline ? 'OFFLINE' : 'ONLINE'}`);
     };
     const setConnectionVisuals = (status) => {
         const avatar = $('chat-avatar-display');
@@ -301,14 +300,11 @@ export function initHRNchat(customConfig = {}) {
         } else {
             let count = state.lastKnownOnlineCount || 0;
             let displayRoomText = count;
-            
-            // Logica voor DMs: 1 = Offline, 2 = Online
             if (state.currentRoomData?.is_direct) {
                 if (count === 1) displayRoomText = "Offline";
                 else if (count === 2) displayRoomText = "Online";
                 else displayRoomText = "-";
             }
-
             let displayGlobalCount = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
             if (infoGlobalEl) infoGlobalEl.innerText = displayGlobalCount;
             if (roomCountEl) roomCountEl.innerText = displayRoomText;
@@ -390,7 +386,6 @@ export function initHRNchat(customConfig = {}) {
                 reader.readAsDataURL(blob);
             });
         } catch (e) {
-            console.warn("Avatar caching mislukt:", e);
             return profile;
         }
     };
@@ -424,9 +419,7 @@ export function initHRNchat(customConfig = {}) {
                         }
                     }
                 }
-            } catch (e) {
-                console.warn("Kon profiel niet updaten van server:", e);
-            }
+            } catch (e) {}
         }
         if (profile) state.profileCache[userId] = profile;
         return profile;
@@ -727,10 +720,10 @@ export function initHRNchat(customConfig = {}) {
                 if (state.currentRoomId) attemptHardReconnect();
                 window.loadRooms();
                 window.setLoading(false);
-                window.toast("Back Online");
+                window.toast("Back online.");
             } else {
                 window.setLoading(false);
-                window.toast("Re-login failed");
+                window.toast("Login failed.");
                 window.nav('scr-login');
             }
         } else {
@@ -742,7 +735,7 @@ export function initHRNchat(customConfig = {}) {
         const overlay = $('block-overlay');
         if (overlay) overlay.classList.remove('active');
         setAppMode(true);
-        window.toast("Staying in Offline Mode");
+        window.toast("Offline mode active.");
         if (state.user) window.loadRooms();
     };
     const handleReconnect = async () => {
@@ -776,10 +769,10 @@ export function initHRNchat(customConfig = {}) {
                     if (state.currentRoomId) attemptHardReconnect();
                     window.loadRooms();
                     if (overlay) overlay.classList.remove('active');
-                    window.toast("Synced successfully");
+                    window.toast("Synced.");
                 } else {
                     if (overlay) overlay.classList.remove('active');
-                    window.toast("Login failed. Try again.");
+                    window.toast("Login failed.");
                 }
             } catch (e) {
                 if (overlay) overlay.classList.remove('active');
@@ -831,9 +824,7 @@ export function initHRNchat(customConfig = {}) {
                         checkChatEmpty();
                         await localDB.put('messages', msgObj);
                     }
-                } catch (e) {
-                    console.error("Decryption failed for new message", e);
-                }
+                } catch (e) {}
             }
         }).on('postgres_changes', {
             event: 'UPDATE',
@@ -883,9 +874,7 @@ export function initHRNchat(customConfig = {}) {
                         cached.text = decRes.result?.text;
                         await localDB.put('messages', cached);
                     }
-                } catch (e) {
-                    console.error("Decryption failed for update", e);
-                }
+                } catch (e) {}
             }
         }).subscribe((status) => {
             state.isChatChannelReady = (status === 'SUBSCRIBED');
@@ -1037,7 +1026,7 @@ export function initHRNchat(customConfig = {}) {
     $('ctx-copy').onclick = () => {
         if (!state.contextTarget) return;
         navigator.clipboard.writeText(state.contextTarget.text);
-        window.toast("Copied to clipboard");
+        window.toast("Copied.");
         hideContextMenu();
     };
     $('ctx-delete').onclick = async () => {
@@ -1050,17 +1039,17 @@ export function initHRNchat(customConfig = {}) {
         } = await db.from('messages').update({
             content: '/'
         }).eq('id', idToDelete);
-        if (error) window.toast("Failed: " + error.message);
+        if (error) window.toast("Failed to delete.");
         window.setLoading(false);
     };
     window.saveEditMessage = async () => {
         if (!state.editingMessage) return;
         const v = $('edit-msg-input').value.trim();
-        if (!v) return window.toast("Message cannot be empty");
+        if (!v) return window.toast("Message is empty.");
         const msgDate = new Date(state.editingMessage.created_at);
         const now = new Date();
         if ((now - msgDate) / 60000 >= 15) {
-            window.toast("Edit time expired");
+            window.toast("Edit time expired.");
             window.closeOverlay();
             state.editingMessage = null;
             return;
@@ -1073,10 +1062,10 @@ export function initHRNchat(customConfig = {}) {
             } = await db.from('messages').update({
                 content: enc
             }).eq('id', state.editingMessage.id);
-            if (error) window.toast("Failed to edit: " + error.message);
-            else window.toast("Message updated");
+            if (error) window.toast("Failed to edit.");
+            else window.toast("Message updated.");
         } catch (e) {
-            window.toast("Encryption failed");
+            window.toast("Encryption failed.");
         }
         state.editingMessage = null;
         window.setLoading(false);
@@ -1183,9 +1172,9 @@ export function initHRNchat(customConfig = {}) {
                     AVATARS.push(dataUrl);
                     $('r-avatar-url').value = '';
                     updateCarouselPreview();
-                    window.toast("Avatar added to carousel");
+                    window.toast("Avatar updated.");
                 };
-                img.onerror = () => window.toast("Invalid image file");
+                img.onerror = () => window.toast("Invalid image.");
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
@@ -1200,11 +1189,11 @@ export function initHRNchat(customConfig = {}) {
         if (state.currentStep.reg === 1) {
             const em = $('r-email').value,
                 p = $('r-pass').value;
-            if (!em || p.length < 8) return window.toast("Email and valid password required");
+            if (!em || p.length < 8) return window.toast("Invalid email or password.");
         }
         if (state.currentStep.reg === 2) {
             const n = $('r-name').value;
-            if (!n) return window.toast("Name required");
+            if (!n) return window.toast("Name required.");
         }
         state.currentStep.reg++;
         updateStepUI('reg');
@@ -1243,7 +1232,7 @@ export function initHRNchat(customConfig = {}) {
     };
     window.nextEditStep = () => {
         const name = $('edit-room-name').value.trim();
-        if (!name) return window.toast("Name required");
+        if (!name) return window.toast("Name required.");
         state.currentStep.edit = 2;
         updateStepUI('edit');
         updateAccessSummary('edit');
@@ -1299,15 +1288,15 @@ export function initHRNchat(customConfig = {}) {
     window.addUserById = async () => {
         const input = $('picker-id-input');
         const id = input.value.trim();
-        if (!id) return window.toast("Enter ID");
-        if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added");
+        if (!id) return window.toast("Enter an ID.");
+        if (state.selectedAllowedUsers.find(u => u.id === id)) return window.toast("User already added.");
         window.setLoading(true, "Fetching...");
         const {
             data,
             error
         } = await db.from('profiles').select('id, full_name, avatar_url').eq('id', id).single();
         window.setLoading(false);
-        if (error || !data) return window.toast("User not found");
+        if (error || !data) return window.toast("User not found.");
         state.selectedAllowedUsers.push({
             id: data.id,
             name: data.full_name,
@@ -1315,7 +1304,7 @@ export function initHRNchat(customConfig = {}) {
         });
         renderPickerSelectedUsers();
         input.value = '';
-        window.toast("Added");
+        window.toast("User added.");
     };
     const checkMaster = () => new Promise((resolve) => {
         let masterFound = false;
@@ -1400,12 +1389,12 @@ export function initHRNchat(customConfig = {}) {
     window.copyAccountId = () => {
         if (!state.user) return;
         navigator.clipboard.writeText(state.user.id);
-        window.toast("ID Copied");
+        window.toast("ID copied.");
     };
     window.copyInfoId = () => {
         if (!state.currentRoomId) return;
         navigator.clipboard.writeText(state.currentRoomId);
-        window.toast("Room ID Copied");
+        window.toast("ID copied.");
     };
     const updateLobbyAvatar = async () => {
         if (!state.user) return;
@@ -1531,9 +1520,7 @@ export function initHRNchat(customConfig = {}) {
                 }));
                 await localDB.putAll('messages', messagesWithRoomId);
             }
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) {}
         state.isLoadingHistory = false;
     };
     window.openRoomInfo = async () => {
@@ -1604,7 +1591,7 @@ export function initHRNchat(customConfig = {}) {
     };
     window.openRoomSettings = async () => {
         window.closeOverlay();
-        if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Not owner");
+        if (!state.currentRoomId || !state.currentRoomData || state.currentRoomData.created_by !== state.user.id) return window.toast("Access denied.");
         window.setLoading(true, "Loading...");
         const room = state.currentRoomData;
         state.currentStep.edit = 1;
@@ -1660,7 +1647,7 @@ export function initHRNchat(customConfig = {}) {
         let allowedUsers = state.selectedAllowedUsers.length > 0 ? state.selectedAllowedUsers.map(u => u.id) : ['*'];
         if (!allowedUsers.includes(state.user.id)) allowedUsers.push(state.user.id);
         if (!name) {
-            window.toast("Name required");
+            window.toast("Name required.");
             state.processingAction = false;
             return;
         }
@@ -1679,7 +1666,7 @@ export function initHRNchat(customConfig = {}) {
             error: updateError
         } = await db.from('rooms').update(updates).eq('id', state.currentRoomId);
         if (updateError) {
-            window.toast("Failed: " + updateError.message);
+            window.toast("Save failed.");
             window.setLoading(false);
             state.processingAction = false;
             return;
@@ -1704,7 +1691,7 @@ export function initHRNchat(customConfig = {}) {
         } = await db.from('rooms').select('*').eq('id', state.currentRoomId).single();
         state.currentRoomData = updatedRoom;
         $('chat-title').innerText = updatedRoom.name;
-        window.toast("Saved");
+        window.toast("Saved.");
         window.closeOverlay();
         state.processingAction = false;
         window.setLoading(false);
@@ -1716,11 +1703,11 @@ export function initHRNchat(customConfig = {}) {
             error
         } = await db.from('rooms').delete().eq('id', state.currentRoomId);
         if (error) {
-            window.toast("Failed: " + error.message);
+            window.toast("Delete failed.");
             window.setLoading(false);
             return;
         }
-        window.toast("Deleted");
+        window.toast("Deleted.");
         state.currentRoomId = null;
         state.currentRoomData = null;
         window.closeOverlay();
@@ -1729,7 +1716,7 @@ export function initHRNchat(customConfig = {}) {
         window.setLoading(false);
     };
     window.openVault = async (id, n, rawPassword, roomSalt, cachedData = null) => {
-        if (!state.user) return window.toast("Please login first");
+        if (!state.user) return window.toast("Please log in.");
         if (state.isCapacityBlocked) return;
         window.setLoading(true, "Opening chat...");
         state.currentRoomPassword = rawPassword;
@@ -1755,9 +1742,7 @@ export function initHRNchat(customConfig = {}) {
                     roomData = netRoom;
                     await localDB.put('rooms', roomData);
                 }
-            } catch (e) {
-                console.warn("Network fetch failed, using local", e);
-            }
+            } catch (e) {}
         }
         if (!roomData) {
             if (id && n && roomSalt) {
@@ -1767,10 +1752,9 @@ export function initHRNchat(customConfig = {}) {
                     salt: roomSalt,
                     created_at: new Date().toISOString()
                 };
-                window.toast("Loading from cache info");
             } else {
                 window.setLoading(false);
-                return window.toast("Room data not found");
+                return window.toast("Chat not found.");
             }
         }
         state.currentRoomData = roomData;
@@ -1819,13 +1803,9 @@ export function initHRNchat(customConfig = {}) {
                         await localDB.clearRoomMessages(id);
                         await localDB.putAll('messages', messagesWithRoomId);
                         finalMessages = validMsgs;
-                    } catch (e) {
-                        console.error(e);
-                    }
+                    } catch (e) {}
                 }
-            } catch (e) {
-                console.warn("Failed to fetch online messages", e);
-            }
+            } catch (e) {}
         }
         if (finalMessages.length === 0) finalMessages = await localDB.getRoomMessages(id);
         window.nav('scr-chat');
@@ -1862,14 +1842,14 @@ export function initHRNchat(customConfig = {}) {
     window.sendMsg = async (e) => {
         if (!e || !e.isTrusted) return;
         if (!state.user || !state.currentRoomId || state.processingAction) return;
-        if (state.isOfflineMode) return window.toast("Offline Mode: Cannot send");
-        if (!state.isChatChannelReady) return window.toast("Reconnecting...");
-        if (state.isCapacityBlocked) return window.toast("Server Full");
+        if (state.isOfflineMode) return window.toast("Offline mode.");
+        if (!state.isChatChannelReady) return;
+        if (state.isCapacityBlocked) return window.toast("Server full.");
         if (!applyRateLimit()) return;
         const v = $('chat-input').value.trim();
         if (!v) return;
         if (v.length > CONFIG.maxMessageLength) {
-            return window.toast(`Message too long (max ${CONFIG.maxMessageLength} chars)`);
+            return window.toast(`Message too long (max ${CONFIG.maxMessageLength} chars).`);
         }
         state.processingAction = true;
         $('chat-input').value = '';
@@ -1885,9 +1865,9 @@ export function initHRNchat(customConfig = {}) {
                 user_name: state.user.user_metadata?.full_name,
                 content: enc
             }]).select().single();
-            if (error) window.toast("Failed to send message");
+            if (error) window.toast("Failed to send.");
         } catch (err) {
-            window.toast("Encryption or Send failed");
+            window.toast("Send failed.");
         }
         state.processingAction = false;
     };
@@ -1915,7 +1895,7 @@ export function initHRNchat(customConfig = {}) {
         const em = $('l-email').value,
             p = $('l-pass').value;
         if (!em || !p) {
-            window.toast("Input missing");
+            window.toast("Missing fields.");
             state.processingAction = false;
             return;
         }
@@ -1934,11 +1914,11 @@ export function initHRNchat(customConfig = {}) {
                     window.loadRooms();
                     window.setLoading(false);
                     state.processingAction = false;
-                    window.toast("Offline Login Successful");
+                    window.toast("Logged in offline.");
                     return;
                 }
             }
-            window.toast("Offline login failed. Check credentials.");
+            window.toast("Login failed.");
             window.setLoading(false);
             state.processingAction = false;
             return;
@@ -1964,11 +1944,11 @@ export function initHRNchat(customConfig = {}) {
                     window.loadRooms();
                     window.setLoading(false);
                     state.processingAction = false;
-                    window.toast("Server unreachable. Logged in Offline.");
+                    window.toast("Offline mode.");
                     return;
                 }
             }
-            window.toast(error.message);
+            window.toast("Invalid credentials.");
             window.setLoading(false);
             state.processingAction = false;
         } else {
@@ -2006,7 +1986,7 @@ export function initHRNchat(customConfig = {}) {
         const customAvatar = $('r-avatar-url').value.trim();
         const avatarUrl = customAvatar || state.selectedAvatar;
         if (!n || !em || p.length < 8) {
-            window.toast("Check inputs");
+            window.toast("Invalid input.");
             state.processingAction = false;
             return;
         }
@@ -2022,9 +2002,10 @@ export function initHRNchat(customConfig = {}) {
                     email: em
                 })
             }));
+            if (err) throw err;
             if (r) {
                 if (r.status === 429) {
-                    window.toast("Rate limited");
+                    window.toast("Too many attempts.");
                     state.processingAction = false;
                     window.setLoading(false);
                     return;
@@ -2041,22 +2022,12 @@ export function initHRNchat(customConfig = {}) {
                     startVTimer();
                     window.setLoading(false);
                 } else {
-                    window.toast(j.message || "Error");
+                    window.toast("Could not send code.");
                     window.setLoading(false);
                 }
-            } else {
-                throw new Error("Network error");
             }
         } catch (err) {
-            window.toast("API Fallback: Proceeding without code (Dev Mode)");
-            sessionStorage.setItem('temp_reg', JSON.stringify({
-                n,
-                em,
-                p,
-                avatar: avatarUrl
-            }));
-            window.nav('scr-verify');
-            startVTimer();
+            window.toast("Network error.");
             window.setLoading(false);
         }
         state.processingAction = false;
@@ -2080,7 +2051,7 @@ export function initHRNchat(customConfig = {}) {
         const code = $('v-code').value,
             temp = JSON.parse(sessionStorage.getItem('temp_reg'));
         if (!temp) {
-            window.toast("Session expired");
+            window.toast("Session expired.");
             state.processingAction = false;
             return;
         }
@@ -2098,7 +2069,7 @@ export function initHRNchat(customConfig = {}) {
                 })
             });
             if (r.status === 429) {
-                window.toast("Rate limited");
+                window.toast("Too many attempts.");
                 state.processingAction = false;
                 window.setLoading(false);
                 return;
@@ -2106,12 +2077,12 @@ export function initHRNchat(customConfig = {}) {
             const j = await r.json();
             if (j.message === "Verified") await finishReg(temp);
             else {
-                window.toast(j.message || "Wrong code");
+                window.toast("Invalid code.");
                 window.setLoading(false);
             }
         } catch (err) {
-            window.toast("API Fallback: Auto-verifying (Dev Mode)");
-            await finishReg(temp);
+            window.toast("Verification failed.");
+            window.setLoading(false);
         }
         state.processingAction = false;
     };
@@ -2129,7 +2100,7 @@ export function initHRNchat(customConfig = {}) {
             }
         });
         if (error) {
-            window.toast(error.message);
+            window.toast("Registration failed.");
             window.setLoading(false);
         } else {
             localStorage.setItem('hrn_auth_email', temp.em);
@@ -2151,7 +2122,7 @@ export function initHRNchat(customConfig = {}) {
         if (isDirect) {
             targetUser = $('c-target-user').value.trim();
             if (!targetUser) {
-                window.toast("User ID required");
+                window.toast("User ID required.");
                 state.processingAction = false;
                 return;
             }
@@ -2160,7 +2131,7 @@ export function initHRNchat(customConfig = {}) {
                 error
             } = await db.from('profiles').select('full_name').eq('id', targetUser).single();
             if (error || !profile) {
-                window.toast("User not found");
+                window.toast("User not found.");
                 state.processingAction = false;
                 return;
             }
@@ -2172,7 +2143,7 @@ export function initHRNchat(customConfig = {}) {
             rawPass = $('c-pass').value;
             isVisible = $('c-visible').checked;
             if (!n) {
-                window.toast("Name required");
+                window.toast("Name required.");
                 state.processingAction = false;
                 return;
             }
@@ -2202,7 +2173,7 @@ export function initHRNchat(customConfig = {}) {
             error
         } = await db.from('rooms').insert([insertData]).select();
         if (error) {
-            window.toast("Error: " + error.message);
+            window.toast("Creation failed.");
             state.processingAction = false;
             window.setLoading(false);
             return;
@@ -2230,7 +2201,6 @@ export function initHRNchat(customConfig = {}) {
         if (!e || !e.isTrusted) return;
         const inputPass = $('gate-pass').value;
         if (state.isOfflineMode) {
-            window.toast("Attempting access...");
             window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt, state.pending);
             return;
         }
@@ -2244,7 +2214,7 @@ export function initHRNchat(customConfig = {}) {
         });
         window.setLoading(false);
         if (data === true) window.openVault(state.pending.id, state.pending.name, inputPass, state.pending.salt, state.pending);
-        else window.toast("Access Denied");
+        else window.toast("Incorrect password.");
     };
     window.handleLogout = async (e) => {
         if (!e || !e.isTrusted) return;
@@ -2265,14 +2235,12 @@ export function initHRNchat(customConfig = {}) {
     };
     window.copySId = () => {
         navigator.clipboard.writeText(state.lastCreated.id);
-        window.toast("ID Copied");
+        window.toast("ID copied.");
     };
     window.enterCreated = () => {
         window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt, state.lastCreated);
         state.lastCreatedPass = null;
     };
-    
-    // FIX: Destructure subscription from the returned data object
     const { data: { subscription } } = db.auth.onAuthStateChange(async (ev, ses) => {
         if (state.isOfflineMode && !ses) return;
         state.user = ses?.user;
@@ -2343,7 +2311,7 @@ export function initHRNchat(customConfig = {}) {
     };
     window.refreshLobby = async () => {
         const now = Date.now();
-        if (now - state.lastLobbyRefresh < 10000) return window.toast(`Wait ${Math.ceil((10000 - (now - state.lastLobbyRefresh)) / 1000)}s`);
+        if (now - state.lastLobbyRefresh < 10000) return window.toast("Please wait.");
         state.lastLobbyRefresh = now;
         await window.loadRooms();
     };
@@ -2388,7 +2356,7 @@ export function initHRNchat(customConfig = {}) {
             ascending: false
         });
         if (error) {
-            window.toast("Sync failed");
+            window.toast("Sync failed.");
             window.setLoading(false);
             return;
         }
@@ -2430,7 +2398,7 @@ export function initHRNchat(customConfig = {}) {
                     await window.openVault(meta.id, meta.name, null, meta.salt, meta);
                 }
             } else {
-                window.toast("Room not found in cache");
+                window.toast("Chat not found.");
             }
         };
         if (state.isOfflineMode) {
@@ -2463,20 +2431,19 @@ export function initHRNchat(customConfig = {}) {
             else window.openVault(data.id, data.name, null, data.salt, data);
         } catch (e) {
             window.setLoading(false);
-            console.warn("Online join failed, switching to offline fallback:", e);
-            window.toast("Connection error. Switching to Offline.");
+            window.toast("Connection lost.");
             setAppMode(true);
             await openLocal();
         }
     };
     window.joinPrivate = async () => {
-        if (!state.user) return window.toast("Login required");
+        if (!state.user) return window.toast("Please log in.");
         const id = $('join-id').value.trim();
         if (!id) return;
         if (state.isOfflineMode) {
             const meta = await localDB.get('rooms', id);
             if (meta) window.joinAttempt(id);
-            else window.toast("Cannot join new rooms offline");
+            else window.toast("Connection required.");
             return;
         }
         window.setLoading(true, "Checking...");
@@ -2488,7 +2455,7 @@ export function initHRNchat(customConfig = {}) {
             });
             if (!canAccess) {
                 window.setLoading(false);
-                return window.toast("Access denied or not found");
+                return window.toast("Access denied.");
             }
             const {
                 data
@@ -2503,7 +2470,7 @@ export function initHRNchat(customConfig = {}) {
                 };
                 if (data.has_password) window.nav('scr-gate');
                 else window.openVault(data.id, data.name, null, data.salt, data);
-            } else window.toast("Not found");
+            } else window.toast("Chat not found.");
         } catch (e) {
             window.setLoading(false);
             window.toast("Network error.");
@@ -2580,7 +2547,6 @@ export function initHRNchat(customConfig = {}) {
                     window.nav('scr-lobby');
                     window.loadRooms();
                 } else {
-                    console.warn("Auto-login failed, trying offline fallback...", error);
                     const knownUser = await localDB.get('known_users', storedEmail);
                     if (knownUser && knownUser.metadata) {
                         const hashInput = await sha256(storedPass + storedEmail);
@@ -2593,7 +2559,7 @@ export function initHRNchat(customConfig = {}) {
                             setAppMode(true);
                             window.nav('scr-lobby');
                             window.loadRooms();
-                            window.toast("Connection failed. Logged in offline.");
+                            window.toast("Offline mode.");
                         } else {
                             localStorage.removeItem('hrn_auth_email');
                             localStorage.removeItem('hrn_auth_pass');
