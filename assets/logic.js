@@ -10,6 +10,29 @@ import {
     createClient
 } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
+// --- POLYFILLS FOR OLDER DEVICES ---
+if (!window.crypto) window.crypto = {};
+if (!window.crypto.randomUUID) {
+    window.crypto.randomUUID = function() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    };
+}
+
+// Dummy BroadcastChannel for browsers that don't support it (older Safari)
+if (typeof BroadcastChannel === 'undefined') {
+    window.BroadcastChannel = class {
+        constructor() { this.onmessage = () => {}; }
+        postMessage() {}
+        addEventListener() {}
+        removeEventListener() {}
+    };
+}
+// -----------------------------------
+
 export function initHRNchat(customConfig = {}) {
     const CONFIG = {
         supabaseUrl: customConfig.supabaseUrl || "https://jnhsuniduzvhkpexorqk.supabase.co",
@@ -28,6 +51,49 @@ export function initHRNchat(customConfig = {}) {
     const DB_NAME = 'HRN_LOCAL_DB';
     const DB_VERSION = 7;
     
+    // Check for Secure Context (HTTPS or localhost)
+    const useNativeCrypto = window.crypto && window.crypto.subtle;
+
+    // --- CUSTOM CRYPTO ENGINE (For HTTP / Older Devices) ---
+    const customCryptoEngine = {
+        key: null,
+        
+        init: async () => {
+            let keyStr = localStorage.getItem('hrn_custom_key');
+            if (!keyStr) {
+                // Generate a random key string
+                const arr = new Uint8Array(32);
+                window.crypto.getRandomValues(arr);
+                keyStr = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+                localStorage.setItem('hrn_custom_key', keyStr);
+            }
+            customCryptoEngine.key = keyStr;
+            return true;
+        },
+
+        xorEncode: (text, key) => {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return btoa(encodeURIComponent(result)); // Base64 encode
+        },
+
+        xorDecode: (encoded, key) => {
+            try {
+                const text = decodeURIComponent(atob(encoded));
+                let result = '';
+                for (let i = 0; i < text.length; i++) {
+                    result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+                }
+                return result;
+            } catch (e) {
+                return null;
+            }
+        }
+    };
+    // --------------------------------------------------------
+
     const state = {
         user: null,
         currentRoomId: null,
@@ -48,7 +114,7 @@ export function initHRNchat(customConfig = {}) {
         lastCreated: null,
         lastCreatedPass: null,
         isMasterTab: false,
-        tabId: sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id')),
+        tabId: sessionStorage.getItem('hrn_tab_id') || (sessionStorage.setItem('hrn_tab_id', window.crypto.randomUUID()), sessionStorage.getItem('hrn_tab_id')),
         processingAction: false,
         isLoadingHistory: false,
         oldestMessageTimestamp: null,
@@ -119,35 +185,51 @@ export function initHRNchat(customConfig = {}) {
         minute: '2-digit'
     });
 
+    // --- REPLACED ENCRYPTION LOGIC ---
     const getLocalKey = async () => {
-        if (state.localKey) return state.localKey;
-        let keyStr = localStorage.getItem('hrn_mk');
-        if (keyStr) {
-            try {
-                const keyData = JSON.parse(keyStr);
-                state.localKey = await crypto.subtle.importKey('jwk', keyData, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
-                return state.localKey;
-            } catch (e) {
-                localStorage.removeItem('hrn_mk');
+        if (useNativeCrypto) {
+            // Use Native SubtleCrypto if available (HTTPS)
+            if (state.localKey) return state.localKey;
+            let keyStr = localStorage.getItem('hrn_mk');
+            if (keyStr) {
+                try {
+                    const keyData = JSON.parse(keyStr);
+                    state.localKey = await crypto.subtle.importKey('jwk', keyData, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+                    return state.localKey;
+                } catch (e) {
+                    localStorage.removeItem('hrn_mk');
+                }
             }
+            state.localKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+            const exported = await crypto.subtle.exportKey('jwk', state.localKey);
+            localStorage.setItem('hrn_mk', JSON.stringify(exported));
+            return state.localKey;
+        } else {
+            // Use Custom Engine if NOT secure context (HTTP)
+            await customCryptoEngine.init();
+            return true;
         }
-        state.localKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-        const exported = await crypto.subtle.exportKey('jwk', state.localKey);
-        localStorage.setItem('hrn_mk', JSON.stringify(exported));
-        return state.localKey;
     };
 
     const encryptValue = async (data) => {
         try {
             const key = await getLocalKey();
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const encoded = new TextEncoder().encode(JSON.stringify(data));
-            const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-            const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-            combined.set(iv, 0);
-            combined.set(new Uint8Array(ciphertext), iv.length);
-            return btoa(String.fromCharCode(...combined));
+            const payload = JSON.stringify(data);
+            
+            if (useNativeCrypto && key) {
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const encoded = new TextEncoder().encode(payload);
+                const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+                const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+                combined.set(iv, 0);
+                combined.set(new Uint8Array(ciphertext), iv.length);
+                return btoa(String.fromCharCode(...combined));
+            } else {
+                // Fallback
+                return customCryptoEngine.xorEncode(payload, customCryptoEngine.key);
+            }
         } catch (e) {
+            console.error("Encryption error", e);
             return null;
         }
     };
@@ -156,17 +238,26 @@ export function initHRNchat(customConfig = {}) {
         if (!encryptedStr) return null;
         try {
             const key = await getLocalKey();
-            const binary = atob(encryptedStr);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            const iv = bytes.slice(0, 12);
-            const ciphertext = bytes.slice(12);
-            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-            return JSON.parse(new TextDecoder().decode(decrypted));
+
+            if (useNativeCrypto && key) {
+                const binary = atob(encryptedStr);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const iv = bytes.slice(0, 12);
+                const ciphertext = bytes.slice(12);
+                const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+                return JSON.parse(new TextDecoder().decode(decrypted));
+            } else {
+                // Fallback
+                const decryptedStr = customCryptoEngine.xorDecode(encryptedStr, customCryptoEngine.key);
+                return decryptedStr ? JSON.parse(decryptedStr) : null;
+            }
         } catch (e) {
+            console.error("Decryption error", e);
             return null;
         }
     };
+    // ---------------------------------
 
     const setAppMode = (offline) => {
         state.isOfflineMode = offline;
@@ -372,6 +463,27 @@ export function initHRNchat(customConfig = {}) {
         return profile;
     };
 
+    // Simple SHA256 for password hashing (uses Subtle if avail, else simple string hash)
+    const sha256 = async (text) => {
+        if (window.crypto && window.crypto.subtle) {
+            const buffer = new TextEncoder().encode(text);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } else {
+            // Simple non-crypto hash fallback for legacy
+            let hash = 0;
+            for (let i = 0; i < text.length; i++) {
+                const char = text.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16);
+        }
+    };
+
+    // --- WORKER CODE (UPDATED FOR COMPATIBILITY) ---
+    // We inject logic to handle non-secure contexts inside the worker if needed
     const workerCode = `
         self.onmessage = async (e) => { 
             const { id, type, payload } = e.data; 
@@ -379,22 +491,42 @@ export function initHRNchat(customConfig = {}) {
             const decoder = new TextDecoder(); 
             self.keys = self.keys || {};
             
+            // Check if we are in a secure context inside worker
+            const hasSubtle = !!(self.crypto && self.crypto.subtle);
+            
             try { 
                 if (type === 'deriveKey') { 
-                    const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); 
-                    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); 
-                    self.keys[payload.keyId] = key; 
+                    if (hasSubtle) {
+                         const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(payload.password), { name: 'PBKDF2' }, false, ['deriveKey']); 
+                         const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: encoder.encode(payload.salt), iterations: 300000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']); 
+                         self.keys[payload.keyId] = key;
+                    } else {
+                        // Fallback: Store raw password string as key for XOR (INSECURE BUT WORKS)
+                        self.keys[payload.keyId] = payload.password; 
+                    }
                     self.postMessage({ id, type: 'keyDerived', success: true }); 
                 } else if (type === 'encrypt') { 
                     if (!self.keys[payload.keyId]) throw new Error("Key not derived"); 
-                    const iv = crypto.getRandomValues(new Uint8Array(12)); 
-                    const encoded = encoder.encode(payload.text); 
-                    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.keys[payload.keyId], encoded); 
-                    const combined = new Uint8Array(iv.length + ciphertext.byteLength); 
-                    combined.set(iv, 0); 
-                    combined.set(new Uint8Array(ciphertext), iv.length); 
-                    const base64 = btoa(String.fromCharCode(...combined)); 
-                    self.postMessage({ id, type: 'encrypted', result: base64 }); 
+                    const text = payload.text;
+                    
+                    if (hasSubtle) {
+                        const iv = crypto.getRandomValues(new Uint8Array(12)); 
+                        const encoded = encoder.encode(text); 
+                        const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, self.keys[payload.keyId], encoded); 
+                        const combined = new Uint8Array(iv.length + ciphertext.byteLength); 
+                        combined.set(iv, 0); 
+                        combined.set(new Uint8Array(ciphertext), iv.length); 
+                        const base64 = btoa(String.fromCharCode(...combined)); 
+                        self.postMessage({ id, type: 'encrypted', result: base64 });
+                    } else {
+                        // Custom XOR encrypt for Worker
+                        const key = self.keys[payload.keyId];
+                        let result = '';
+                        for (let i = 0; i < text.length; i++) {
+                            result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+                        }
+                        self.postMessage({ id, type: 'encrypted', result: btoa(result) });
+                    }
                 } else if (type === 'decryptHistory') { 
                     if (!self.keys[payload.keyId]) throw new Error("Key not derived"); 
                     const results = []; 
@@ -404,15 +536,28 @@ export function initHRNchat(customConfig = {}) {
                                 results.push({ id: m.id, deleted: true, user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); 
                                 continue; 
                             } 
-                            const binary = atob(m.content); 
-                            const bytes = new Uint8Array(binary.length); 
-                            for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); 
-                            const iv = bytes.slice(0, 12); 
-                            const ciphertext = bytes.slice(12); 
-                            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.keys[payload.keyId], ciphertext); 
-                            const text = decoder.decode(decrypted); 
-                            const parts = text.split('|'); 
-                            results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at }); 
+                            
+                            if (hasSubtle) {
+                                const binary = atob(m.content); 
+                                const bytes = new Uint8Array(binary.length); 
+                                for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); 
+                                const iv = bytes.slice(0, 12); 
+                                const ciphertext = bytes.slice(12); 
+                                const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.keys[payload.keyId], ciphertext); 
+                                const text = decoder.decode(decrypted); 
+                                const parts = text.split('|'); 
+                                results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at });
+                            } else {
+                                // Custom XOR decrypt for Worker
+                                const key = self.keys[payload.keyId];
+                                const binary = atob(m.content);
+                                let text = '';
+                                for (let i = 0; i < binary.length; i++) {
+                                    text += String.fromCharCode(binary.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+                                }
+                                const parts = text.split('|');
+                                results.push({ id: m.id, time: parts[0], text: parts.slice(1).join('|'), user_id: m.user_id, user_name: m.user_name, created_at: m.created_at, updated_at: m.updated_at });
+                            }
                         } catch (err) { 
                             results.push({ id: m.id, error: true }); 
                         } 
@@ -424,16 +569,28 @@ export function initHRNchat(customConfig = {}) {
                         self.postMessage({ id, type: 'singleDecrypted', result: { deleted: true } }); 
                         return; 
                     } 
-                    try { 
-                        const binary = atob(payload.content); 
-                        const bytes = new Uint8Array(binary.length); 
-                        for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); 
-                        const iv = bytes.slice(0, 12); 
-                        const ciphertext = bytes.slice(12); 
-                        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.keys[payload.keyId], ciphertext); 
-                        const text = decoder.decode(decrypted); 
-                        const parts = text.split('|'); 
-                        self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } }); 
+                    try {
+                        if (hasSubtle) {
+                            const binary = atob(payload.content); 
+                            const bytes = new Uint8Array(binary.length); 
+                            for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i); 
+                            const iv = bytes.slice(0, 12); 
+                            const ciphertext = bytes.slice(12); 
+                            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, self.keys[payload.keyId], ciphertext); 
+                            const text = decoder.decode(decrypted); 
+                            const parts = text.split('|'); 
+                            self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } });
+                        } else {
+                             // Custom XOR decrypt
+                             const key = self.keys[payload.keyId];
+                             const binary = atob(payload.content);
+                             let text = '';
+                             for (let i = 0; i < binary.length; i++) {
+                                 text += String.fromCharCode(binary.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+                             }
+                             const parts = text.split('|');
+                             self.postMessage({ id, type: 'singleDecrypted', result: { time: parts[0], text: parts.slice(1).join('|') } });
+                        }
                     } catch(e) { 
                         self.postMessage({ id, type: 'singleDecrypted', error: e.message }); 
                     } 
@@ -443,11 +600,13 @@ export function initHRNchat(customConfig = {}) {
             } 
         };
     `;
+    
     const workerBlob = new Blob([workerCode], {
         type: 'application/javascript'
     });
     const cryptoWorker = new Worker(URL.createObjectURL(workerBlob));
     const pendingResolvers = {};
+    
     cryptoWorker.onmessage = (e) => {
         const {
             id,
@@ -472,7 +631,7 @@ export function initHRNchat(customConfig = {}) {
 
     const workerExec = (type, payload) => {
         return new Promise((resolve, reject) => {
-            const id = crypto.randomUUID();
+            const id = window.crypto.randomUUID(); // Use the polyfilled version
             pendingResolvers[id] = {
                 resolve,
                 reject
@@ -487,15 +646,8 @@ export function initHRNchat(customConfig = {}) {
 
     const generateSalt = () => {
         const arr = new Uint8Array(16);
-        crypto.getRandomValues(arr);
+        window.crypto.getRandomValues(arr); // Works in non-secure context too
         return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
-    };
-
-    const sha256 = async (text) => {
-        const buffer = new TextEncoder().encode(text);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     };
 
     const deriveKey = (pass, salt, keyId) => workerExec('deriveKey', {
@@ -2336,6 +2488,7 @@ export function initHRNchat(customConfig = {}) {
         await cleanupChannels();
         localStorage.removeItem('hrn_auth');
         localStorage.removeItem('hrn_mk');
+        localStorage.removeItem('hrn_custom_key'); // Clean up custom key
         state.user = null;
         setAppMode(false);
         state.isCapacityBlocked = false;
