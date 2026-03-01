@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Storage Cleaner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: white;
+            text-align: center;
+            padding: 50px;
+        }
+        button {
+            padding: 15px 25px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background: #e74c3c;
+            color: white;
+        }
+        button:hover {
+            background: #c0392b;
+        }
+        .success {
+            color: #2ecc71;
+            margin-top: 20px;
+        }
+        .warning {
+            color: #f1c40f;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Browser Storage Cleaner</h1>
+<p>Use the buttons below to clear storage data for this origin.</p>
+
+<button onclick="clearLocalStorage()">Clear LocalStorage</button>
+<button onclick="clearSessionStorage()">Clear SessionStorage</button>
+<button onclick="clearIndexedDB()">Clear IndexedDB</button>
+<button onclick="clearAll()">Clear EVERYTHING</button>
+
+<div id="status"></div>
+
+<script>
+function setStatus(message, type="success") {
+    const status = document.getElementById("status");
+    status.className = type;
+    status.innerText = message;
+}
+
+function clearLocalStorage() {
+    localStorage.clear();
+    setStatus("LocalStorage cleared.");
+}
+
+function clearSessionStorage() {
+    sessionStorage.clear();
+    setStatus("SessionStorage cleared.");
+}
+
+function clearIndexedDB() {
+    if (!window.indexedDB) {
+        setStatus("IndexedDB not supported in this browser.", "warning");
+        return;
+    }
+
+    indexedDB.databases().then(databases => {
+        if (databases.length === 0) {
+            setStatus("No IndexedDB databases found.");
+            return;
+        }
+
+        let deletePromises = databases.map(db => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.deleteDatabase(db.name);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject();
+                request.onblocked = () => reject();
+            });
+        });
+
+        Promise.all(deletePromises)
+            .then(() => setStatus("All IndexedDB databases deleted."))
+            .catch(() => setStatus("Error deleting some IndexedDB databases.", "warning"));
+    }).catch(() => {
+        setStatus("Your browser does not support listing IndexedDB databases.", "warning");
+    });
+}
+
+function clearAll() {
+    clearLocalStorage();
+    clearSessionStorage();
+    clearIndexedDB();
+    setStatus("Attempted to clear ALL storage types.");
+}
+</script>
+
+</body>
+</html>
