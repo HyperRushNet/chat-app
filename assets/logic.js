@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.7
+ *  Version: 1.0.5
  *  assets/logic.js 
  *  MIT License
  */
