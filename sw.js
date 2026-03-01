@@ -1,7 +1,8 @@
 const CACHE_NAME = "hrn-cache-v1.0.5-5";
 const FILES_TO_CACHE = [
   "./assets/logic.js",
-  "./index.html"
+  "./index.html",
+  "./assets/branding/logo.png"
 ];
 
 self.addEventListener("install", (event) => {
