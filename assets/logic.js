@@ -1446,12 +1446,16 @@ export function initHRNchat(customConfig = {}) {
 		const diff = Math.round((today - target) / 86400000);
 		if (diff === 0) return "Today";
 		if (diff === 1) return "Yesterday";
-		if (diff < 7) return d.toLocaleDateString('en-GB', {
-			weekday: 'long'
-		});
+		if (diff < 7) {
+			return d.toLocaleDateString('en-GB', {
+				weekday: 'long'
+			});
+		}
+		const isSameYear = d.getFullYear() === now.getFullYear();
 		return d.toLocaleDateString('en-GB', {
 			day: '2-digit',
-			month: 'short'
+			month: 'short',
+			year: isSameYear ? undefined : 'numeric'
 		});
 	};
 	const processText = (text) => {
