@@ -297,6 +297,21 @@ export function initHRNchat(customConfig = {}) {
         }
     };
 
+    const promiseTimeout = (ms, promise) => {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(`Timeout after ${ms}ms`));
+            }, ms);
+            promise.then(value => {
+                clearTimeout(timer);
+                resolve(value);
+            }).catch(reason => {
+                clearTimeout(timer);
+                reject(reason);
+            });
+        });
+    };
+
     const cacheAvatar = async (profile) => {
         if (!profile || !profile.avatar_url) return profile;
         if (profile.avatar_url.startsWith('data:')) return profile;
@@ -1972,42 +1987,44 @@ export function initHRNchat(customConfig = {}) {
             return;
         }
         window.setLoading(true, "Signing In...");
+        
         if (!state.isOfflineMode) {
-            const {
-                error
-            } = await db.auth.signInWithPassword({
-                email: em,
-                password: p
-            });
-            if (!error) {
-                const {
-                    data: {
-                        user
-                    }
-                } = await db.auth.getUser();
-                state.user = user;
-                setAppMode(false);
-                const hashInput = await sha256(p + em);
-                await localDB.put('known_users', {
-                    id: em,
-                    pass_hash: hashInput,
+            try {
+                const authPromise = db.auth.signInWithPassword({
                     email: em,
-                    metadata: user.user_metadata,
-                    userId: user.id
+                    password: p
                 });
-                if (state.user) setupGlobalPresence(state.user.id);
-                window.nav('scr-lobby');
-                try { await window.loadRooms(); } catch(e) {}
-                window.setLoading(false);
-                state.processingAction = false;
-                const encCreds = await encryptValue({
-                    e: em,
-                    p: p
-                });
-                localStorage.setItem('hrn_auth', encCreds);
-                return;
+                
+                const { error } = await promiseTimeout(10000, authPromise);
+                
+                if (!error) {
+                    const { data: { user } } = await db.auth.getUser();
+                    state.user = user;
+                    setAppMode(false);
+                    const hashInput = await sha256(p + em);
+                    await localDB.put('known_users', {
+                        id: em,
+                        pass_hash: hashInput,
+                        email: em,
+                        metadata: user.user_metadata,
+                        userId: user.id
+                    });
+                    if (state.user) setupGlobalPresence(state.user.id);
+                    window.nav('scr-lobby');
+                    try { await window.loadRooms(); } catch(e) {}
+                    window.setLoading(false);
+                    state.processingAction = false;
+                    const encCreds = await encryptValue({ e: em, p: p });
+                    localStorage.setItem('hrn_auth', encCreds);
+                    return;
+                } else {
+                    window.toast("Login failed: " + (error.message || "Network error"));
+                }
+            } catch (err) {
+                window.toast("Connection timed out.");
             }
         }
+        
         const offlineOk = await attemptOfflineLogin(em, p);
         if (offlineOk) {
             setAppMode(true);
@@ -2016,10 +2033,7 @@ export function initHRNchat(customConfig = {}) {
             window.setLoading(false);
             state.processingAction = false;
             window.toast("Logged in successfully (Offline).");
-            const encCreds = await encryptValue({
-                e: em,
-                p: p
-            });
+            const encCreds = await encryptValue({ e: em, p: p });
             localStorage.setItem('hrn_auth', encCreds);
             return;
         }
@@ -2818,18 +2832,13 @@ export function initHRNchat(customConfig = {}) {
                 window.setLoading(true, "Logging in...");
                 if (navigator.onLine) {
                     try {
-                        const {
-                            error
-                        } = await db.auth.signInWithPassword({
+                        const authPromise = db.auth.signInWithPassword({
                             email: creds.e,
                             password: creds.p
                         });
+                        const { error } = await promiseTimeout(10000, authPromise);
                         if (!error) {
-                            const {
-                                data: {
-                                    user
-                                }
-                            } = await db.auth.getUser();
+                            const { data: { user } } = await db.auth.getUser();
                             state.user = user;
                             setAppMode(false);
                             const hashInput = await sha256(creds.p + creds.e);
