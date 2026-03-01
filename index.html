@@ -1,17 +1,17 @@
 <!--
- *  © 2026 
- *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.5 
- *  index.html 
- *  MIT License
--->
-
+   *  © 2026 
+   *  GitHub: https://github.com/HyperRushNet/chat-app
+   *  Version: 1.0.5 
+   *  index.html 
+   *  MIT License
+   -->
 <!DOCTYPE html>
 <html lang="en">
    <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-      <link rel="icon" href="./assets/branding/logo.png">
+      <link rel="icon" href="./assets/branding/favicon/favicon-black.png" media="(prefers-color-scheme: light)">
+      <link rel="icon" href="./assets/branding/favicon/favicon-white.png" media="(prefers-color-scheme: dark)">
       <title>HyperRush Chat</title>
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <style>
@@ -457,18 +457,6 @@
       <script type=module>
          import { initHRNchat } from './assets/logic.js';
          initHRNchat({ maxUsers: 150, maxMessageLength: 5000, maxMessages: 50, rateLimitMs: 1000, historyLoadLimit: 20 });
-           if ("serviceWorker" in navigator) {
-           window.addEventListener("load", () => {
-             navigator.serviceWorker
-               .register("./sw.js")
-               .then((registration) => {
-                 console.log("Service Worker registered:", registration.scope);
-               })
-               .catch((error) => {
-                 console.error("Service Worker registration failed:", error);
-               });
-           });
-         }
-      </script>
+         "serviceWorker"in navigator&&window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));      </script>
    </body>
 </html>
