@@ -1,7 +1,7 @@
 /* 
  *  © 2026 
  *  GitHub: https://github.com/HyperRushNet/chat-app
- *  Version: 1.0.6
+ *  Version: 1.0.7
  *  assets/logic.js 
  *  MIT License
  */
@@ -301,14 +301,11 @@ export function initHRNchat(customConfig = {}) {
         } else {
             let count = state.lastKnownOnlineCount || 0;
             let displayRoomText = count;
-            
-            // Logica voor DMs: 1 = Offline, 2 = Online
             if (state.currentRoomData?.is_direct) {
                 if (count === 1) displayRoomText = "Offline";
                 else if (count === 2) displayRoomText = "Online";
                 else displayRoomText = "-";
             }
-
             let displayGlobalCount = `${state.globalOnlineCount}/${CONFIG.maxUsers}`;
             if (infoGlobalEl) infoGlobalEl.innerText = displayGlobalCount;
             if (roomCountEl) roomCountEl.innerText = displayRoomText;
@@ -696,6 +693,24 @@ export function initHRNchat(customConfig = {}) {
             setConnectionVisuals('connected');
         }
     };
+    
+    // NEW: Centralized offline login check
+    const attemptOfflineLogin = async (email, pass) => {
+        const knownUser = await localDB.get('known_users', email);
+        if (knownUser && knownUser.metadata) {
+            const hashInput = await sha256(pass + email);
+            if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
+                state.user = {
+                    id: knownUser.userId,
+                    email: knownUser.email,
+                    user_metadata: knownUser.metadata
+                };
+                return true;
+            }
+        }
+        return false;
+    };
+
     window.goOnline = async () => {
         state.isCapacityBlocked = false;
         const overlay = $('block-overlay');
@@ -729,9 +744,10 @@ export function initHRNchat(customConfig = {}) {
                 window.setLoading(false);
                 window.toast("Back Online");
             } else {
+                // CHANGE: If online fails, keep offline session instead of kicking to login
                 window.setLoading(false);
-                window.toast("Re-login failed");
-                window.nav('scr-login');
+                window.toast("Reconnect failed. Staying offline.");
+                setAppMode(true); // Ensure we stay in offline mode
             }
         } else {
             window.setLoading(false);
@@ -1920,81 +1936,46 @@ export function initHRNchat(customConfig = {}) {
             return;
         }
         window.setLoading(true, "Signing In...");
-        if (state.isOfflineMode) {
-            const knownUser = await localDB.get('known_users', em);
-            if (knownUser && knownUser.metadata) {
+        
+        // Try Online
+        if (!state.isOfflineMode) {
+            const { error } = await db.auth.signInWithPassword({ email: em, password: p });
+            if (!error) {
+                const { data: { user } } = await db.auth.getUser();
+                state.user = user;
+                setAppMode(false);
                 const hashInput = await sha256(p + em);
-                if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                    state.user = {
-                        id: knownUser.userId,
-                        email: knownUser.email,
-                        user_metadata: knownUser.metadata
-                    };
-                    window.nav('scr-lobby');
-                    window.loadRooms();
-                    window.setLoading(false);
-                    state.processingAction = false;
-                    window.toast("Offline Login Successful");
-                    return;
-                }
+                await localDB.put('known_users', {
+                    id: em, pass_hash: hashInput, email: em, metadata: user.user_metadata, userId: user.id
+                });
+                if (state.user) setupGlobalPresence(state.user.id);
+                window.nav('scr-lobby');
+                window.loadRooms();
+                window.setLoading(false);
+                state.processingAction = false;
+                localStorage.setItem('hrn_auth_email', em);
+                localStorage.setItem('hrn_auth_pass', p);
+                return;
             }
-            window.toast("Offline login failed. Check credentials.");
-            window.setLoading(false);
-            state.processingAction = false;
-            return;
         }
-        const {
-            error
-        } = await db.auth.signInWithPassword({
-            email: em,
-            password: p
-        });
-        if (error) {
-            const knownUser = await localDB.get('known_users', em);
-            if (knownUser && knownUser.metadata) {
-                const hashInput = await sha256(p + em);
-                if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                    setAppMode(true);
-                    state.user = {
-                        id: knownUser.userId,
-                        email: knownUser.email,
-                        user_metadata: knownUser.metadata
-                    };
-                    window.nav('scr-lobby');
-                    window.loadRooms();
-                    window.setLoading(false);
-                    state.processingAction = false;
-                    window.toast("Server unreachable. Logged in Offline.");
-                    return;
-                }
-            }
-            window.toast(error.message);
-            window.setLoading(false);
-            state.processingAction = false;
-        } else {
-            localStorage.setItem('hrn_auth_email', em);
-            localStorage.setItem('hrn_auth_pass', p);
-            const {
-                data: {
-                    user
-                }
-            } = await db.auth.getUser();
-            state.user = user;
-            setAppMode(false);
-            const hashInput = await sha256(p + em);
-            await localDB.put('known_users', {
-                id: em,
-                pass_hash: hashInput,
-                email: em,
-                metadata: user.user_metadata,
-                userId: user.id
-            });
-            if (state.user) setupGlobalPresence(state.user.id);
+        
+        // Fallback: Offline or Online Failed
+        const offlineOk = await attemptOfflineLogin(em, p);
+        if (offlineOk) {
+            setAppMode(true);
             window.nav('scr-lobby');
             window.loadRooms();
             window.setLoading(false);
             state.processingAction = false;
+            window.toast("Logged in offline mode");
+            localStorage.setItem('hrn_auth_email', em);
+            localStorage.setItem('hrn_auth_pass', p);
+            return;
         }
+        
+        window.toast("Login failed");
+        window.setLoading(false);
+        state.processingAction = false;
     };
     window.handleRegister = async (e) => {
         if (!e || !e.isTrusted) return;
@@ -2271,8 +2252,6 @@ export function initHRNchat(customConfig = {}) {
         window.openVault(state.lastCreated.id, state.lastCreated.name, state.lastCreatedPass, state.lastCreated.salt, state.lastCreated);
         state.lastCreatedPass = null;
     };
-    
-    // FIX: Destructure subscription from the returned data object
     const { data: { subscription } } = db.auth.onAuthStateChange(async (ev, ses) => {
         if (state.isOfflineMode && !ses) return;
         state.user = ses?.user;
@@ -2526,89 +2505,47 @@ export function initHRNchat(customConfig = {}) {
         }
         const storedEmail = localStorage.getItem('hrn_auth_email');
         const storedPass = localStorage.getItem('hrn_auth_pass');
-        if (!navigator.onLine) setAppMode(true);
-        if (storedEmail && storedPass) {
-            if (state.isOfflineMode) {
-                const knownUser = await localDB.get('known_users', storedEmail);
-                if (knownUser && knownUser.metadata) {
-                    const hashInput = await sha256(storedPass + storedEmail);
-                    if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                        state.user = {
-                            id: knownUser.userId,
-                            email: knownUser.email,
-                            user_metadata: knownUser.metadata
-                        };
-                        window.nav('scr-lobby');
-                        window.loadRooms();
-                    } else {
-                        window.nav('scr-login');
-                        $('l-email').value = storedEmail;
-                        $('l-pass').value = storedPass;
-                    }
-                } else {
-                    window.nav('scr-login');
-                    $('l-email').value = storedEmail;
-                    $('l-pass').value = storedPass;
-                }
-            } else {
-                window.setLoading(true, "Auto-logging in...");
-                $('l-email').value = storedEmail;
-                $('l-pass').value = storedPass;
-                const {
-                    error
-                } = await db.auth.signInWithPassword({
-                    email: storedEmail,
-                    password: storedPass
-                });
-                window.setLoading(false);
-                if (!error) {
-                    const {
-                        data: {
-                            user
-                        }
-                    } = await db.auth.getUser();
-                    state.user = user;
-                    setAppMode(false);
-                    const hashInput = await sha256(storedPass + storedEmail);
-                    await localDB.put('known_users', {
-                        id: storedEmail,
-                        pass_hash: hashInput,
-                        email: storedEmail,
-                        metadata: user.user_metadata,
-                        userId: user.id
-                    });
-                    window.nav('scr-lobby');
-                    window.loadRooms();
-                } else {
-                    console.warn("Auto-login failed, trying offline fallback...", error);
-                    const knownUser = await localDB.get('known_users', storedEmail);
-                    if (knownUser && knownUser.metadata) {
-                        const hashInput = await sha256(storedPass + storedEmail);
-                        if (knownUser.pass_hash && knownUser.pass_hash === hashInput) {
-                            state.user = {
-                                id: knownUser.userId,
-                                email: knownUser.email,
-                                user_metadata: knownUser.metadata
-                            };
-                            setAppMode(true);
-                            window.nav('scr-lobby');
-                            window.loadRooms();
-                            window.toast("Connection failed. Logged in offline.");
-                        } else {
-                            localStorage.removeItem('hrn_auth_email');
-                            localStorage.removeItem('hrn_auth_pass');
-                            window.nav('scr-start');
-                        }
-                    } else {
-                        localStorage.removeItem('hrn_auth_email');
-                        localStorage.removeItem('hrn_auth_pass');
-                        window.nav('scr-start');
-                    }
-                }
-            }
-        } else {
+        
+        if (!storedEmail || !storedPass) {
             window.nav('scr-start');
+            window.setLoading(false);
+            return;
         }
+
+        // Auto-Login Logic
+        window.setLoading(true, "Auto-logging in...");
+        
+        // 1. Try Online
+        if (navigator.onLine) {
+            const { error } = await db.auth.signInWithPassword({ email: storedEmail, password: storedPass });
+            if (!error) {
+                const { data: { user } } = await db.auth.getUser();
+                state.user = user;
+                setAppMode(false);
+                const hashInput = await sha256(storedPass + storedEmail);
+                await localDB.put('known_users', { id: storedEmail, pass_hash: hashInput, email: storedEmail, metadata: user.user_metadata, userId: user.id });
+                window.nav('scr-lobby');
+                window.loadRooms();
+                window.setLoading(false);
+                return;
+            }
+        }
+        
+        // 2. Fallback: Offline (if online failed or offline mode)
+        const offlineOk = await attemptOfflineLogin(storedEmail, storedPass);
+        if (offlineOk) {
+            setAppMode(true);
+            window.nav('scr-lobby');
+            window.loadRooms();
+            window.setLoading(false);
+            window.toast("Offline login successful");
+            return;
+        }
+        
+        // 3. Fail: Show login screen
+        window.nav('scr-login');
+        $('l-email').value = storedEmail;
+        $('l-pass').value = storedPass;
         window.setLoading(false);
     };
     init();
